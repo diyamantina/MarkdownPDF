@@ -31,6 +31,22 @@ struct TrueTypeFontParserTests {
         #expect(metadata.post.italicAngle == 0)
     }
 
+    @Test("Parses renderable synthetic Latin witness font")
+    func parsesRenderableSyntheticLatinWitnessFont() throws {
+        let metadata = try TrueTypeFontParser().parse(
+            SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true),
+        )
+        let tableTags = metadata.tables.map(\.tag).sorted()
+
+        #expect(tableTags.contains("glyf"))
+        #expect(tableTags.contains("loca"))
+        #expect(metadata.maxp.numGlyphs == 28)
+        #expect(metadata.hhea.numberOfHMetrics == 28)
+        #expect(metadata.hmtx.advanceWidths[1] == 280)
+        #expect(metadata.hmtx.advanceWidths[10] == 260)
+        #expect(metadata.hmtx.advanceWidths[24] == 900)
+    }
+
     @Test("Rejects malformed table checksums")
     func rejectsMalformedTableChecksums() {
         expectTrueTypeError {
@@ -295,6 +311,11 @@ struct TrueTypeFontParserTests {
 }
 
 enum SyntheticTrueTypeFont {
+    enum GlyphProfile {
+        case basic
+        case latinWitness
+    }
+
     static func data(
         fsType: UInt16 = 0,
         cmapFormat: UInt16 = 4,
@@ -318,17 +339,23 @@ enum SyntheticTrueTypeFont {
         overlappingNameStorage: Bool = false,
         overlappingLanguageTagStorage: Bool = false,
         shortOS2: Bool = false,
+        glyphProfile: GlyphProfile = .basic,
         includeGlyphOutlines: Bool = false,
     ) -> Data {
+        let glyphSet = GlyphSet(profile: glyphProfile)
         var tables = [
             "head": headTable(
                 invalidUnitsPerEm: invalidHeadUnitsPerEm,
                 invalidIndexToLocFormat: invalidHeadIndexToLocFormat,
                 invalidBoundingBox: invalidHeadBoundingBox,
             ),
-            "hhea": hheaTable(invalidVersion: invalidHheaVersion),
-            "hmtx": hmtxTable(),
-            "maxp": maxpTable(invalidVersion: invalidMaxpVersion, includeGlyphOutlines: includeGlyphOutlines),
+            "hhea": hheaTable(invalidVersion: invalidHheaVersion, glyphSet: glyphSet),
+            "hmtx": hmtxTable(glyphSet: glyphSet),
+            "maxp": maxpTable(
+                invalidVersion: invalidMaxpVersion,
+                includeGlyphOutlines: includeGlyphOutlines,
+                glyphSet: glyphSet,
+            ),
             "cmap": cmapTable(
                 format: cmapFormat,
                 malformedLength: malformedCMapLength,
@@ -338,6 +365,7 @@ enum SyntheticTrueTypeFont {
                 invalidFormat4ReservedPad: invalidCMapFormat4ReservedPad,
                 invalidGroupCount: invalidCMapGroupCount,
                 format12StartGlyphID: cmapFormat12StartGlyphID,
+                glyphSet: glyphSet,
             ),
             "name": nameTable(
                 format: nameFormat,
@@ -349,8 +377,12 @@ enum SyntheticTrueTypeFont {
             "post": postTable(),
         ].filter { !omittedTables.contains($0.key) }
         if includeGlyphOutlines {
-            tables["glyf"] = glyfTable()
-            tables["loca"] = locaTable()
+            if !omittedTables.contains("glyf") {
+                tables["glyf"] = glyfTable(glyphSet: glyphSet)
+            }
+            if !omittedTables.contains("loca") {
+                tables["loca"] = locaTable(glyphSet: glyphSet)
+            }
         }
 
         var records: [(tag: String, checksum: UInt32, offset: UInt32, length: UInt32)] = []
@@ -411,21 +443,25 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func hheaTable(invalidVersion: Bool) -> Data {
+    private static func hheaTable(invalidVersion: Bool, glyphSet: GlyphSet) -> Data {
         var data = Data(count: 36)
         writeUInt32(invalidVersion ? 0 : 0x0001_0000, at: 0, in: &data)
         writeInt16(800, at: 4, in: &data)
         writeInt16(-200, at: 6, in: &data)
-        writeUInt16(600, at: 10, in: &data)
+        writeUInt16(glyphSet.advanceWidthMax, at: 10, in: &data)
         writeInt16(1, at: 18, in: &data)
-        writeUInt16(2, at: 34, in: &data)
+        writeUInt16(glyphSet.numberOfHMetrics, at: 34, in: &data)
         return data
     }
 
-    private static func maxpTable(invalidVersion: Bool, includeGlyphOutlines: Bool) -> Data {
+    private static func maxpTable(
+        invalidVersion: Bool,
+        includeGlyphOutlines: Bool,
+        glyphSet: GlyphSet,
+    ) -> Data {
         var data = Data()
         appendUInt32(invalidVersion ? 0 : 0x0001_0000, to: &data)
-        appendUInt16(3, to: &data)
+        appendUInt16(glyphSet.numGlyphs, to: &data)
         guard includeGlyphOutlines else {
             return data
         }
@@ -446,20 +482,31 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func glyfTable() -> Data {
+    private static func glyfTable(glyphSet: GlyphSet) -> Data {
         var data = Data()
-        data.append(simpleRectangleGlyph(xMin: 40, yMin: 0, xMax: 560, yMax: 700))
-        data.append(simpleRectangleGlyph(xMin: 70, yMin: 0, xMax: 540, yMax: 700))
+        for glyph in glyphSet.glyphs {
+            data.append(glyphData(for: glyph))
+        }
         return data
     }
 
-    private static func locaTable() -> Data {
+    private static func locaTable(glyphSet: GlyphSet) -> Data {
         var data = Data()
         appendUInt16(0, to: &data)
         appendUInt16(0, to: &data)
-        appendUInt16(UInt16(simpleRectangleGlyph(xMin: 40, yMin: 0, xMax: 560, yMax: 700).count / 2), to: &data)
-        appendUInt16(UInt16(glyfTable().count / 2), to: &data)
+        var glyfOffset = 0
+        for glyph in glyphSet.glyphs {
+            glyfOffset += glyphData(for: glyph).count
+            appendUInt16(UInt16(glyfOffset / 2), to: &data)
+        }
         return data
+    }
+
+    private static func glyphData(for glyph: GlyphRecord) -> Data {
+        guard let xMin = glyph.xMin, let xMax = glyph.xMax else {
+            return Data()
+        }
+        return simpleRectangleGlyph(xMin: xMin, yMin: 0, xMax: xMax, yMax: 700)
     }
 
     private static func simpleRectangleGlyph(xMin: Int16, yMin: Int16, xMax: Int16, yMax: Int16) -> Data {
@@ -483,13 +530,24 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func hmtxTable() -> Data {
+    private static func hmtxTable(glyphSet: GlyphSet) -> Data {
+        if glyphSet.profile == .basic {
+            var data = Data()
+            appendUInt16(500, to: &data)
+            appendInt16(0, to: &data)
+            appendUInt16(600, to: &data)
+            appendInt16(0, to: &data)
+            appendInt16(0, to: &data)
+            return data
+        }
+
         var data = Data()
         appendUInt16(500, to: &data)
         appendInt16(0, to: &data)
-        appendUInt16(600, to: &data)
-        appendInt16(0, to: &data)
-        appendInt16(0, to: &data)
+        for glyph in glyphSet.glyphs {
+            appendUInt16(glyph.advanceWidth, to: &data)
+            appendInt16(0, to: &data)
+        }
         return data
     }
 
@@ -502,6 +560,7 @@ enum SyntheticTrueTypeFont {
         invalidFormat4ReservedPad: Bool,
         invalidGroupCount: Bool,
         format12StartGlyphID: UInt32,
+        glyphSet: GlyphSet,
     ) -> Data {
         var data = Data()
         appendUInt16(0, to: &data)
@@ -512,23 +571,34 @@ enum SyntheticTrueTypeFont {
 
         switch format {
         case 4:
-            data.append(
-                format4CMapSubtable(
-                    malformedLength: malformedLength,
-                    usesGlyphArray: format4UsesGlyphArray,
-                    invalidSegmentRange: invalidFormat4SegmentRange,
-                    invalidSegmentOrder: invalidFormat4SegmentOrder,
-                    invalidReservedPad: invalidFormat4ReservedPad,
-                ),
-            )
+            if glyphSet.profile == .basic {
+                data.append(
+                    format4CMapSubtable(
+                        malformedLength: malformedLength,
+                        usesGlyphArray: format4UsesGlyphArray,
+                        invalidSegmentRange: invalidFormat4SegmentRange,
+                        invalidSegmentOrder: invalidFormat4SegmentOrder,
+                        invalidReservedPad: invalidFormat4ReservedPad,
+                    ),
+                )
+            } else {
+                data.append(format4LatinWitnessCMapSubtable(malformedLength: malformedLength))
+            }
         case 12:
-            data.append(
-                format12CMapSubtable(
+            if glyphSet.profile == .basic {
+                data.append(
+                    format12CMapSubtable(
+                        malformedLength: malformedLength,
+                        invalidGroupCount: invalidGroupCount,
+                        startGlyphID: format12StartGlyphID,
+                    ),
+                )
+            } else {
+                data.append(format12LatinWitnessCMapSubtable(
                     malformedLength: malformedLength,
                     invalidGroupCount: invalidGroupCount,
-                    startGlyphID: format12StartGlyphID,
-                ),
-            )
+                ))
+            }
         default:
             var subtable = Data(count: 262)
             writeUInt16(format, at: 0, in: &subtable)
@@ -536,6 +606,31 @@ enum SyntheticTrueTypeFont {
             data.append(subtable)
         }
 
+        return data
+    }
+
+    private static func format4LatinWitnessCMapSubtable(malformedLength: Bool) -> Data {
+        var data = Data()
+        appendUInt16(4, to: &data)
+        appendUInt16(malformedLength ? 24 : 40, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(6, to: &data)
+        appendUInt16(4, to: &data)
+        appendUInt16(1, to: &data)
+        appendUInt16(2, to: &data)
+        appendUInt16(0x0020, to: &data)
+        appendUInt16(0x005A, to: &data)
+        appendUInt16(0xFFFF, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0x0020, to: &data)
+        appendUInt16(0x0041, to: &data)
+        appendUInt16(0xFFFF, to: &data)
+        appendInt16(-31, to: &data)
+        appendInt16(-63, to: &data)
+        appendInt16(1, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
         return data
     }
 
@@ -584,6 +679,25 @@ enum SyntheticTrueTypeFont {
         appendUInt32(0x0041, to: &data)
         appendUInt32(0x0042, to: &data)
         appendUInt32(startGlyphID, to: &data)
+        return data
+    }
+
+    private static func format12LatinWitnessCMapSubtable(
+        malformedLength: Bool,
+        invalidGroupCount: Bool,
+    ) -> Data {
+        var data = Data()
+        appendUInt16(12, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt32(malformedLength ? 0 : 40, to: &data)
+        appendUInt32(0, to: &data)
+        appendUInt32(invalidGroupCount ? 0 : 2, to: &data)
+        appendUInt32(0x0020, to: &data)
+        appendUInt32(0x0020, to: &data)
+        appendUInt32(1, to: &data)
+        appendUInt32(0x0041, to: &data)
+        appendUInt32(0x005A, to: &data)
+        appendUInt32(2, to: &data)
         return data
     }
 
@@ -666,6 +780,77 @@ enum SyntheticTrueTypeFont {
         var data = Data(count: 32)
         writeUInt32(0x0003_0000, at: 0, in: &data)
         return data
+    }
+
+    private struct GlyphSet {
+        var profile: GlyphProfile
+        var glyphs: [GlyphRecord]
+
+        init(profile: GlyphProfile) {
+            self.profile = profile
+            glyphs = switch profile {
+            case .basic:
+                [
+                    GlyphRecord(scalar: "A", advanceWidth: 600, xMin: 40, xMax: 560),
+                    GlyphRecord(scalar: "B", advanceWidth: 600, xMin: 70, xMax: 540),
+                ]
+            case .latinWitness:
+                [GlyphRecord(scalar: " ", advanceWidth: 280, xMin: nil, xMax: nil)]
+                    + (UInt8(ascii: "A") ... UInt8(ascii: "Z")).map { byte in
+                        let scalar = UnicodeScalar(byte)
+                        let width = Self.latinWitnessAdvanceWidth(for: scalar)
+                        return GlyphRecord(
+                            scalar: scalar,
+                            advanceWidth: width,
+                            xMin: 50,
+                            xMax: Int16(max(120, Int(width) - 70)),
+                        )
+                    }
+            }
+        }
+
+        var numGlyphs: UInt16 {
+            UInt16(glyphs.count + 1)
+        }
+
+        var advanceWidthMax: UInt16 {
+            max(500, glyphs.map(\.advanceWidth).max() ?? 0)
+        }
+
+        var numberOfHMetrics: UInt16 {
+            switch profile {
+            case .basic:
+                2
+            case .latinWitness:
+                numGlyphs
+            }
+        }
+
+        private static func latinWitnessAdvanceWidth(for scalar: UnicodeScalar) -> UInt16 {
+            switch scalar {
+            case "I":
+                260
+            case "J", "L", "T":
+                520
+            case "M":
+                840
+            case "W":
+                900
+            case "N", "U":
+                740
+            case "R", "S", "Z":
+                640
+            default:
+                600
+            }
+        }
+    }
+
+    private struct GlyphRecord {
+        var scalar: UnicodeScalar
+        var advanceWidth: UInt16
+        var xMin: Int16?
+        var xMax: Int16?
     }
 
     private static func appendNameRecord(

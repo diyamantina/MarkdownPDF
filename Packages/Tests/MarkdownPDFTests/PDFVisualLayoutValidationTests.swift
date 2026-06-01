@@ -279,15 +279,15 @@ struct PDFVisualLayoutValidationTests {
         let textResult = try PDFValidation.pdftotext(url: url)
         try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
         try PDFValidation.writeTextArtifact(textResult.output, name: "embedded-cid-text/text.txt")
-        #expect(textResult.output.contains("ABBA ABBA BAAB AABB"))
-        #expect(textResult.output.contains("AABB BAAB ABBA ABBA"))
+        #expect(textResult.output.contains("WIDE WILLIAM MINIMUM MARGIN"))
+        #expect(textResult.output.contains("LATIN CID TEXT STAYS ALIGNED"))
 
         let tsvResult = try PDFValidation.pdftotextTSV(url: url)
         try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
         try PDFValidation.writeTextArtifact(tsvResult.output, name: "embedded-cid-text/poppler.tsv")
         let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
         let popplerIssues = popplerLayout.visualLayoutIssues()
-        #expect(popplerLayout.words.count >= 16)
+        #expect(popplerLayout.words.count >= 18)
         #expect(
             popplerIssues.isEmpty,
             "Embedded CID text Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
@@ -298,7 +298,7 @@ struct PDFVisualLayoutValidationTests {
         try PDFValidation.writeTextArtifact(structuredText.output, name: "embedded-cid-text/mupdf-stext.xml")
         let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
         let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) >= 64)
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) >= 88)
         #expect(
             mupdfIssues.isEmpty,
             "Embedded CID text MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
@@ -839,7 +839,7 @@ struct PDFVisualLayoutValidationTests {
     }
 
     private func embeddedCIDTextPDF() throws -> Data {
-        let fontData = SyntheticTrueTypeFont.data(includeGlyphOutlines: true)
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
         let metadata = try TrueTypeFontParser().parse(fontData)
         let mapper = TrueTypeGlyphMapper(
             data: fontData,
@@ -853,10 +853,10 @@ struct PDFVisualLayoutValidationTests {
         )
         let canvas = PDFPageCanvas()
         let lines = [
-            "ABBA ABBA BAAB AABB",
-            "AABB BAAB ABBA ABBA",
-            "BAAB AABB ABBA BAAB",
-            "ABBA BAAB AABB ABBA",
+            "WIDE WILLIAM MINIMUM MARGIN",
+            "NARROW INK MEETS WIDE WORDS",
+            "LATIN CID TEXT STAYS ALIGNED",
+            "WIDE LETTERS AND THIN INK",
         ]
 
         for (index, line) in lines.enumerated() {
@@ -870,7 +870,7 @@ struct PDFVisualLayoutValidationTests {
         }
 
         return try PDFDocumentWriter(
-            pageSize: PDFOptions.PageSize(width: 360, height: 360),
+            pageSize: PDFOptions.PageSize(width: 440, height: 360),
             fontSet: .pdfBase,
             pages: [canvas],
             images: [],
