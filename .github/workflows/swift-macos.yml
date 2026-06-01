@@ -28,7 +28,7 @@ jobs:
           git checkout --detach FETCH_HEAD
       - name: Format, lint, build, test
         run: |
-          brew install poppler qpdf swiftformat swiftlint
+          brew install mupdf poppler qpdf swiftformat swiftlint
           swiftformat . --config .swiftformat --lint
           swiftlint --config .swiftlint.yml --strict
           cd Packages && swift build && swift test

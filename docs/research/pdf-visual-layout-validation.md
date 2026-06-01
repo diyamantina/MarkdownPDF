@@ -203,11 +203,12 @@ On the current macOS machine:
 - `qpdf`: available at `/opt/homebrew/bin/qpdf`.
 - `gs`: available at `/opt/homebrew/bin/gs`.
 - `magick`: available at `/opt/homebrew/bin/magick`.
-- `mutool`: not installed.
+- `mutool`: available at `/opt/homebrew/bin/mutool`.
 - `diff-pdf`: not installed.
 
-The first implementation should therefore use Poppler TSV geometry because it is
-already installed locally and in the Linux CI dependency set.
+The first implementation used Poppler TSV geometry. The current canonical gate
+also uses MuPDF because it is an independent renderer and extractor that can
+inspect per-character quads.
 
 ## Canonical testing status
 
@@ -217,7 +218,19 @@ It is a fast Swift test that runs `pdftotext -tsv`, parses word and line boxes,
 and fails on invalid boxes, same-line word overlap, words outside page bounds,
 or line-box collisions.
 
-This is now part of the canonical test gate for layout-affecting renderer
-changes. It is not a full typography oracle: MuPDF character-quad validation
-remains a stronger follow-up for letter-level overlap, and golden raster
-comparison remains deferred until layout stabilizes.
+MuPDF character-quad validation lives in
+`PDFVisualLayoutValidationTests.generatedPDFsDoNotHaveOverlappingMuPDFCharacterQuads`.
+It runs `mutool draw -F stext`, parses character quads, and fails on
+non-positive glyph boxes, glyphs outside page bounds, same-word glyph overlap,
+or glyph order moving backward inside a text run.
+
+Raster comparison lives in
+`PDFVisualLayoutValidationTests.popplerAndMuPDFRenderComparableInkBounds`. It
+renders the first representative page through Poppler and MuPDF as raw PNM,
+measures non-white pixels and ink bounds, and fails on blank renders, size
+divergence, ink-bound divergence, or large ink-coverage divergence.
+
+Together, these tests are now the canonical visual gate for layout-affecting
+renderer changes. Remaining gaps are smaller: this is not a full
+pixel-perfect golden image suite, but it no longer relies on manual inspection
+or word-level geometry alone.

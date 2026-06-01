@@ -17,7 +17,7 @@ jobs:
       - name: Install runner tools
         run: |
           apt-get update
-          apt-get install -y git poppler-utils qpdf
+          apt-get install -y git mupdf-tools poppler-utils qpdf
       - name: Checkout repository
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
