@@ -209,11 +209,15 @@ On the current macOS machine:
 The first implementation should therefore use Poppler TSV geometry because it is
 already installed locally and in the Linux CI dependency set.
 
-## Implementation status
+## Canonical testing status
 
-The first Poppler TSV geometry check was added on branch
-`test/25-canonical-pdf-structure-validation` after this research pass. It is a
-fast Swift test that runs `pdftotext -tsv`, parses word and line boxes, and
-fails on invalid boxes, same-line word overlap, words outside page bounds, or
-line-box collisions. MuPDF character-quad validation remains a stronger
-follow-up for letter-level overlap.
+The first Poppler TSV geometry check lives in
+`PDFVisualLayoutValidationTests.generatedPDFsDoNotHaveOverlappingPopplerWordBoxes`.
+It is a fast Swift test that runs `pdftotext -tsv`, parses word and line boxes,
+and fails on invalid boxes, same-line word overlap, words outside page bounds,
+or line-box collisions.
+
+This is now part of the canonical test gate for layout-affecting renderer
+changes. It is not a full typography oracle: MuPDF character-quad validation
+remains a stronger follow-up for letter-level overlap, and golden raster
+comparison remains deferred until layout stabilizes.

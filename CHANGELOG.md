@@ -24,3 +24,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   structures.
 - Model image XObjects and reusable image resource references through typed
   Swift structures.
+- Build page content streams from typed PDF operator structures.

@@ -174,6 +174,56 @@ struct PDFDocumentStructureTests {
         #expect(resources.pdfDictionary.serialized() == "<< /XObject << /Im1 4 0 R /Fm1 5 0 R >> >>")
     }
 
+    @Test("Serializes typed text content stream operators")
+    func serializesTypedTextContentStreamOperators() {
+        var stream = PDFContentStream()
+
+        stream.append([
+            .beginText,
+            .setFont(PDFSyntax.Name("F1"), size: 12),
+            .moveText(x: 20, y: 30),
+            .showText(PDFSyntax.LiteralString(#"Text (with slash \)"#)),
+            .endText,
+        ])
+
+        #expect(stream.serialized == #"BT /F1 12 Tf 20 30 Td (Text \(with slash \\\)) Tj ET"# + "\n")
+    }
+
+    @Test("Serializes typed graphics content stream operators")
+    func serializesTypedGraphicsContentStreamOperators() {
+        var stream = PDFContentStream()
+
+        stream.append(.setFillColor(PDFColor(red: 0.05, green: 0.24, blue: 0.62)))
+        stream.append([
+            .setStrokeColor(PDFColor(red: 0.35, green: 0.35, blue: 0.35)),
+            .setLineWidth(0.5),
+            .moveTo(x: 10, y: 12),
+            .lineTo(x: 40, y: 12),
+            .stroke,
+        ])
+        stream.append([
+            .rectangle(x: 20, y: 24, width: 80, height: 30),
+            .fill,
+        ])
+        stream.append([
+            .saveGraphicsState,
+            .concatenateMatrix(a: 40, b: 0, c: 0, d: 30, e: 20, f: 10),
+            .drawXObject(PDFSyntax.Name("Im1")),
+            .restoreGraphicsState,
+        ])
+
+        #expect(
+            stream.serialized
+                == """
+                0.050 0.240 0.620 rg
+                0.350 0.350 0.350 RG 0.500 w 10 12 m 40 12 l S
+                20 24 80 30 re f
+                q 40 0 0 30 20 10 cm /Im1 Do Q
+
+                """,
+        )
+    }
+
     @Test("Serializes PDF base font object without descriptor or embedded font file")
     func serializesPDFBaseFontObjectWithoutDescriptorOrEmbeddedFontFile() {
         let font = PDFFontObject(font: .helvetica, fontSet: .pdfBase)

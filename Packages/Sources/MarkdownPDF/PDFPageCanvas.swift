@@ -1,9 +1,13 @@
 import Foundation
 
 final class PDFPageCanvas {
-    private(set) var commands: String = ""
+    private var contentStream = PDFContentStream()
     private(set) var linkAnnotations: [PDFLinkAnnotation] = []
     private(set) var resourceUsage = PDFPageResourceUsage()
+
+    var commands: String {
+        contentStream.serialized
+    }
 
     func drawTextRun(
         _ run: PDFTextRun,
@@ -13,11 +17,13 @@ final class PDFPageCanvas {
     ) {
         resourceUsage.useFont(run.font)
         setFillColor(run.color)
-        let fontName = PDFSyntax.Name(run.font.rawValue).serialized
-        let text = PDFSyntax.LiteralString(run.text).serialized
-        append(
-            "BT \(fontName) \(pdfNumber(run.size)) Tf \(pdfNumber(x)) \(pdfNumber(y)) Td \(text) Tj ET\n",
-        )
+        contentStream.append([
+            .beginText,
+            .setFont(PDFSyntax.Name(run.font.rawValue), size: run.size),
+            .moveText(x: x, y: y),
+            .showText(PDFSyntax.LiteralString(run.text)),
+            .endText,
+        ])
 
         let width = run.width(fontSet: fontSet)
         if run.underline {
@@ -62,9 +68,12 @@ final class PDFPageCanvas {
         color: PDFColor = .black,
     ) {
         setStrokeColor(color)
-        append(
-            "\(pdfNumber(width)) w \(pdfNumber(x1)) \(pdfNumber(y1)) m \(pdfNumber(x2)) \(pdfNumber(y2)) l S\n",
-        )
+        contentStream.append([
+            .setLineWidth(width),
+            .moveTo(x: x1, y: y1),
+            .lineTo(x: x2, y: y2),
+            .stroke,
+        ])
     }
 
     func drawRectangle(
@@ -77,11 +86,18 @@ final class PDFPageCanvas {
     ) {
         if let fill {
             setFillColor(fill)
-            append("\(pdfNumber(x)) \(pdfNumber(y)) \(pdfNumber(width)) \(pdfNumber(height)) re f\n")
+            contentStream.append([
+                .rectangle(x: x, y: y, width: width, height: height),
+                .fill,
+            ])
         }
         if let stroke {
             setStrokeColor(stroke)
-            append("0.5 w \(pdfNumber(x)) \(pdfNumber(y)) \(pdfNumber(width)) \(pdfNumber(height)) re S\n")
+            contentStream.append([
+                .setLineWidth(0.5),
+                .rectangle(x: x, y: y, width: width, height: height),
+                .stroke,
+            ])
         }
     }
 
@@ -93,25 +109,19 @@ final class PDFPageCanvas {
         height: Double,
     ) {
         resourceUsage.useImageXObject(named: name)
-        let imageName = PDFSyntax.Name(name).serialized
-        append(
-            "q \(pdfNumber(width)) 0 0 \(pdfNumber(height)) \(pdfNumber(x)) \(pdfNumber(y)) cm \(imageName) Do Q\n",
-        )
+        contentStream.append([
+            .saveGraphicsState,
+            .concatenateMatrix(a: width, b: 0, c: 0, d: height, e: x, f: y),
+            .drawXObject(PDFSyntax.Name(name)),
+            .restoreGraphicsState,
+        ])
     }
 
     private func setFillColor(_ color: PDFColor) {
-        append("\(pdfNumber(color.red)) \(pdfNumber(color.green)) \(pdfNumber(color.blue)) rg\n")
+        contentStream.append(.setFillColor(color))
     }
 
     private func setStrokeColor(_ color: PDFColor) {
-        append("\(pdfNumber(color.red)) \(pdfNumber(color.green)) \(pdfNumber(color.blue)) RG\n")
-    }
-
-    private func pdfNumber(_ value: Double) -> String {
-        PDFSyntax.Number(value).serialized
-    }
-
-    private func append(_ command: String) {
-        commands.append(command)
+        contentStream.append(.setStrokeColor(color))
     }
 }
