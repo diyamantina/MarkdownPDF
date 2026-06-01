@@ -228,7 +228,7 @@ Raster comparison lives in
 `PDFVisualLayoutValidationTests.popplerAndMuPDFRenderComparableInkBounds`. It
 renders the first representative page through Poppler and MuPDF as raw PNM,
 measures non-white pixels and ink bounds, and fails on blank renders, size
-divergence, ink-bound divergence, or large ink-coverage divergence.
+divergence, or non-overlapping ink bounds.
 
 Together, these tests are now the canonical visual gate for layout-affecting
 renderer changes. Remaining gaps are smaller: this is not a full

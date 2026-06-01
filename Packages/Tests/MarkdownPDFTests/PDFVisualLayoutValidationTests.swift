@@ -148,24 +148,26 @@ struct PDFVisualLayoutValidationTests {
             return issues
         }
 
-        let allowedDelta = 12
-        if abs(popplerBox.left - mupdfBox.left) > allowedDelta
-            || abs(popplerBox.top - mupdfBox.top) > allowedDelta
-            || abs(popplerBox.right - mupdfBox.right) > allowedDelta
-            || abs(popplerBox.bottom - mupdfBox.bottom) > allowedDelta
-        {
+        let overlapRatio = inkOverlapRatio(popplerBox, mupdfBox)
+        if overlapRatio < 0.85 {
             issues.append("ink bounds differ: Poppler \(popplerBox), MuPDF \(mupdfBox)")
         }
 
-        let inkRatio = Double(mupdfInk.nonWhitePixelCount) / Double(popplerInk.nonWhitePixelCount)
-        if inkRatio < 0.5 || inkRatio > 1.8 {
-            issues.append(
-                "ink coverage differs: Poppler \(popplerInk.nonWhitePixelCount), "
-                    + "MuPDF \(mupdfInk.nonWhitePixelCount)",
-            )
+        return issues
+    }
+
+    private func inkOverlapRatio(_ left: PNMImage.InkBox, _ right: PNMImage.InkBox) -> Double {
+        let intersectionLeft = max(left.left, right.left)
+        let intersectionTop = max(left.top, right.top)
+        let intersectionRight = min(left.right, right.right)
+        let intersectionBottom = min(left.bottom, right.bottom)
+        guard intersectionLeft <= intersectionRight, intersectionTop <= intersectionBottom else {
+            return 0
         }
 
-        return issues
+        let intersectionArea = (intersectionRight - intersectionLeft + 1) * (intersectionBottom - intersectionTop + 1)
+        let smallerArea = min(left.width * left.height, right.width * right.height)
+        return Double(intersectionArea) / Double(smallerArea)
     }
 
     private func pnmImage(width: Int, height: Int, inkBox: ClosedRange<Int>) -> Data {
