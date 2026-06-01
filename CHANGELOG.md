@@ -20,3 +20,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   typed Swift structures.
 - Model the PDF catalog, flat page tree, and page dictionaries as typed Swift
   structures.
+- Track page resource usage and resource dictionaries through typed Swift
+  structures.

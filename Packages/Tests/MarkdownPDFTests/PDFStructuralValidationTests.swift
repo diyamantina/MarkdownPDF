@@ -1,5 +1,5 @@
 import Foundation
-import MarkdownPDF
+@testable import MarkdownPDF
 import Testing
 
 @Suite("PDF structural validation")
@@ -109,6 +109,15 @@ struct PDFStructuralValidationTests {
         #expect(issues.contains { $0.contains("uses undeclared font /F1") })
     }
 
+    @Test("Rejects undeclared image XObject usage")
+    func rejectsUndeclaredImageXObjectUsage() {
+        let data = xObjectFixturePDF()
+        let damaged = replaceFirst(matching: #"/Im1 \d+ 0 R"#, with: "", in: data)
+        let issues = PDFInspector(damaged).canonicalStructureIssues()
+
+        #expect(issues.contains { $0.contains("uses undeclared XObject /Im1") })
+    }
+
     @Test("Rejects missing page resources")
     func rejectsMissingPageResources() throws {
         let data = try MarkdownPDFRenderer().render(markdown: "Hello from MarkdownPDF.")
@@ -125,6 +134,15 @@ struct PDFStructuralValidationTests {
         let issues = PDFInspector(damaged).canonicalStructureIssues()
 
         #expect(issues.contains { $0.contains("font resource /F1 references missing object 99") })
+    }
+
+    @Test("Rejects declared image XObject references that are missing")
+    func rejectsDeclaredImageXObjectReferencesThatAreMissing() {
+        let data = xObjectFixturePDF()
+        let damaged = replaceFirst(matching: #"/Im1 \d+ 0 R"#, with: "/Im1 99 0 R", in: data)
+        let issues = PDFInspector(damaged).canonicalStructureIssues()
+
+        #expect(issues.contains { $0.contains("XObject resource /Im1 references missing object 99") })
     }
 
     @Test("Rejects missing object references")
@@ -158,6 +176,42 @@ struct PDFStructuralValidationTests {
         }
 
         return Data(text.replacingCharacters(in: range, with: replacement).utf8)
+    }
+
+    private func xObjectFixturePDF() -> Data {
+        var registry = PDFObjectRegistry()
+        let catalogRef = registry.reserve()
+        let pagesRef = registry.reserve()
+        let imageRef = registry.add(Data(PDFSyntax.Dictionary([
+            .init("Type", .pdfName("XObject")),
+            .init("Subtype", .pdfName("Image")),
+        ]).serialized().utf8))
+        let contentRef = registry.add(PDFSyntax.Stream(
+            dictionary: PDFSyntax.Dictionary(),
+            data: Data("q /Im1 Do Q\n".utf8),
+        ).serialized)
+        let pageRef = registry.add(Data(PDFPageDictionary(
+            parent: pagesRef,
+            mediaBox: PDFOptions.PageSize(width: 300, height: 300),
+            resources: PDFPageResources(
+                imageXObjects: [
+                    PDFPageResources.Entry(name: "Im1", objectRef: imageRef),
+                ],
+            ).pdfDictionary,
+            contents: contentRef,
+            annotations: [],
+        ).pdfDictionary.serialized(style: .multiline).utf8))
+
+        registry.set(
+            pagesRef,
+            body: Data(PDFDocumentPageTree(kids: [pageRef]).pdfDictionary.serialized().utf8),
+        )
+        registry.set(
+            catalogRef,
+            body: Data(PDFDocumentCatalog(pages: pagesRef, displayDocumentTitle: false).pdfDictionary.serialized().utf8),
+        )
+
+        return registry.serializedFile(root: catalogRef)
     }
 
     private func minimalJPEG() -> Data {

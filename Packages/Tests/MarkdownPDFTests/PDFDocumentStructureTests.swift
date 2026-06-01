@@ -70,6 +70,61 @@ struct PDFDocumentStructureTests {
         #expect(!page.pdfDictionary.serialized(style: .multiline).contains("/Annots"))
     }
 
+    @Test("Serializes page resources from typed entries")
+    func serializesPageResourcesFromTypedEntries() {
+        let resources = PDFPageResources(
+            fonts: [
+                PDFPageResources.Entry(name: "F2", objectRef: PDFSyntax.Reference(objectNumber: 3)),
+            ],
+            imageXObjects: [
+                PDFPageResources.Entry(name: "Im1", objectRef: PDFSyntax.Reference(objectNumber: 4)),
+            ],
+            formXObjects: [
+                PDFPageResources.Entry(name: "Fm1", objectRef: PDFSyntax.Reference(objectNumber: 5)),
+            ],
+            extGStates: [
+                PDFPageResources.Entry(name: "GS1", objectRef: PDFSyntax.Reference(objectNumber: 6)),
+            ],
+            patterns: [
+                PDFPageResources.Entry(name: "P1", objectRef: PDFSyntax.Reference(objectNumber: 7)),
+            ],
+        )
+
+        #expect(
+            resources.pdfDictionary.serialized()
+                == "<< /ExtGState << /GS1 6 0 R >> /Font << /F2 3 0 R >> /XObject << /Im1 4 0 R /Fm1 5 0 R >> /Pattern << /P1 7 0 R >> >>",
+        )
+    }
+
+    @Test("Omits unused resource namespaces")
+    func omitsUnusedResourceNamespaces() {
+        let resources = PDFPageResources(
+            fonts: [
+                PDFPageResources.Entry(name: "F1", objectRef: PDFSyntax.Reference(objectNumber: 3)),
+            ],
+        )
+
+        #expect(resources.pdfDictionary.serialized() == "<< /Font << /F1 3 0 R >> >>")
+    }
+
+    @Test("Draw commands populate typed page resource usage")
+    func drawCommandsPopulateTypedPageResourceUsage() {
+        let canvas = PDFPageCanvas()
+
+        canvas.drawTextRun(
+            PDFTextRun(text: "Heading", font: .helveticaBold, size: 12),
+            x: 20,
+            y: 100,
+            fontSet: .pdfBase,
+        )
+        canvas.drawImage(name: "Im1", x: 20, y: 20, width: 40, height: 30)
+
+        #expect(canvas.resourceUsage.usedFonts == [.helveticaBold])
+        #expect(canvas.resourceUsage.usedImageXObjectNames == ["Im1"])
+        #expect(canvas.commands.contains("/F2 12 Tf"))
+        #expect(canvas.commands.contains("/Im1 Do"))
+    }
+
     @Test("Renderer keeps deterministic document spine object order")
     func rendererKeepsDeterministicDocumentSpineObjectOrder() throws {
         let data = try MarkdownPDFRenderer().render(markdown: "Hello from MarkdownPDF.")
@@ -87,5 +142,13 @@ struct PDFDocumentStructureTests {
         #expect(font.content.contains("/Type /Font"))
         #expect(content.isStream)
         #expect(page.content.contains("<< /Type /Page\n"))
+    }
+
+    @Test("Renderer keeps deterministic font resource order")
+    func rendererKeepsDeterministicFontResourceOrder() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: "Regular **Bold** *Italic* `code`")
+        let text = String(decoding: data, as: UTF8.self)
+
+        #expect(text.contains("/Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >>"))
     }
 }

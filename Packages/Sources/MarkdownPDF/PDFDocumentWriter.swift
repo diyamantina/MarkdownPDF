@@ -13,31 +13,31 @@ struct PDFDocumentWriter {
         let pagesRef = builder.reserve()
 
         let usedFonts = StandardFont.allCases.filter { font in
-            pages.contains { $0.usedFonts.contains(font) }
+            pages.contains { $0.resourceUsage.usesFont(font) }
         }
         let fontResources = Dictionary(uniqueKeysWithValues: usedFonts.map { font in
             (
                 font,
-                PageResources.Entry(name: font.rawValue, objectRef: builder.addFont(font, fontSet: fontSet))
+                PDFPageResources.Entry(name: font.rawValue, objectRef: builder.addFont(font, fontSet: fontSet))
             )
         })
 
-        let usedImageNames = Set(pages.flatMap(\.usedImageNames))
+        let usedImageNames = Set(pages.flatMap(\.resourceUsage.usedImageXObjectNames))
         let imageResources = Dictionary(uniqueKeysWithValues: images.filter { usedImageNames.contains($0.name) }.map { image in
             (
                 image.name,
-                PageResources.Entry(name: image.name, objectRef: builder.addImage(image))
+                PDFPageResources.Entry(name: image.name, objectRef: builder.addImage(image))
             )
         })
 
-        func resources(for page: PDFPageCanvas) -> PageResources {
-            let pageFonts = StandardFont.allCases.compactMap { font in
-                page.usedFonts.contains(font) ? fontResources[font] : nil
+        func resources(for page: PDFPageCanvas) -> PDFPageResources {
+            let pageFonts = page.resourceUsage.usedFonts.compactMap { font in
+                fontResources[font]
             }
             let pageXObjects = images.compactMap { image in
-                page.usedImageNames.contains(image.name) ? imageResources[image.name] : nil
+                page.resourceUsage.usesImageXObject(named: image.name) ? imageResources[image.name] : nil
             }
-            return PageResources(fonts: pageFonts, xObjects: pageXObjects)
+            return PDFPageResources(fonts: pageFonts, imageXObjects: pageXObjects)
         }
 
         var pageRefs: [PDFSyntax.Reference] = []
@@ -74,41 +74,6 @@ struct PDFDocumentWriter {
         )
 
         return builder.build(root: catalogRef)
-    }
-
-    private struct PageResources {
-        var fonts: [Entry]
-        var xObjects: [Entry]
-
-        var pdfDictionary: PDFSyntax.Dictionary {
-            var entries: [PDFSyntax.Dictionary.Entry] = []
-            if !fonts.isEmpty {
-                entries.append(
-                    .init(
-                        "Font",
-                        .dictionary(PDFSyntax.Dictionary(fonts.map(\.pdfEntry))),
-                    ),
-                )
-            }
-            if !xObjects.isEmpty {
-                entries.append(
-                    .init(
-                        "XObject",
-                        .dictionary(PDFSyntax.Dictionary(xObjects.map(\.pdfEntry))),
-                    ),
-                )
-            }
-            return PDFSyntax.Dictionary(entries)
-        }
-
-        struct Entry {
-            var name: String
-            var objectRef: PDFSyntax.Reference
-
-            var pdfEntry: PDFSyntax.Dictionary.Entry {
-                .init(name, .reference(objectRef))
-            }
-        }
     }
 
     private struct Builder {
