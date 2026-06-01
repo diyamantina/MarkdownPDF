@@ -214,8 +214,8 @@ flowchart TD
     F0["Phase 0<br/>#49 Witness artifacts Done"]
     F1["Phase 1<br/>#50 Article fixtures Done"]
     F2["Phase 2<br/>#51 Text encoding Done"]
-    F3["Phase 3<br/>#52 Oversized blocks In review"]
-    F4["Phase 4<br/>#53 Tables Ready"]
+    F3["Phase 3<br/>#52 Oversized blocks Done"]
+    F4["Phase 4<br/>#53 Tables In progress"]
     F5["Phase 5<br/>#54 Diagrams and charts Ready"]
     F6["Phase 6<br/>#55 Fonts and ToUnicode plan Ready"]
 
@@ -228,8 +228,9 @@ flowchart TD
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
     class F0,F1 done;
     class F2 done;
-    class F3 review;
-    class F4,F5,F6 todo;
+    class F3 done;
+    class F4 active;
+    class F5,F6 todo;
 ```
 
 ## Build and Test
