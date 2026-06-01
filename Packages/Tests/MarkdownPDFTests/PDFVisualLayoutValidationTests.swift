@@ -368,6 +368,104 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("Measured tables preserve alignment and repeat headers across pages")
+    func measuredTablesPreserveAlignmentAndRepeatHeadersAcrossPages() throws {
+        let longCell = (1 ... 56)
+            .map { "span\($0)" }
+            .joined(separator: " ")
+        let rows = (1 ... 16)
+            .map { row in
+                let description = [
+                    "Measured prose cell \(row) keeps words separated near borders",
+                    "UltraPortableDeterministicTableTokenWithoutSpaces\(row)",
+                    "and wraps dense article-style language across the measured column.",
+                ].joined(separator: " ")
+                return "| row-\(row) | \(description) | \(90 + row) |"
+            }
+            .joined(separator: "\n")
+        let markdown = """
+        # Measured Tables
+
+        | ID | Description | Score |
+        |:---|:---:|---:|
+        | intro | \(longCell) | 100 |
+        \(rows)
+        """
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 280, height: 250),
+                margins: PDFOptions.Margins(top: 30, right: 24, bottom: 30, left: 24),
+                baseFontSize: 9,
+            ),
+        ).render(markdown: markdown)
+        let url = try PDFValidation.temporaryPDF(name: "measured-tables", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+
+        #expect(pageCount >= 4)
+        #expect(tableRectangleWidths(in: inspector).contains { $0 < 60 })
+        #expect(tableRectangleWidths(in: inspector).contains { $0 > 95 })
+        try PDFValidation.writeArtifact(data, name: "measured-tables.pdf")
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "measured-tables/text.txt")
+        #expect(textResult.output.contains("row-16"))
+        #expect(textResult.output.components(separatedBy: "Description").count >= 3)
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "measured-tables/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+        #expect(
+            popplerIssues.isEmpty,
+            "Measured table Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "measured-tables/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+        #expect(
+            mupdfIssues.isEmpty,
+            "Measured table MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "measured-tables/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "measured-tables/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "measured-tables-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "measured-tables-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "Measured table raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("Visual layout validator rejects overlapping words")
     func visualLayoutValidatorRejectsOverlappingWords() throws {
         let layout = try PopplerTextLayout(tsv: """
@@ -645,7 +743,33 @@ struct PDFVisualLayoutValidationTests {
 
     oversized-blocks-pages/
     Poppler and MuPDF page rasters for the oversized blocks fixture.
+
+    measured-tables.pdf
+    PDF proving measured table column widths, mixed alignment, row splitting, and repeated headers.
+
+    measured-tables/
+    Text, geometry, structured text, and render logs for the measured table fixture.
+
+    measured-tables-pages/
+    Poppler and MuPDF page rasters for the measured table fixture.
     """
+
+    private func tableRectangleWidths(in inspector: PDFInspector) -> [Double] {
+        inspector.streams
+            .flatMap { stream in
+                stream.body
+                    .split(separator: "\n")
+                    .compactMap { line -> Double? in
+                        let parts = line.split(separator: " ")
+                        guard let rectangleIndex = parts.firstIndex(of: "re"),
+                              rectangleIndex >= 2
+                        else {
+                            return nil
+                        }
+                        return Double(parts[rectangleIndex - 2])
+                    }
+            }
+    }
 
     private func rasterComparisonIssues(poppler: PNMImage, mupdf: PNMImage) -> [String] {
         var issues: [String] = []

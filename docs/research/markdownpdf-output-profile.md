@@ -208,6 +208,38 @@ Long tokens are split by measured font width before they exceed the line width.
 This protects headings, ToC entries, URLs, and identifiers from colliding with
 page bounds or neighboring text.
 
+## Tables
+
+Tables render as portable PDF page content: stroked cell rectangles, optional
+header fill rectangles, and text runs. The output is not tagged PDF table
+structure.
+
+Column widths are measured from the header cells and all body rows before the
+table is drawn. The width plan uses standard-font text metrics to compute a
+minimum width and a preferred width per column, then distributes the available
+content width deterministically. Wide prose columns can receive more space than
+short identifier or numeric columns, while every column remains bounded by the
+page content width.
+
+Cell text wraps inside its measured column. Long no-space tokens are split by
+the same measured-token policy used by paragraphs and headings. Alignment
+markers are preserved per column:
+
+- Leading columns draw from the left cell padding.
+- Center columns center each wrapped line in the cell.
+- Trailing columns draw each wrapped line against the right cell padding.
+
+Rows split by wrapped cell-line fragments when a row is taller than the
+remaining page space. Body pages repeat the prepared header after a page break
+when the table continues. If a header itself consumes too much page space, the
+renderer avoids an infinite repeat and continues on a fresh page.
+
+The measured table witness fixture covers mixed alignments, dense prose cells,
+long no-space tokens, a tall row that splits across page boundaries, repeated
+headers, qpdf syntax validation, Poppler text and geometry, MuPDF character
+quads, and all-page Poppler/MuPDF raster comparison. macOS and Linux use the
+same portable table algorithm. iOS support is not claimed.
+
 ## Text encoding
 
 The portable base-font profile emits PDF literal strings and font dictionaries
@@ -238,8 +270,8 @@ policies:
 - Code blocks split by wrapped code line fragments. Each fragment gets its own
   code background rectangle and never reserves more than the available page body.
 - Table rows split by wrapped cell-line fragments when one row is taller than the
-  usable page body. Header repetition and richer table pagination remain future
-  table work.
+  usable page body. Continued table pages repeat the prepared header when the
+  table body crosses a page break.
 - Mermaid diagrams render as vector drawing commands only when the measured plan
   fits the page body. Too-tall or too-wide diagrams fall back to a visible code
   block, so the split code-block policy applies.

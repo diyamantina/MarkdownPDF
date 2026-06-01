@@ -64,6 +64,15 @@ private struct TableOfContentsEntry: Equatable {
     var pageNumber: Int
 }
 
+private struct TableColumnMetrics {
+    var minimumWidth: Double
+    var preferredWidth: Double
+}
+
+private struct TablePreparedRow {
+    var cellLines: [[[PDFTextRun]]]
+}
+
 private struct Layout {
     var options: PDFOptions
     var assetsBaseURL: URL?
@@ -689,57 +698,205 @@ private struct Layout {
     }
 
     private mutating func renderTable(_ table: MarkdownBlock.Table) {
-        let columns = max(1, table.headers.count)
-        let columnWidth = contentWidth / Double(columns)
         let cellPadding = 4.0
         let fontSize = options.baseFontSize * 0.9
         let lineHeight = fontSize * 1.35
-
-        renderTableRow(
+        let columns = tableColumnCount(table)
+        let columnWidths = measuredTableColumnWidths(
+            table,
+            columns: columns,
+            cellPadding: cellPadding,
+            fontSize: fontSize,
+        )
+        let header = preparedTableRow(
             cells: table.headers,
+            columns: columns,
+            columnWidths: columnWidths,
+            cellPadding: cellPadding,
+            fontSize: fontSize,
+            header: true,
+        )
+
+        renderPreparedTableRow(
+            header,
             alignments: table.alignments,
-            columnWidth: columnWidth,
+            columnWidths: columnWidths,
             cellPadding: cellPadding,
             fontSize: fontSize,
             lineHeight: lineHeight,
             header: true,
+            repeatedHeader: nil,
         )
 
         for row in table.rows {
-            renderTableRow(
+            let preparedRow = preparedTableRow(
                 cells: row,
+                columns: columns,
+                columnWidths: columnWidths,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+                header: false,
+            )
+            renderPreparedTableRow(
+                preparedRow,
                 alignments: table.alignments,
-                columnWidth: columnWidth,
+                columnWidths: columnWidths,
                 cellPadding: cellPadding,
                 fontSize: fontSize,
                 lineHeight: lineHeight,
                 header: false,
+                repeatedHeader: header,
             )
         }
 
         y -= 12
     }
 
-    private mutating func renderTableRow(
+    private func tableColumnCount(_ table: MarkdownBlock.Table) -> Int {
+        let counts = [table.headers.count, table.alignments.count] + table.rows.map(\.count)
+        return max(1, counts.max() ?? 1)
+    }
+
+    private func measuredTableColumnWidths(
+        _ table: MarkdownBlock.Table,
+        columns: Int,
+        cellPadding: Double,
+        fontSize: Double,
+    ) -> [Double] {
+        let minimumColumnWidth = min(36, contentWidth / Double(columns))
+        let maximumColumnWidth = columns == 1 ? contentWidth : contentWidth * 0.65
+        let metrics = (0 ..< columns).map { column in
+            tableColumnMetrics(
+                table,
+                column: column,
+                columns: columns,
+                minimumWidth: minimumColumnWidth,
+                maximumWidth: maximumColumnWidth,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+            )
+        }
+        let preferredWidths = metrics.map(\.preferredWidth)
+        let minimumWidths = metrics.map(\.minimumWidth)
+        let preferredTotal = preferredWidths.reduce(0, +)
+
+        if preferredTotal <= contentWidth {
+            let slack = contentWidth - preferredTotal
+            return preferredWidths.map { $0 + slack / Double(columns) }
+        }
+
+        let minimumTotal = minimumWidths.reduce(0, +)
+        guard minimumTotal < contentWidth else {
+            return Array(repeating: contentWidth / Double(columns), count: columns)
+        }
+
+        let shrinkableTotal = zip(preferredWidths, minimumWidths)
+            .map { $0 - $1 }
+            .reduce(0, +)
+        guard shrinkableTotal > 0 else {
+            return Array(repeating: contentWidth / Double(columns), count: columns)
+        }
+
+        let overflow = preferredTotal - contentWidth
+        return zip(preferredWidths, minimumWidths).map { preferred, minimum in
+            let shrinkable = preferred - minimum
+            return preferred - overflow * (shrinkable / shrinkableTotal)
+        }
+    }
+
+    private func tableColumnMetrics(
+        _ table: MarkdownBlock.Table,
+        column: Int,
+        columns: Int,
+        minimumWidth: Double,
+        maximumWidth: Double,
+        cellPadding: Double,
+        fontSize: Double,
+    ) -> TableColumnMetrics {
+        let headerRuns = tableRuns(
+            table.headers,
+            column: column,
+            font: .helveticaBold,
+            size: fontSize,
+        )
+        let bodyRuns = table.rows.map {
+            tableRuns($0, column: column, font: .helvetica, size: fontSize)
+        }
+        let allRuns = [headerRuns] + bodyRuns
+        let contentWidths = allRuns.map { $0.reduce(0) { $0 + $1.width(fontSet: options.fontSet) } }
+        let tokenWidths = allRuns
+            .flatMap(tokenize)
+            .filter { $0.text != "\n" }
+            .map { $0.width(fontSet: options.fontSet) }
+        let preferredContentWidth = contentWidths.max() ?? 0
+        let widestTokenWidth = tokenWidths.max() ?? 0
+        let paddedPreferredWidth = preferredContentWidth + cellPadding * 2
+        let paddedTokenWidth = widestTokenWidth + cellPadding * 2
+        let preferredWidth = min(maximumWidth, max(minimumWidth, paddedPreferredWidth))
+        let tokenFloor = min(maximumWidth, max(minimumWidth, paddedTokenWidth))
+        let fairFloor = max(minimumWidth, min(tokenFloor, contentWidth / Double(columns)))
+
+        return TableColumnMetrics(
+            minimumWidth: fairFloor,
+            preferredWidth: max(preferredWidth, fairFloor),
+        )
+    }
+
+    private func tableRuns(
+        _ cells: [[MarkdownInline]],
+        column: Int,
+        font: StandardFont,
+        size: Double,
+    ) -> [PDFTextRun] {
+        guard column < cells.count else {
+            return []
+        }
+        return flatten(cells[column], font: font, size: size)
+    }
+
+    private func preparedTableRow(
         cells: [[MarkdownInline]],
+        columns: Int,
+        columnWidths: [Double],
+        cellPadding: Double,
+        fontSize: Double,
+        header: Bool,
+    ) -> TablePreparedRow {
+        let cellLines = (0 ..< columns).map { column in
+            let cell = column < cells.count ? cells[column] : []
+            let width = column < columnWidths.count ? columnWidths[column] : contentWidth / Double(columns)
+            return wrappedLines(
+                flatten(cell, font: header ? .helveticaBold : .helvetica, size: fontSize),
+                maxWidth: max(1, width - cellPadding * 2),
+            )
+        }
+        return TablePreparedRow(cellLines: cellLines)
+    }
+
+    private mutating func renderPreparedTableRow(
+        _ row: TablePreparedRow,
         alignments: [MarkdownBlock.Alignment],
-        columnWidth: Double,
+        columnWidths: [Double],
         cellPadding: Double,
         fontSize: Double,
         lineHeight: Double,
         header: Bool,
+        repeatedHeader: TablePreparedRow?,
     ) {
-        let cellLines = cells.map {
-            wrappedLines(
-                flatten($0, font: header ? .helveticaBold : .helvetica, size: fontSize),
-                maxWidth: columnWidth - cellPadding * 2,
-            )
-        }
+        let cellLines = row.cellLines
         let maxLines = max(1, cellLines.map(\.count).max() ?? 1)
         var lineOffset = 0
 
         while lineOffset < maxLines {
-            ensureSpace(lineHeight + cellPadding * 2)
+            ensureTableRowFragmentSpace(
+                lineHeight + cellPadding * 2,
+                header: repeatedHeader,
+                alignments: alignments,
+                columnWidths: columnWidths,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+                lineHeight: lineHeight,
+            )
             let lineCount = min(
                 maxLines - lineOffset,
                 tableRowLineCapacity(lineHeight: lineHeight, cellPadding: cellPadding),
@@ -747,7 +904,7 @@ private struct Layout {
             renderTableRowFragment(
                 cellLines: cellLines,
                 alignments: alignments,
-                columnWidth: columnWidth,
+                columnWidths: columnWidths,
                 cellPadding: cellPadding,
                 fontSize: fontSize,
                 lineHeight: lineHeight,
@@ -758,7 +915,53 @@ private struct Layout {
             lineOffset += lineCount
             if lineOffset < maxLines {
                 startNewPage()
+                if let repeatedHeader {
+                    renderPreparedTableRow(
+                        repeatedHeader,
+                        alignments: alignments,
+                        columnWidths: columnWidths,
+                        cellPadding: cellPadding,
+                        fontSize: fontSize,
+                        lineHeight: lineHeight,
+                        header: true,
+                        repeatedHeader: nil,
+                    )
+                }
             }
+        }
+    }
+
+    private mutating func ensureTableRowFragmentSpace(
+        _ height: Double,
+        header: TablePreparedRow?,
+        alignments: [MarkdownBlock.Alignment],
+        columnWidths: [Double],
+        cellPadding: Double,
+        fontSize: Double,
+        lineHeight: Double,
+    ) {
+        guard y - height < options.margins.bottom else {
+            return
+        }
+
+        startNewPage()
+        guard let header else {
+            return
+        }
+
+        renderPreparedTableRow(
+            header,
+            alignments: alignments,
+            columnWidths: columnWidths,
+            cellPadding: cellPadding,
+            fontSize: fontSize,
+            lineHeight: lineHeight,
+            header: true,
+            repeatedHeader: nil,
+        )
+
+        if y - height < options.margins.bottom {
+            startNewPage()
         }
     }
 
@@ -929,7 +1132,7 @@ private struct Layout {
     private mutating func renderTableRowFragment(
         cellLines: [[[PDFTextRun]]],
         alignments: [MarkdownBlock.Alignment],
-        columnWidth: Double,
+        columnWidths: [Double],
         cellPadding: Double,
         fontSize: Double,
         lineHeight: Double,
@@ -939,9 +1142,10 @@ private struct Layout {
     ) {
         let rowHeight = Double(lineCount) * lineHeight + cellPadding * 2
         let rowBottom = y - rowHeight
+        var x = options.margins.left
 
         for column in 0 ..< cellLines.count {
-            let x = options.margins.left + Double(column) * columnWidth
+            let columnWidth = column < columnWidths.count ? columnWidths[column] : 0
             currentPage.drawRectangle(
                 x: x,
                 y: rowBottom,
@@ -967,6 +1171,7 @@ private struct Layout {
                 drawRuns(line, x: textX, y: lineY)
                 lineY -= lineHeight
             }
+            x += columnWidth
         }
         y = rowBottom
     }
