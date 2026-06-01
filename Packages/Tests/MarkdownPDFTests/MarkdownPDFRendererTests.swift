@@ -115,6 +115,22 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.streamLengthsMatch())
     }
 
+    @Test("Block quotes indent without vertical border strokes")
+    func blockQuotesDoNotEmitVerticalBorderStrokes() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: """
+        Intro paragraph.
+
+        > Quoted text stays readable through indentation.
+
+        Follow-up paragraph.
+        """)
+        let streamBodies = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
+
+        #expect(streamBodies.contains("(Quoted "))
+        #expect(!streamBodies.contains(" l S"))
+        #expect(!streamBodies.contains("2 w"))
+    }
+
     @Test("Writes minimal canonical PDF for one text page")
     func writesMinimalCanonicalPDFForOneTextPage() throws {
         let data = try MarkdownPDFRenderer().render(markdown: "Hello from MarkdownPDF.")

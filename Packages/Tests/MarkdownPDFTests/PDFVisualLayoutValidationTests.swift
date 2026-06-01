@@ -872,6 +872,84 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("Code and quote spacing keeps following text separated")
+    func codeAndQuoteSpacingKeepsFollowingTextSeparated() throws {
+        let markdown = """
+        # Quote Spacing Witness
+
+        The first struct tracks surface characteristics in a single block:
+
+        ```metal
+        struct Surface {
+            float3 baseColor;
+            float shininess;
+            float roughness;
+            float emissive;
+            float3 transmission;
+            float indexOfRefraction;
+        };
+        ```
+
+        > QuoteStartToken surface measurements should stay clear of the preceding code background and finish with QuoteEndToken
+
+        AfterQuoteParagraph begins below the quote, with enough spacing to avoid a crammed transition.
+
+        ```metal
+        struct SurfaceRefraction {
+            half3 transmission;
+            half indexOfRefraction;
+        };
+        ```
+
+        > SecondQuoteStartToken the second quote is directly followed by a heading and ends with SecondQuoteEndToken
+
+        ## AfterQuoteHeading
+
+        AfterHeadingParagraph keeps normal flow below the heading.
+        """
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 420, height: 720),
+                margins: PDFOptions.Margins(top: 42, right: 42, bottom: 42, left: 42),
+                baseFontSize: 12,
+                title: "Quote Spacing Witness",
+            ),
+        ).render(markdown: markdown)
+        try PDFValidation.writeArtifact(data, name: "quote-spacing.pdf")
+
+        let tsvResult = try PDFValidation.pdftotextTSV(data: data, name: "quote-spacing")
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "quote-spacing/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+
+        #expect(
+            popplerIssues.isEmpty,
+            "Quote spacing Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let quoteEnd = try word("QuoteEndToken", in: popplerLayout)
+        let afterParagraph = try word("AfterQuoteParagraph", in: popplerLayout)
+        let secondQuoteEnd = try word("SecondQuoteEndToken", in: popplerLayout)
+        let afterHeading = try word("AfterQuoteHeading", in: popplerLayout)
+
+        #expect(afterParagraph.page == quoteEnd.page)
+        #expect(afterHeading.page == secondQuoteEnd.page)
+        #expect(afterParagraph.top > quoteEnd.bottom + 4)
+        #expect(afterHeading.top > secondQuoteEnd.bottom + 8)
+
+        let structuredText = try PDFValidation.mutoolStructuredText(data: data, name: "quote-spacing-mupdf")
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "quote-spacing/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+
+        #expect(
+            mupdfIssues.isEmpty,
+            "Quote spacing MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("Visual layout validator rejects overlapping words")
     func visualLayoutValidatorRejectsOverlappingWords() throws {
         let layout = try PopplerTextLayout(tsv: """
@@ -1259,6 +1337,10 @@ struct PDFVisualLayoutValidationTests {
         return try String(contentsOf: fixtureURL, encoding: .utf8)
     }
 
+    private func word(_ text: String, in layout: PopplerTextLayout) throws -> PopplerTextLayout.Box {
+        try #require(layout.words.first { $0.text == text }, "Missing extracted word \(text)")
+    }
+
     private static let artifactManifest = """
     MarkdownPDF PDF witness artifacts
 
@@ -1315,6 +1397,12 @@ struct PDFVisualLayoutValidationTests {
 
     a4-manuscript-pages/
     Poppler and MuPDF page rasters for the A4 manuscript fixture.
+
+    quote-spacing.pdf
+    Focused witness for code block, block quote, paragraph, and heading spacing.
+
+    quote-spacing/
+    Poppler TSV geometry and MuPDF structured text for the quote spacing witness.
 
     text-encoding-profile.pdf
     One-page PDF proving the portable text encoding replacement profile.

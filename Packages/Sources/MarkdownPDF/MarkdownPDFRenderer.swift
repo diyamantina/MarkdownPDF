@@ -168,20 +168,13 @@ private struct Layout {
             }
         case let .blockQuote(blocks):
             ensureSpace(24)
-            let left = options.margins.left
-            currentPage.drawLine(
-                x1: left,
-                y1: y + 6,
-                x2: left,
-                y2: max(options.margins.bottom, y - 42),
-                width: 2,
-                color: .gray,
-            )
             let savedLeft = options.margins.left
             options.margins.left += 14
+            y -= blockQuoteTopSpacing
             for nested in blocks {
                 try render(nested)
             }
+            y -= blockQuoteBottomSpacing
             options.margins.left = savedLeft
         case let .unorderedList(items):
             try renderList(items: items, start: nil)
@@ -1502,6 +1495,14 @@ private struct Layout {
 
     private var listTrailingSpacing: Double {
         listDepth > 1 ? 1 : 3
+    }
+
+    private var blockQuoteTopSpacing: Double {
+        options.baseFontSize * 0.45
+    }
+
+    private var blockQuoteBottomSpacing: Double {
+        options.baseFontSize * 0.55
     }
 
     private var contentWidth: Double {
