@@ -1,5 +1,5 @@
 import Foundation
-import MarkdownPDF
+@testable import MarkdownPDF
 import Testing
 
 @Suite("PDF visual layout validation")
@@ -256,6 +256,70 @@ struct PDFVisualLayoutValidationTests {
         #expect(
             rasterIssues.isEmpty,
             "Text encoding raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
+    @Test("Embedded CID text profile passes visual witness stack")
+    func embeddedCIDTextProfilePassesVisualWitnessStack() throws {
+        let data = try embeddedCIDTextPDF()
+        let url = try PDFValidation.temporaryPDF(name: "embedded-cid-text", data: data)
+        let inspector = PDFInspector(data)
+
+        #expect(inspector.pageCount == 1)
+        #expect(inspector.text.contains("/Subtype /Type0"))
+        #expect(inspector.text.contains("/Subtype /CIDFontType2"))
+        #expect(inspector.text.contains("/FontFile2"))
+        #expect(inspector.text.contains("/ToUnicode"))
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        try PDFValidation.writeArtifact(data, name: "embedded-cid-text.pdf")
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "embedded-cid-text/text.txt")
+        #expect(textResult.output.contains("ABBA ABBA BAAB AABB"))
+        #expect(textResult.output.contains("AABB BAAB ABBA ABBA"))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "embedded-cid-text/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+        #expect(popplerLayout.words.count >= 16)
+        #expect(
+            popplerIssues.isEmpty,
+            "Embedded CID text Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "embedded-cid-text/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) >= 64)
+        #expect(
+            mupdfIssues.isEmpty,
+            "Embedded CID text MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNM(url: url)
+        let mupdf = try PDFValidation.mutoolPNM(url: url)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "embedded-cid-text/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "embedded-cid-text/mupdf-render.log")
+        try PDFValidation.copyArtifact(from: poppler.pnmURL, name: "embedded-cid-text-pages/poppler/page-1.ppm")
+        try PDFValidation.copyArtifact(from: mupdf.pnmURL, name: "embedded-cid-text-pages/mupdf/page-1.pnm")
+
+        let rasterIssues = try rasterComparisonIssues(
+            poppler: PNMImage(data: Data(contentsOf: poppler.pnmURL)),
+            mupdf: PNMImage(data: Data(contentsOf: mupdf.pnmURL)),
+        )
+        #expect(
+            rasterIssues.isEmpty,
+            "Embedded CID text raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
         )
     }
 
@@ -774,6 +838,46 @@ struct PDFVisualLayoutValidationTests {
         return data
     }
 
+    private func embeddedCIDTextPDF() throws -> Data {
+        let fontData = SyntheticTrueTypeFont.data(includeGlyphOutlines: true)
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        let mapper = TrueTypeGlyphMapper(
+            data: fontData,
+            metadata: metadata,
+            missingGlyphPolicy: .useNotdef,
+        )
+        let resource = PDFEmbeddedFontResource(
+            resourceName: "EF1",
+            fontProgram: fontData,
+            metadata: metadata,
+        )
+        let canvas = PDFPageCanvas()
+        let lines = [
+            "ABBA ABBA BAAB AABB",
+            "AABB BAAB ABBA ABBA",
+            "BAAB AABB ABBA BAAB",
+            "ABBA BAAB AABB ABBA",
+        ]
+
+        for (index, line) in lines.enumerated() {
+            try canvas.drawCIDText(
+                mapping: mapper.map(text: line, fontSize: 18),
+                fontResource: resource,
+                fontSize: 18,
+                x: 42,
+                y: 300 - Double(index) * 30,
+            )
+        }
+
+        return try PDFDocumentWriter(
+            pageSize: PDFOptions.PageSize(width: 360, height: 360),
+            fontSet: .pdfBase,
+            pages: [canvas],
+            images: [],
+            title: "Embedded CID Text Witness",
+        ).data()
+    }
+
     private func fixture(named name: String) throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let fixtureURL = testFile
@@ -856,6 +960,15 @@ struct PDFVisualLayoutValidationTests {
 
     diagram-policy-pages/
     Poppler and MuPDF page rasters for the diagram policy fixture.
+
+    embedded-cid-text.pdf
+    PDF proving the opt-in embedded CID text writer with FontFile2, CIDFontType2, Type0, and ToUnicode objects.
+
+    embedded-cid-text/
+    Text, geometry, structured text, and render logs for the embedded CID text fixture.
+
+    embedded-cid-text-pages/
+    Poppler and MuPDF page rasters for the embedded CID text fixture.
     """
 
     private func tableRectangleWidths(in inspector: PDFInspector) -> [Double] {

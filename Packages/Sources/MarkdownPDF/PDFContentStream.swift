@@ -30,6 +30,7 @@ struct PDFContentStream {
         case setFont(PDFSyntax.Name, size: Double)
         case moveText(x: Double, y: Double)
         case showText(PDFSyntax.LiteralString)
+        case showCIDText([UInt16])
         case endText
         case setFillColor(PDFColor)
         case setStrokeColor(PDFColor)
@@ -61,6 +62,8 @@ struct PDFContentStream {
                 "\(pdfNumber(x)) \(pdfNumber(y)) Td"
             case let .showText(text):
                 "\(text.serialized) Tj"
+            case let .showCIDText(codes):
+                "\(PDFSyntax.HexString(twoByteCodes: codes).serialized) Tj"
             case .endText:
                 "ET"
             case let .setFillColor(color):

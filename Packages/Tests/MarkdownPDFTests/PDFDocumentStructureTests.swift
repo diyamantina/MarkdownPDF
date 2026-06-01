@@ -263,6 +263,21 @@ struct PDFDocumentStructureTests {
         #expect(stream.serialized == #"BT /F1 12 Tf 20 30 Td (Text \(with slash \\\)) Tj ET"# + "\n")
     }
 
+    @Test("Serializes two-byte CID text content stream operators")
+    func serializesTwoByteCIDTextContentStreamOperators() {
+        var stream = PDFContentStream()
+
+        stream.append([
+            .beginText,
+            .setFont(PDFSyntax.Name("EF1"), size: 14),
+            .moveText(x: 40, y: 90),
+            .showCIDText([1, 2, 255, 4096]),
+            .endText,
+        ])
+
+        #expect(stream.serialized == "BT /EF1 14 Tf 40 90 Td <0001000200FF1000> Tj ET\n")
+    }
+
     @Test("Serializes typed graphics content stream operators")
     func serializesTypedGraphicsContentStreamOperators() {
         var stream = PDFContentStream()
@@ -487,6 +502,83 @@ struct PDFDocumentStructureTests {
         #expect(canvas.commands.contains("/Im1 Do"))
     }
 
+    @Test("Writer serializes embedded CID font object graph for mapped text")
+    func writerSerializesEmbeddedCIDFontObjectGraphForMappedText() throws {
+        let fontData = SyntheticTrueTypeFont.data()
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        let mapping = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "ABBA", fontSize: 14)
+        let canvas = PDFPageCanvas()
+
+        try canvas.drawCIDText(
+            mapping: mapping,
+            fontResource: PDFEmbeddedFontResource(resourceName: "EF1", fontProgram: fontData, metadata: metadata),
+            fontSize: 14,
+            x: 40,
+            y: 120,
+        )
+        let data = try PDFDocumentWriter(
+            pageSize: PDFOptions.PageSize(width: 300, height: 200),
+            fontSet: .pdfBase,
+            pages: [canvas],
+            images: [],
+            title: nil,
+        ).data()
+        let text = String(decoding: data, as: UTF8.self)
+
+        #expect(canvas.resourceUsage.usedEmbeddedFonts.map(\.resource.resourceName) == ["EF1"])
+        #expect(canvas.commands.contains("/EF1 14 Tf"))
+        #expect(canvas.commands.contains("<0001000200020001> Tj"))
+        #expect(text.contains("/Font << /EF1"))
+        #expect(text.contains("/Subtype /Type0"))
+        #expect(text.contains("/Encoding /Identity-H"))
+        #expect(text.contains("/Subtype /CIDFontType2"))
+        #expect(text.contains("/CIDToGIDMap /Identity"))
+        #expect(text.contains("/W [1 [600] 2 [600]]"))
+        #expect(text.contains("/FontFile2"))
+        #expect(text.contains("/ToUnicode"))
+        #expect(text.contains("<0001> <0002> <0041>"))
+        #expect(!text.contains("/F1 14 Tf"))
+    }
+
+    @Test("Writer rejects conflicting CID widths before serializing PDF")
+    func writerRejectsConflictingCIDWidthsBeforeSerializingPDF() throws {
+        let fontData = SyntheticTrueTypeFont.data()
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        let canvas = PDFPageCanvas()
+        let mapping = TrueTypeGlyphMapper.TextMapping(
+            sourceText: "AB",
+            glyphs: [
+                glyph(scalar: "A", glyphID: 1, cid: 1, pdfCharacterCode: 1, advanceWidth: 600),
+                glyph(scalar: "B", glyphID: 2, cid: 1, pdfCharacterCode: 2, advanceWidth: 650),
+            ],
+        )
+
+        try canvas.drawCIDText(
+            mapping: mapping,
+            fontResource: PDFEmbeddedFontResource(resourceName: "EF1", fontProgram: fontData, metadata: metadata),
+            fontSize: 12,
+            x: 40,
+            y: 120,
+        )
+
+        do {
+            _ = try PDFDocumentWriter(
+                pageSize: PDFOptions.PageSize(width: 300, height: 200),
+                fontSet: .pdfBase,
+                pages: [canvas],
+                images: [],
+                title: nil,
+            ).data()
+            Issue.record("Expected conflicting CID width error")
+        } catch let error as PDFEmbeddedFontError {
+            #expect(error == .conflictingCIDWidth(cid: 1, existing: 600, duplicate: 650))
+            #expect(error.errorDescription != nil)
+            #expect(error.recoverySuggestion != nil)
+        } catch {
+            Issue.record("Expected PDFEmbeddedFontError, got \(error)")
+        }
+    }
+
     @Test("Renderer keeps deterministic document spine object order")
     func rendererKeepsDeterministicDocumentSpineObjectOrder() throws {
         let data = try MarkdownPDFRenderer().render(markdown: "Hello from MarkdownPDF.")
@@ -530,6 +622,23 @@ struct PDFDocumentStructureTests {
                 y: y,
             ),
             page: PDFSyntax.Reference(objectNumber: page),
+        )
+    }
+
+    private func glyph(
+        scalar: UnicodeScalar,
+        glyphID: UInt16,
+        cid: UInt16,
+        pdfCharacterCode: UInt16,
+        advanceWidth: UInt16,
+    ) -> TrueTypeGlyphMapper.Glyph {
+        TrueTypeGlyphMapper.Glyph(
+            scalar: scalar,
+            glyphID: glyphID,
+            cid: cid,
+            pdfCharacterCode: pdfCharacterCode,
+            advanceWidth: advanceWidth,
+            width: Double(advanceWidth) / 1000 * 12,
         )
     }
 }

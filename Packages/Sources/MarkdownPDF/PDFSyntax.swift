@@ -76,6 +76,29 @@ enum PDFSyntax {
         }
     }
 
+    struct HexString: Equatable {
+        var bytes: [UInt8]
+
+        init(bytes: [UInt8]) {
+            self.bytes = bytes
+        }
+
+        init(twoByteCodes codes: [UInt16]) {
+            bytes = codes.flatMap { code in
+                [
+                    UInt8((code >> 8) & 0xFF),
+                    UInt8(code & 0xFF),
+                ]
+            }
+        }
+
+        var serialized: String {
+            "<" + bytes.map { byte in
+                String(format: "%02X", locale: PDFSyntax.serializationLocale, byte)
+            }.joined() + ">"
+        }
+    }
+
     struct Reference: Equatable, Hashable {
         var objectNumber: Int
         var generation: Int

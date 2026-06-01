@@ -60,6 +60,29 @@ final class PDFPageCanvas {
         }
     }
 
+    func drawCIDText(
+        mapping: TrueTypeGlyphMapper.TextMapping,
+        fontResource: PDFEmbeddedFontResource,
+        fontSize: Double,
+        x: Double,
+        y: Double,
+        color: PDFColor = .black,
+    ) throws {
+        guard !mapping.glyphs.isEmpty else {
+            return
+        }
+
+        try resourceUsage.useEmbeddedFont(fontResource, glyphs: mapping.glyphs)
+        setFillColor(color)
+        contentStream.append([
+            .beginText,
+            .setFont(PDFSyntax.Name(fontResource.resourceName), size: fontSize),
+            .moveText(x: x, y: y),
+            .showCIDText(mapping.glyphs.map(\.pdfCharacterCode)),
+            .endText,
+        ])
+    }
+
     func addHeadingDestination(_ destination: PDFHeadingDestination) {
         headingDestinations.append(destination)
     }

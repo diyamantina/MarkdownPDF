@@ -318,8 +318,9 @@ enum SyntheticTrueTypeFont {
         overlappingNameStorage: Bool = false,
         overlappingLanguageTagStorage: Bool = false,
         shortOS2: Bool = false,
+        includeGlyphOutlines: Bool = false,
     ) -> Data {
-        let tables = [
+        var tables = [
             "head": headTable(
                 invalidUnitsPerEm: invalidHeadUnitsPerEm,
                 invalidIndexToLocFormat: invalidHeadIndexToLocFormat,
@@ -327,7 +328,7 @@ enum SyntheticTrueTypeFont {
             ),
             "hhea": hheaTable(invalidVersion: invalidHheaVersion),
             "hmtx": hmtxTable(),
-            "maxp": maxpTable(invalidVersion: invalidMaxpVersion),
+            "maxp": maxpTable(invalidVersion: invalidMaxpVersion, includeGlyphOutlines: includeGlyphOutlines),
             "cmap": cmapTable(
                 format: cmapFormat,
                 malformedLength: malformedCMapLength,
@@ -347,6 +348,10 @@ enum SyntheticTrueTypeFont {
             "OS/2": os2Table(fsType: fsType, short: shortOS2),
             "post": postTable(),
         ].filter { !omittedTables.contains($0.key) }
+        if includeGlyphOutlines {
+            tables["glyf"] = glyfTable()
+            tables["loca"] = locaTable()
+        }
 
         var records: [(tag: String, checksum: UInt32, offset: UInt32, length: UInt32)] = []
         var font = Data(count: 12 + tables.count * 16)
@@ -417,10 +422,64 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func maxpTable(invalidVersion: Bool) -> Data {
+    private static func maxpTable(invalidVersion: Bool, includeGlyphOutlines: Bool) -> Data {
         var data = Data()
         appendUInt32(invalidVersion ? 0 : 0x0001_0000, to: &data)
         appendUInt16(3, to: &data)
+        guard includeGlyphOutlines else {
+            return data
+        }
+
+        appendUInt16(4, to: &data)
+        appendUInt16(1, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(2, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        return data
+    }
+
+    private static func glyfTable() -> Data {
+        var data = Data()
+        data.append(simpleRectangleGlyph(xMin: 40, yMin: 0, xMax: 560, yMax: 700))
+        data.append(simpleRectangleGlyph(xMin: 70, yMin: 0, xMax: 540, yMax: 700))
+        return data
+    }
+
+    private static func locaTable() -> Data {
+        var data = Data()
+        appendUInt16(0, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(UInt16(simpleRectangleGlyph(xMin: 40, yMin: 0, xMax: 560, yMax: 700).count / 2), to: &data)
+        appendUInt16(UInt16(glyfTable().count / 2), to: &data)
+        return data
+    }
+
+    private static func simpleRectangleGlyph(xMin: Int16, yMin: Int16, xMax: Int16, yMax: Int16) -> Data {
+        var data = Data()
+        appendInt16(1, to: &data)
+        appendInt16(xMin, to: &data)
+        appendInt16(yMin, to: &data)
+        appendInt16(xMax, to: &data)
+        appendInt16(yMax, to: &data)
+        appendUInt16(3, to: &data)
+        appendUInt16(0, to: &data)
+        data.append(contentsOf: [0x01, 0x01, 0x01, 0x01])
+        appendInt16(xMin, to: &data)
+        appendInt16(xMax - xMin, to: &data)
+        appendInt16(0, to: &data)
+        appendInt16(xMin - xMax, to: &data)
+        appendInt16(yMin, to: &data)
+        appendInt16(0, to: &data)
+        appendInt16(yMax - yMin, to: &data)
+        appendInt16(0, to: &data)
         return data
     }
 

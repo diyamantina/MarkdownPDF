@@ -48,7 +48,7 @@ public struct MarkdownPDFRenderer: Sendable {
             )
             let nextEntries = layout.tableOfContentsEntries(maximumDepth: options.tableOfContents.maximumDepth)
             if nextEntries == entries {
-                return layout.pdfData()
+                return try layout.pdfData()
             }
             entries = nextEntries
         }
@@ -110,8 +110,8 @@ private struct Layout {
         }
     }
 
-    func pdfData() -> Data {
-        PDFDocumentWriter(
+    func pdfData() throws -> Data {
+        try PDFDocumentWriter(
             pageSize: options.pageSize,
             fontSet: options.fontSet,
             pages: pages,
