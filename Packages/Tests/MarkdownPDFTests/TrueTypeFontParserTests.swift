@@ -294,7 +294,7 @@ struct TrueTypeFontParserTests {
     }
 }
 
-private enum SyntheticTrueTypeFont {
+enum SyntheticTrueTypeFont {
     static func data(
         fsType: UInt16 = 0,
         cmapFormat: UInt16 = 4,
@@ -307,7 +307,12 @@ private enum SyntheticTrueTypeFont {
         invalidHheaVersion: Bool = false,
         invalidMaxpVersion: Bool = false,
         malformedCMapLength: Bool = false,
+        cmapFormat4UsesGlyphArray: Bool = false,
+        invalidCMapFormat4SegmentRange: Bool = false,
+        invalidCMapFormat4SegmentOrder: Bool = false,
+        invalidCMapFormat4ReservedPad: Bool = false,
         invalidCMapGroupCount: Bool = false,
+        cmapFormat12StartGlyphID: UInt32 = 1,
         nameFormat: UInt16 = 0,
         leadingNonUnicodeName: Bool = false,
         overlappingNameStorage: Bool = false,
@@ -326,7 +331,12 @@ private enum SyntheticTrueTypeFont {
             "cmap": cmapTable(
                 format: cmapFormat,
                 malformedLength: malformedCMapLength,
+                format4UsesGlyphArray: cmapFormat4UsesGlyphArray,
+                invalidFormat4SegmentRange: invalidCMapFormat4SegmentRange,
+                invalidFormat4SegmentOrder: invalidCMapFormat4SegmentOrder,
+                invalidFormat4ReservedPad: invalidCMapFormat4ReservedPad,
                 invalidGroupCount: invalidCMapGroupCount,
+                format12StartGlyphID: cmapFormat12StartGlyphID,
             ),
             "name": nameTable(
                 format: nameFormat,
@@ -424,7 +434,16 @@ private enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func cmapTable(format: UInt16, malformedLength: Bool, invalidGroupCount: Bool) -> Data {
+    private static func cmapTable(
+        format: UInt16,
+        malformedLength: Bool,
+        format4UsesGlyphArray: Bool,
+        invalidFormat4SegmentRange: Bool,
+        invalidFormat4SegmentOrder: Bool,
+        invalidFormat4ReservedPad: Bool,
+        invalidGroupCount: Bool,
+        format12StartGlyphID: UInt32,
+    ) -> Data {
         var data = Data()
         appendUInt16(0, to: &data)
         appendUInt16(1, to: &data)
@@ -434,9 +453,23 @@ private enum SyntheticTrueTypeFont {
 
         switch format {
         case 4:
-            data.append(format4CMapSubtable(malformedLength: malformedLength))
+            data.append(
+                format4CMapSubtable(
+                    malformedLength: malformedLength,
+                    usesGlyphArray: format4UsesGlyphArray,
+                    invalidSegmentRange: invalidFormat4SegmentRange,
+                    invalidSegmentOrder: invalidFormat4SegmentOrder,
+                    invalidReservedPad: invalidFormat4ReservedPad,
+                ),
+            )
         case 12:
-            data.append(format12CMapSubtable(malformedLength: malformedLength, invalidGroupCount: invalidGroupCount))
+            data.append(
+                format12CMapSubtable(
+                    malformedLength: malformedLength,
+                    invalidGroupCount: invalidGroupCount,
+                    startGlyphID: format12StartGlyphID,
+                ),
+            )
         default:
             var subtable = Data(count: 262)
             writeUInt16(format, at: 0, in: &subtable)
@@ -447,34 +480,51 @@ private enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func format4CMapSubtable(malformedLength: Bool) -> Data {
+    private static func format4CMapSubtable(
+        malformedLength: Bool,
+        usesGlyphArray: Bool,
+        invalidSegmentRange: Bool,
+        invalidSegmentOrder: Bool,
+        invalidReservedPad: Bool,
+    ) -> Data {
         var data = Data()
         appendUInt16(4, to: &data)
-        appendUInt16(malformedLength ? 24 : 32, to: &data)
+        appendUInt16(malformedLength ? 24 : usesGlyphArray ? 36 : 32, to: &data)
         appendUInt16(0, to: &data)
         appendUInt16(4, to: &data)
         appendUInt16(4, to: &data)
         appendUInt16(1, to: &data)
         appendUInt16(0, to: &data)
-        appendUInt16(0x0042, to: &data)
-        appendUInt16(0xFFFF, to: &data)
-        appendUInt16(0, to: &data)
-        appendUInt16(0x0041, to: &data)
-        appendUInt16(0xFFFF, to: &data)
-        appendUInt16(0xFFC0, to: &data)
+        appendUInt16(invalidSegmentOrder ? 0xFFFF : invalidSegmentRange ? 0x0040 : 0x0042, to: &data)
+        appendUInt16(invalidSegmentOrder ? 0x0042 : 0xFFFF, to: &data)
+        appendUInt16(invalidReservedPad ? 1 : 0, to: &data)
+        appendUInt16(invalidSegmentOrder ? 0xFFFF : 0x0041, to: &data)
+        appendUInt16(invalidSegmentOrder ? 0x0041 : 0xFFFF, to: &data)
+        appendUInt16(usesGlyphArray ? 0 : 0xFFC0, to: &data)
         appendUInt16(1, to: &data)
+        appendUInt16(usesGlyphArray ? 4 : 0, to: &data)
         appendUInt16(0, to: &data)
-        appendUInt16(0, to: &data)
+        if usesGlyphArray {
+            appendUInt16(1, to: &data)
+            appendUInt16(2, to: &data)
+        }
         return data
     }
 
-    private static func format12CMapSubtable(malformedLength: Bool, invalidGroupCount: Bool) -> Data {
+    private static func format12CMapSubtable(
+        malformedLength: Bool,
+        invalidGroupCount: Bool,
+        startGlyphID: UInt32,
+    ) -> Data {
         var data = Data()
         appendUInt16(12, to: &data)
         appendUInt16(0, to: &data)
-        appendUInt32(malformedLength ? 0 : 16, to: &data)
+        appendUInt32(malformedLength ? 0 : 28, to: &data)
         appendUInt32(0, to: &data)
-        appendUInt32(invalidGroupCount ? 1 : 0, to: &data)
+        appendUInt32(invalidGroupCount ? 0 : 1, to: &data)
+        appendUInt32(0x0041, to: &data)
+        appendUInt32(0x0042, to: &data)
+        appendUInt32(startGlyphID, to: &data)
         return data
     }
 

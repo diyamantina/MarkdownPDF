@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   portable embedded-font profile.
 - Pure Swift TrueType metadata parser with table bounds, checksums, cmap
   discovery, horizontal metrics, names, and OS/2 embedding policy gates.
+- Internal TrueType glyph mapping and width measurement for the portable
+  embedded-font profile.
 
 ### Changed
 
