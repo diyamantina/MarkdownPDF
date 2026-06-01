@@ -155,7 +155,7 @@ struct PNMImage {
     private static let poundSign = UInt8(ascii: "#")
 }
 
-enum PNMImageError: Error {
+private enum PNMImageError: Error {
     case unsupportedMagic(String)
     case invalidHeader
     case truncatedHeader

@@ -148,7 +148,7 @@ flowchart TD
 
 ## Validation
 
-The test suite validates generated PDFs in three ways:
+The test suite validates generated PDFs in four layers:
 
 - Swift structural inspection checks object references, xref offsets, stream
   lengths, page resources, annotations, fonts, images, and canonical page
@@ -163,7 +163,7 @@ Those tests render representative Markdown, extract Poppler word and line boxes
 with `pdftotext -tsv`, extract MuPDF character quads with `mutool draw -F stext`,
 and compare Poppler and MuPDF raster ink bounds. They fail on
 non-positive boxes, text outside page bounds, same-line word overlap,
-same-word glyph overlap, vertical line collisions, blank renders, or divergent
+same-word glyph overlap, vertical line collisions, blank renders, or
 non-overlapping ink bounds.
 
 See [docs/research/pdf-validation-tooling.md](docs/research/pdf-validation-tooling.md)
