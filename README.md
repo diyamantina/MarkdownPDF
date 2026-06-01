@@ -120,14 +120,16 @@ document structure.
 
 Portable Mermaid diagrams and generated ToC are explicit phases because they
 affect pagination and must work on Linux without Node or Apple-only rendering.
+The epic issue and this diagram should be updated at every child issue transition:
+implementation start, PR open, merge, or scope change.
 
 ```mermaid
 flowchart TD
     P0["Phase 0<br/>#28 Minimal canonical PDF<br/>Done"]
     P1["Phase 1<br/>#29 Tool validation<br/>#25 Structural validation<br/>Done"]
     P2["Phase 2<br/>#22 PDF syntax<br/>#30 Object registry, xref, trailer<br/>Done"]
-    P3["Phase 3<br/>#18 Catalog, page tree, page dictionaries<br/>Next"]
-    P4["Phase 4<br/>#19 Page resources<br/>#20 Font objects<br/>#23 Image XObjects"]
+    P3["Phase 3<br/>#18 Catalog, page tree, page dictionaries<br/>Done"]
+    P4["Phase 4<br/>#19 Page resources<br/>PR #39 in review<br/>#20 Font objects next<br/>#23 Image XObjects"]
     P5["Phase 5<br/>#21 Typed content streams"]
     P6["Phase 6<br/>#26 Metadata, outlines, destinations"]
     P7["Phase 7<br/>#37 Mermaid diagrams"]
@@ -137,11 +139,12 @@ flowchart TD
     P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
+    classDef review fill:#e3f2fd,stroke:#0277bd,color:#111;
     classDef next fill:#fff8e1,stroke:#f9a825,color:#111;
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
-    class P0,P1,P2 done;
-    class P3 next;
-    class P4,P5,P6,P7,P8,P9 todo;
+    class P0,P1,P2,P3 done;
+    class P4 review;
+    class P5,P6,P7,P8,P9 todo;
 ```
 
 ## Validation
