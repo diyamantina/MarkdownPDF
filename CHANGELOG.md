@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discovery, horizontal metrics, names, and OS/2 embedding policy gates.
 - Internal TrueType glyph mapping and width measurement for the portable
   embedded-font profile.
+- Deterministic ToUnicode CMap generation with range compression, chunking, and
+  glyph-mapping conflict detection.
 
 ### Changed
 

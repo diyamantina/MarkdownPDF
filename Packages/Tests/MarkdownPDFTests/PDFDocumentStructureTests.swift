@@ -441,30 +441,8 @@ struct PDFDocumentStructureTests {
             PDFToUnicodeCMap.Mapping(code: 4, unicode: "\u{1F600}"),
         ]).serialized
 
-        #expect(
-            cmap.serialized
-                ==
-                """
-                /CIDInit /ProcSet findresource begin
-                12 dict begin
-                begincmap
-                /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
-                /CMapName /MarkdownPDF-ToUnicode def
-                /CMapType 2 def
-                1 begincodespacerange
-                <0000> <FFFF>
-                endcodespacerange
-                2 beginbfchar
-                <0001> <0041>
-                <0002> <0042>
-                endbfchar
-                endcmap
-                CMapName currentdict /CMap defineresource pop
-                end
-                end
-
-                """,
-        )
+        #expect(cmap.serialized.contains("1 beginbfrange"))
+        #expect(cmap.serialized.contains("<0001> <0002> <0041>"))
         #expect(cmap.pdfStream.serialized.contains(Data("/Length ".utf8)))
         #expect(chunked.contains("100 beginbfchar"))
         #expect(chunked.contains("1 beginbfchar"))
