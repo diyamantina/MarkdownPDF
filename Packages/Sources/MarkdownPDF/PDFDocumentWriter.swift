@@ -46,27 +46,14 @@ struct PDFDocumentWriter {
             let contentRef = builder.addStream(dictionary: PDFSyntax.Dictionary(), data: contentData)
             let annotationRefs = page.linkAnnotations.map { builder.addLinkAnnotation($0) }
 
-            var pageEntries: [PDFSyntax.Dictionary.Entry] = [
-                .init("Type", .pdfName("Page")),
-                .init("Parent", .reference(pagesRef)),
-                .init(
-                    "MediaBox",
-                    .pdfArray([
-                        .int(0),
-                        .int(0),
-                        .number(pageSize.width),
-                        .number(pageSize.height),
-                    ]),
-                ),
-                .init("Resources", .dictionary(resources(for: page).pdfDictionary)),
-                .init("Contents", .reference(contentRef)),
-            ]
-            if !annotationRefs.isEmpty {
-                pageEntries.append(.init("Annots", .pdfArray(annotationRefs.map { .reference($0) })))
-            }
-
             let pageRef = builder.addDictionary(
-                PDFSyntax.Dictionary(pageEntries),
+                PDFPageDictionary(
+                    parent: pagesRef,
+                    mediaBox: pageSize,
+                    resources: resources(for: page).pdfDictionary,
+                    contents: contentRef,
+                    annotations: annotationRefs,
+                ).pdfDictionary,
                 style: .multiline,
             )
             pageRefs.append(pageRef)
@@ -74,28 +61,17 @@ struct PDFDocumentWriter {
 
         builder.set(
             pagesRef,
-            .dictionary(PDFSyntax.Dictionary([
-                .init("Type", .pdfName("Pages")),
-                .init("Kids", .pdfArray(pageRefs.map { .reference($0) })),
-                .init("Count", .int(pageRefs.count)),
-            ])),
+            .dictionary(PDFDocumentPageTree(kids: pageRefs).pdfDictionary),
         )
-
-        var catalogEntries: [PDFSyntax.Dictionary.Entry] = [
-            .init("Type", .pdfName("Catalog")),
-            .init("Pages", .reference(pagesRef)),
-        ]
-        if let title, !title.isEmpty {
-            catalogEntries.append(
-                .init(
-                    "ViewerPreferences",
-                    .pdfDictionary([
-                        .init("DisplayDocTitle", .bool(true)),
-                    ]),
-                ),
-            )
-        }
-        builder.set(catalogRef, .dictionary(PDFSyntax.Dictionary(catalogEntries)))
+        builder.set(
+            catalogRef,
+            .dictionary(
+                PDFDocumentCatalog(
+                    pages: pagesRef,
+                    displayDocumentTitle: title?.isEmpty == false,
+                ).pdfDictionary,
+            ),
+        )
 
         return builder.build(root: catalogRef)
     }

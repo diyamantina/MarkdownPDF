@@ -18,3 +18,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Model PDF object registration, xref tables, trailers, and file envelopes as
   typed Swift structures.
+- Model the PDF catalog, flat page tree, and page dictionaries as typed Swift
+  structures.
