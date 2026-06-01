@@ -78,6 +78,28 @@ struct PDFToUnicodeCMapTests {
         #expect(cmap.serialized.contains("<0001> <0002> <0041>"))
     }
 
+    @Test("Embeds ToUnicode CMap in a PDF accepted by text witnesses")
+    func embedsToUnicodeCMapInPDFAcceptedByTextWitnesses() throws {
+        let pdf = toUnicodeWitnessPDF()
+        let expectedText = "ABC\u{017D}\u{1F600}"
+        try PDFValidation.writeArtifact(pdf, name: "tounicode-cmap-witness.pdf")
+
+        let qpdf = try PDFValidation.qpdfCheck(data: pdf, name: "tounicode-cmap-qpdf")
+        try #require(qpdf.exitCode == 0, "qpdf --check failed for ToUnicode witness PDF:\n\(qpdf.output)")
+
+        let popplerText = try PDFValidation.pdftotext(data: pdf, name: "tounicode-cmap-poppler")
+        try #require(popplerText.exitCode == 0, "pdftotext failed for ToUnicode witness PDF:\n\(popplerText.output)")
+        #expect(popplerText.output.contains(expectedText), "Unexpected pdftotext output:\n\(popplerText.output)")
+
+        let mupdfText = try PDFValidation.mutoolStructuredText(data: pdf, name: "tounicode-cmap-mupdf")
+        try #require(mupdfText.exitCode == 0, "mutool structured text failed:\n\(mupdfText.output)")
+        #expect(mupdfText.output.contains(#"c="A""#))
+        #expect(mupdfText.output.contains(#"c="B""#))
+        #expect(mupdfText.output.contains(#"c="C""#))
+        #expect(mupdfText.output.contains(#"c="&#x17d;""#))
+        #expect(mupdfText.output.contains(#"c="&#x1f600;""#))
+    }
+
     @Test("Rejects conflicting glyph mapping output")
     func rejectsConflictingGlyphMappingOutput() {
         let textMapping = TrueTypeGlyphMapper.TextMapping(
@@ -125,5 +147,63 @@ struct PDFToUnicodeCMapTests {
             advanceWidth: 600,
             width: 7.2,
         )
+    }
+
+    private func toUnicodeWitnessPDF() -> Data {
+        var registry = PDFObjectRegistry()
+        let catalogRef = registry.reserve()
+        let pagesRef = registry.reserve()
+        let descriptorRef = registry.add(
+            Data(PDFFontDescriptor(fontName: "MarkdownPDFSyntheticCID", italicAngle: 0).pdfDictionary.serialized().utf8),
+        )
+        let descendantRef = registry.add(
+            Data(PDFCIDFontType2Object(
+                baseName: "MarkdownPDFSyntheticCID",
+                fontDescriptor: descriptorRef,
+                widths: PDFCIDFontWidths(segments: [
+                    .range(startCID: 1, endCID: 6, width: 600),
+                ]),
+            ).pdfDictionary.serialized().utf8),
+        )
+        let cmapRef = registry.add(PDFToUnicodeCMap(mappings: [
+            PDFToUnicodeCMap.Mapping(code: 1, unicode: "A"),
+            PDFToUnicodeCMap.Mapping(code: 2, unicode: "B"),
+            PDFToUnicodeCMap.Mapping(code: 3, unicode: "C"),
+            PDFToUnicodeCMap.Mapping(code: 5, unicode: "\u{017D}"),
+            PDFToUnicodeCMap.Mapping(code: 6, unicode: "\u{1F600}"),
+        ]).pdfStream.serialized)
+        let fontRef = registry.add(
+            Data(PDFType0FontObject(
+                resourceName: "F1",
+                baseName: "MarkdownPDFSyntheticCID",
+                descendantFont: descendantRef,
+                toUnicodeMap: cmapRef,
+            ).pdfDictionary.serialized().utf8),
+        )
+        let contentRef = registry.add(PDFSyntax.Stream(
+            dictionary: PDFSyntax.Dictionary(),
+            data: Data("BT\n/F1 20 Tf\n50 150 Td\n<00010002000300050006> Tj\nET\n".utf8),
+        ).serialized)
+        let pageRef = registry.add(Data(PDFPageDictionary(
+            parent: pagesRef,
+            mediaBox: PDFOptions.PageSize(width: 300, height: 240),
+            resources: PDFPageResources(
+                fonts: [
+                    PDFPageResources.Entry(name: "F1", objectRef: fontRef),
+                ],
+            ).pdfDictionary,
+            contents: contentRef,
+            annotations: [],
+        ).pdfDictionary.serialized(style: .multiline).utf8))
+
+        registry.set(
+            pagesRef,
+            body: Data(PDFDocumentPageTree(kids: [pageRef]).pdfDictionary.serialized().utf8),
+        )
+        registry.set(
+            catalogRef,
+            body: Data(PDFDocumentCatalog(pages: pagesRef, displayDocumentTitle: false).pdfDictionary.serialized().utf8),
+        )
+        return registry.serializedFile(root: catalogRef)
     }
 }
