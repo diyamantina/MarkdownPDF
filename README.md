@@ -356,6 +356,8 @@ swiftlint --config .swiftlint.yml
 - [docs/research/complex-script-shaping-bidi-roadmap.md](docs/research/complex-script-shaping-bidi-roadmap.md):
   follow-up roadmap for Unicode line breaking, bidi ordering, shaping, and
   ToUnicode cluster witnesses.
+- [docs/research/source-code-typesetting-literature.md](docs/research/source-code-typesetting-literature.md):
+  source-code formatting literature and witness notes.
 
 ## Platform Boundaries
 
@@ -412,11 +414,18 @@ swiftlint --config .swiftlint.yml
 flowchart TD
     H0["#95<br/>Hard Markdown fixture corpus<br/>Done"]
     H1["#97/#98<br/>A4 and external fixtures<br/>Done"]
-    H2["#99<br/>Source-code formatting<br/>Active"]
+    H2["#99<br/>Source-code formatting epic<br/>Active"]
+    H2A["#101<br/>Literature research<br/>Active"]
+    H2B["#102<br/>Compare with renderer<br/>Next"]
+    H2C["#103<br/>Portable code model<br/>Next"]
+    H2D["#104<br/>Formatting baseline<br/>Next"]
+    H2E["#105<br/>Visual witnesses<br/>Next"]
+    H2F["#106<br/>Syntax coloring study<br/>Later"]
     H3["#100<br/>Named page sizes<br/>Next"]
 
     H0 --> H1
     H1 --> H2
+    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F
     H1 --> H3
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
@@ -426,7 +435,9 @@ flowchart TD
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
     class H0 done;
     class H1 done;
-    class H2 active;
+    class H2,H2A active;
+    class H2B,H2C,H2D,H2E next;
+    class H2F todo;
     class H3 next;
 ```
 

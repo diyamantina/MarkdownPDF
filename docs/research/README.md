@@ -26,8 +26,10 @@ Swift source and tests.
 9. Use `complex-script-fixture-witness-policy.md` before adding or claiming
    complex-script fixtures, witness PDFs, geometry, extraction, or raster
    evidence.
-10. Use the source studies when planning new writer features.
-11. Use macOS-specific research only for macOS targets. It is not a Linux or iOS
+10. Use `source-code-typesetting-literature.md` before changing fenced-code or
+    inline-code rendering.
+11. Use the source studies when planning new writer features.
+12. Use macOS-specific research only for macOS targets. It is not a Linux or iOS
    implementation plan.
 
 ## Boundaries
@@ -51,6 +53,7 @@ Swift source and tests.
 | `portable-embedded-fonts-tounicode-plan.md` | Portable embedded-font and ToUnicode implementation plan and current policy, including Type 0, CIDFontType2, public font input, CI font fixture handling, and staged issues. |
 | `complex-script-shaping-bidi-roadmap.md` | Follow-up epic roadmap for Unicode line breaking, bidi ordering, shaped text clusters, pure Swift shaping increments, and ToUnicode cluster witnesses. |
 | `complex-script-fixture-witness-policy.md` | Fixture and witness policy for future complex-script, bidi, ligature, combining-mark, no-space line-break, failure, and platform-boundary claims. |
+| `source-code-typesetting-literature.md` | Literature and standards research for source-code block formatting, wrapping, extraction, and witness policy. |
 | `existing-pdf-writer-alignment.md` | Alignment notes between existing writer behavior and research findings. |
 | `pdf-validation-tooling.md` | Open source validation tools and the current CI validation strategy. |
 | `pdf-visual-layout-validation.md` | Visual layout validation strategy using text and render extraction tools. |
