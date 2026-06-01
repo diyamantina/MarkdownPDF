@@ -89,6 +89,14 @@ struct PDFVisualLayoutValidationTests {
         #expect(layout.characterQuadIssues().contains { $0.contains("overlaps") })
     }
 
+    @Test("Raster comparison rejects divergent ink bounds")
+    func rasterComparisonRejectsDivergentInkBounds() throws {
+        let poppler = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 2 ... 5))
+        let mupdf = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 16 ... 19))
+
+        #expect(rasterComparisonIssues(poppler: poppler, mupdf: mupdf).contains { $0.contains("ink bounds differ") })
+    }
+
     private func visualValidationPDF() throws -> Data {
         let markdown = """
         # Visual validation
@@ -158,6 +166,16 @@ struct PDFVisualLayoutValidationTests {
         }
 
         return issues
+    }
+
+    private func pnmImage(width: Int, height: Int, inkBox: ClosedRange<Int>) -> Data {
+        var data = Data("P5\n\(width) \(height)\n255\n".utf8)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                data.append(inkBox.contains(x) && inkBox.contains(y) ? 0 : 255)
+            }
+        }
+        return data
     }
 }
 
