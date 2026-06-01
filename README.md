@@ -164,7 +164,7 @@ with `pdftotext -tsv`, extract MuPDF character quads with `mutool draw -F stext`
 and compare Poppler and MuPDF raster ink bounds. They fail on
 non-positive boxes, text outside page bounds, same-line word overlap,
 same-word glyph overlap, vertical line collisions, blank renders, or
-non-overlapping ink bounds.
+divergent ink bounds.
 
 See [docs/research/pdf-validation-tooling.md](docs/research/pdf-validation-tooling.md)
 and [docs/research/pdf-visual-layout-validation.md](docs/research/pdf-visual-layout-validation.md)

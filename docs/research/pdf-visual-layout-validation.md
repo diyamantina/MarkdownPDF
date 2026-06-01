@@ -109,13 +109,11 @@ Useful checks:
 - Fail if a character quad has non-positive area.
 - Fail if line boxes collide vertically.
 
-Limitations:
+Status:
 
-- `mutool` is not installed in this repo's current macOS environment.
-- Adding MuPDF to GitHub Actions is possible on Linux, but it is another
-  dependency to install and maintain on macOS and Linux CI.
-- This is stronger than Poppler for letter overlap, but should be a second
-  stage after Poppler TSV checks.
+- `mutool` is installed locally and in both Linux and macOS CI.
+- This is stronger than Poppler for letter overlap and is now part of the
+  canonical test gate after the Poppler TSV checks.
 
 ### Ghostscript: independent raster renderer
 
@@ -187,10 +185,9 @@ This confirms why `qpdf` is necessary but insufficient for the visual problem.
    - multi-page fixture.
 3. Fail on invalid word boxes, same-line word overlap, and suspicious line-box
    collisions.
-4. Keep the existing `pdftoppm` PNG smoke test, but preserve failed PNGs as
-   artifacts in CI later.
-5. Open a follow-up issue for MuPDF per-character quad validation. That is the
-   stronger answer for letter-level overlap, but it is a new dependency.
+4. Add MuPDF per-character quad validation for letter-level overlap.
+5. Add Poppler and MuPDF raster comparison for blank renders and divergent ink
+   bounds.
 6. Consider golden-image regression only after layout stabilizes. Start with
    one fixture and explicit tool versions to avoid noisy PRs.
 
@@ -228,7 +225,7 @@ Raster comparison lives in
 `PDFVisualLayoutValidationTests.popplerAndMuPDFRenderComparableInkBounds`. It
 renders the first representative page through Poppler and MuPDF as raw PNM,
 measures non-white pixels and ink bounds, and fails on blank renders, size
-divergence, or non-overlapping ink bounds.
+divergence, or divergent ink bounds.
 
 Together, these tests are now the canonical visual gate for layout-affecting
 renderer changes. Remaining gaps are smaller: this is not a full
