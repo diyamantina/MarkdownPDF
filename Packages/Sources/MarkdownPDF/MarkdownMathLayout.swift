@@ -35,7 +35,57 @@ struct MarkdownMathLayout {
                 size: size,
                 displayStyle: displayStyle,
             )
+        case let .accent(symbol, _, isOverline, base):
+            try layoutAccent(
+                symbol: symbol,
+                isOverline: isOverline,
+                base: base,
+                size: size,
+                displayStyle: displayStyle,
+            )
         }
+    }
+
+    private func layoutAccent(
+        symbol: String,
+        isOverline: Bool,
+        base: MarkdownMathNode,
+        size: Double,
+        displayStyle: Bool,
+    ) throws -> MarkdownMathLayoutBox {
+        let baseBox = try layout(base, size: size, displayStyle: displayStyle)
+        let gap = size * 0.12
+        let ruleThickness = metrics.radicalRuleThickness(size: size)
+        var elements = baseBox.elements
+
+        if isOverline {
+            let ruleY = baseBox.height + gap
+            elements.append(.rule(
+                x: 0,
+                y: ruleY,
+                width: baseBox.width,
+                height: ruleThickness,
+                color: color,
+            ))
+            return MarkdownMathLayoutBox(
+                width: baseBox.width,
+                height: ruleY + ruleThickness,
+                depth: baseBox.depth,
+                elements: elements,
+            )
+        }
+
+        let accentSize = size * 0.9
+        let accent = try layoutText(symbol, size: accentSize)
+        let accentX = max(0, (baseBox.width - accent.width) / 2)
+        let accentY = baseBox.height + gap
+        elements += accent.elements.map { $0.offsetBy(x: accentX, y: accentY) }
+        return MarkdownMathLayoutBox(
+            width: max(baseBox.width, accentX + accent.width),
+            height: accentY + accent.height,
+            depth: baseBox.depth,
+            elements: elements,
+        )
     }
 
     private func layoutSequence(

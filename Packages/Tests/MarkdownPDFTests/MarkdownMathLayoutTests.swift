@@ -24,6 +24,35 @@ struct MarkdownMathLayoutTests {
         #expect(abs(box.depth - 10.333) < 0.0001)
     }
 
+    @Test("Accents position above the base")
+    func accentsPositionAboveTheBase() throws {
+        let layout = makeLayout()
+        let baseBox = try layout.layout(.text("x"), size: 10, displayStyle: false)
+
+        let hat = try layout.layout(
+            .accent(symbol: "^", linearized: "hat", isOverline: false, base: .text("x")),
+            size: 10,
+            displayStyle: false,
+        )
+        let accentGlyph = try #require(hat.textElement(containing: "^"))
+        let baseGlyph = try #require(hat.textElement(containing: "x"))
+        #expect(accentGlyph.y > baseGlyph.y)
+        #expect(accentGlyph.x >= 0)
+        #expect(hat.height > baseBox.height)
+        #expect(abs(hat.depth - baseBox.depth) < 0.0001)
+
+        let overline = try layout.layout(
+            .accent(symbol: "", linearized: "overline", isOverline: true, base: .text("a")),
+            size: 10,
+            displayStyle: false,
+        )
+        let rule = try #require(overline.ruleElements.first)
+        let aGlyph = try #require(overline.textElement(containing: "a"))
+        #expect(rule.y > aGlyph.y)
+        #expect(rule.width > 0)
+        #expect(overline.height > baseBox.height)
+    }
+
     @Test("Default metrics preserve script radical and limit geometry")
     func defaultMetricsPreserveScriptRadicalAndLimitGeometry() throws {
         let layout = makeLayout()

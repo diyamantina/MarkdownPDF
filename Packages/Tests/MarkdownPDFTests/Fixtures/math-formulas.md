@@ -87,15 +87,25 @@ $$a^2 + b^2 = c^2$$
 
 $$f(x) = \sum_{n=0}^{\infty} \frac{x^n}{n!}$$
 
+## Accents
+
+$$\hat{x}$$
+
+$$\bar{y}$$
+
+$$\vec{v}$$
+
+$$\overline{AB}$$
+
+$$\tilde{z} + \dot{x}$$
+
 ## Advanced constructs rendered as visible source fallback
 
-Matrices, environments, color, and accents are unsupported and render as visible
-source rather than being dropped.
+Matrices, environments, and color are unsupported and render as visible source
+rather than being dropped.
 
 $$\begin{pmatrix} a & b \\ c & d \end{pmatrix}$$
 
 $$\begin{cases} x & x \geq 0 \\ -x & x < 0 \end{cases}$$
 
 $$\textcolor{red}{c}\boxed{x}$$
-
-$$\hat{x} + \bar{y} + \vec{z}$$

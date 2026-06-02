@@ -26,6 +26,8 @@ struct MarkdownMathLinearizer {
                 result += "^{\(linearize(superscriptNode))}"
             }
             return result
+        case let .accent(_, linearized, _, base):
+            return "\(linearized)(\(linearize(base)))"
         }
     }
 

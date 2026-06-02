@@ -161,6 +161,14 @@ struct MarkdownMathParser {
             case "right", "begin", "end", "newcommand", "operatorname":
                 throw ParseError.unsupportedControlWord(command)
             default:
+                if let accent = Self.accents[command] {
+                    return try .accent(
+                        symbol: accent.symbol,
+                        linearized: accent.linearized,
+                        isOverline: accent.isOverline,
+                        base: parseRequiredGroup(for: command),
+                    )
+                }
                 guard let symbol = Self.symbols[command] else {
                     throw ParseError.unsupportedControlWord(command)
                 }
@@ -308,6 +316,21 @@ struct MarkdownMathParser {
             }
             return .sequence(nonEmpty)
         }
+
+        private static let accents: [String: (symbol: String, linearized: String, isOverline: Bool)] = [
+            "hat": ("^", "hat", false),
+            "widehat": ("^", "hat", false),
+            "tilde": ("~", "tilde", false),
+            "widetilde": ("~", "tilde", false),
+            "vec": (">", "vec", false),
+            "dot": (".", "dot", false),
+            "ddot": ("..", "ddot", false),
+            "check": ("v", "check", false),
+            "acute": ("'", "acute", false),
+            "grave": ("`", "grave", false),
+            "bar": ("", "bar", true),
+            "overline": ("", "overline", true),
+        ]
 
         private static let symbols: [String: (display: String, linearized: String, isBigOperator: Bool)] = [
             "alpha": ("alpha", "alpha", false),

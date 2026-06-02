@@ -48,4 +48,14 @@ struct MarkdownMathParserTests {
     func treatsLimitOperatorsAsBigOperators() throws {
         #expect(try MarkdownMathParser().parse(#"\lim_{x \to 0} f"#).linearizedText == "lim_{x -> 0} f")
     }
+
+    @Test("Parses and linearizes math accents")
+    func parsesMathAccents() throws {
+        let parser = MarkdownMathParser()
+
+        #expect(try parser.parse(#"\hat{x}"#).linearizedText == "hat(x)")
+        #expect(try parser.parse(#"\overline{AB}"#).linearizedText == "overline(AB)")
+        #expect(try parser.parse(#"\vec{v}"#).linearizedText == "vec(v)")
+        #expect(try parser.parse(#"\bar{y} + \tilde{z}"#).linearizedText == "bar(y) + tilde(z)")
+    }
 }
