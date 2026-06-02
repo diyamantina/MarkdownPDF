@@ -414,7 +414,10 @@ swiftlint --config .swiftlint.yml
   Issue [#120](https://github.com/mihaelamj/MarkdownPDF/issues/120) landed the
   portable syntax-coloring implementation. Issue
   [#122](https://github.com/mihaelamj/MarkdownPDF/issues/122) is active for
-  CJK and combining-diacritic coverage.
+  CJK and combining-diacritic coverage. Issue
+  [#135](https://github.com/mihaelamj/MarkdownPDF/issues/135) is queued next for
+  the screenshot-reported source-code layout regressions: code-to-quote overlap,
+  visible quote strokes, crammed block flow, and image-presence witnesses.
 - Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) tracks
   named PDF page sizes, including A1, A3, A4, and A5.
 - Apple system font names remain available through
@@ -456,12 +459,13 @@ flowchart TD
     H2J["#119<br/>Crazy markdown fixtures<br/>Done"]
     H2K["#120<br/>Portable syntax coloring<br/>Done"]
     H2L["#122<br/>CJK + diacritics<br/>Active"]
-    H2M["#123<br/>RTL manuscript<br/>Next"]
+    H2M["#135<br/>Screenshot layout regressions<br/>Next"]
+    H2N["#123<br/>RTL manuscript<br/>Todo"]
     H3["#100<br/>Named page sizes<br/>Todo"]
 
     H0 --> H1
     H1 --> H2
-    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M
+    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M --> H2N
     H1 --> H3
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
@@ -473,7 +477,7 @@ flowchart TD
     class H2,H2L active;
     class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J,H2K done;
     class H2M next;
-    class H3 todo;
+    class H2N,H3 todo;
 ```
 
 ## License
