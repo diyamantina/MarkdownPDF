@@ -10,6 +10,7 @@ public struct PDFOptions: Equatable, Sendable {
     public var tableOfContents: TableOfContents
     public var codeSyntaxHighlighting: CodeSyntaxHighlighting
     public var streamCompression: StreamCompression
+    public var taggedPDF: TaggedPDF
 
     public init(
         pageSize: PageSize = .a4,
@@ -21,6 +22,7 @@ public struct PDFOptions: Equatable, Sendable {
         tableOfContents: TableOfContents = .disabled,
         codeSyntaxHighlighting: CodeSyntaxHighlighting = .disabled,
         streamCompression: StreamCompression = .disabled,
+        taggedPDF: TaggedPDF = .disabled,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -31,6 +33,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.tableOfContents = tableOfContents
         self.codeSyntaxHighlighting = codeSyntaxHighlighting
         self.streamCompression = streamCompression
+        self.taggedPDF = taggedPDF
     }
 
     public struct PageSize: Equatable, Sendable {
@@ -223,5 +226,25 @@ public struct PDFOptions: Equatable, Sendable {
 
         public static let disabled = StreamCompression(isEnabled: false)
         public static let enabled = StreamCompression(isEnabled: true)
+    }
+
+    /// Controls opt-in tagged PDF structure output.
+    ///
+    /// The default value is ``disabled``. When enabled, MarkdownPDF writes the
+    /// PDF logical structure spine directly in Swift: `/MarkInfo`, `/Lang`,
+    /// `/StructTreeRoot`, page `/StructParents`, marked-content IDs, and a
+    /// `/ParentTree`. This first portable profile does not claim PDF/UA or
+    /// PDF/A conformance.
+    public struct TaggedPDF: Equatable, Sendable {
+        public var isEnabled: Bool
+        public var language: String
+
+        public init(isEnabled: Bool, language: String = "en-US") {
+            self.isEnabled = isEnabled
+            self.language = language.isEmpty ? "en-US" : language
+        }
+
+        public static let disabled = TaggedPDF(isEnabled: false)
+        public static let enabled = TaggedPDF(isEnabled: true)
     }
 }

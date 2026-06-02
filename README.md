@@ -36,6 +36,9 @@ The generic renderer currently covers:
   hints, using direct DeviceRGB text operators.
 - Opt-in Pure Swift `/FlateDecode` compression for page content streams and
   embedded FontFile2 streams when the encoded bytes are smaller than raw bytes.
+- Opt-in tagged PDF structure output with `/MarkInfo`, `/StructTreeRoot`,
+  `/ParentTree`, page `/StructParents`, and marked-content IDs. This does not
+  claim PDF/UA or PDF/A conformance yet.
 
 The compatibility target is CommonMark plus GitHub Flavored Markdown tables and
 images. The generated PDF profile is intentionally small, typed, and documented
@@ -108,6 +111,20 @@ let answer = "portable"
 """
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ````
+
+Enable tagged PDF structure output:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(
+    title: "Accessible Draft",
+    taggedPDF: .enabled,
+)
+
+let markdown = "# Tagged\n\nA PDF with a logical structure spine."
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
 
 Embed caller-provided TrueType font data:
 
@@ -509,8 +526,8 @@ flowchart TD
     H4["#145<br/>Staged-research shortlist epic<br/>Active"]
     H4A["#126<br/>Native charts<br/>Done"]
     H4B["#127<br/>Pure-Swift DEFLATE<br/>Done"]
-    H4C["#128<br/>Tagged PDF and PDF/A<br/>Next"]
-    H4D["#129<br/>Footnotes and tasks<br/>Todo"]
+    H4C["#128<br/>Tagged PDF and PDF/A<br/>Active"]
+    H4D["#129<br/>Footnotes and tasks<br/>Next"]
     H4E["#130<br/>Theming model<br/>Todo"]
     H4F["#131<br/>Math typesetting<br/>Todo"]
     H4G["#138<br/>Apple and custom fonts<br/>Todo"]
@@ -533,8 +550,10 @@ flowchart TD
     class H2Q done;
     class H4 active;
     class H4A done;
-    class H4B next;
-    class H4C,H4D,H4E,H4F,H4G todo;
+    class H4B done;
+    class H4C active;
+    class H4D next;
+    class H4E,H4F,H4G todo;
     class H3 todo;
 ```
 

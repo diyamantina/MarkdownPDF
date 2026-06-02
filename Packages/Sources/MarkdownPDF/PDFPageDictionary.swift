@@ -4,6 +4,7 @@ struct PDFPageDictionary {
     var resources: PDFSyntax.Dictionary
     var contents: PDFSyntax.Reference
     var annotations: [PDFSyntax.Reference]
+    var structParents: Int?
 
     var pdfDictionary: PDFSyntax.Dictionary {
         var entries: [PDFSyntax.Dictionary.Entry] = [
@@ -21,6 +22,9 @@ struct PDFPageDictionary {
             .init("Resources", .dictionary(resources)),
             .init("Contents", .reference(contents)),
         ]
+        if let structParents {
+            entries.append(.init("StructParents", .int(structParents)))
+        }
         if !annotations.isEmpty {
             entries.append(.init("Annots", .pdfArray(annotations.map { .reference($0) })))
         }

@@ -3,6 +3,9 @@ struct PDFDocumentCatalog {
     var outlines: PDFSyntax.Reference?
     var names: PDFSyntax.Dictionary?
     var metadata: PDFSyntax.Reference?
+    var structTreeRoot: PDFSyntax.Reference?
+    var language: String?
+    var marked: Bool = false
     var displayDocumentTitle: Bool
 
     var pdfDictionary: PDFSyntax.Dictionary {
@@ -19,6 +22,22 @@ struct PDFDocumentCatalog {
         }
         if let metadata {
             entries.append(.init("Metadata", .reference(metadata)))
+        }
+        if marked {
+            entries.append(
+                .init(
+                    "MarkInfo",
+                    .pdfDictionary([
+                        .init("Marked", .bool(true)),
+                    ]),
+                ),
+            )
+        }
+        if let structTreeRoot {
+            entries.append(.init("StructTreeRoot", .reference(structTreeRoot)))
+        }
+        if let language {
+            entries.append(.init("Lang", .pdfString(language)))
         }
         if displayDocumentTitle {
             entries.append(

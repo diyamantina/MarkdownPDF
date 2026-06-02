@@ -45,6 +45,9 @@ struct PDFContentStream {
         case fillAndStroke
         case saveGraphicsState
         case restoreGraphicsState
+        case beginMarkedContent(PDFSyntax.Name, mcid: Int)
+        case beginArtifact
+        case endMarkedContent
         case concatenateMatrix(
             a: Double,
             b: Double,
@@ -95,6 +98,12 @@ struct PDFContentStream {
                 "q"
             case .restoreGraphicsState:
                 "Q"
+            case let .beginMarkedContent(tag, mcid):
+                "\(tag.serialized) << /MCID \(mcid) >> BDC"
+            case .beginArtifact:
+                "/Artifact BMC"
+            case .endMarkedContent:
+                "EMC"
             case let .concatenateMatrix(a, b, c, d, e, f):
                 "\(pdfNumber(a)) \(pdfNumber(b)) \(pdfNumber(c)) \(pdfNumber(d)) \(pdfNumber(e)) \(pdfNumber(f)) cm"
             case let .drawXObject(name):

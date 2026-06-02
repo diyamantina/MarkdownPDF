@@ -92,6 +92,8 @@ private struct Layout {
     var imageCache: [String: PDFImage] = [:]
     var headingNames = PDFHeadingDestinationName()
     var embeddedFonts: PDFEmbeddedFontCatalog
+    var taggedContentBuilder: PDFTaggedContentBuilder?
+    var markedContentDepth = 0
     var y: Double
     var listDepth = 0
 
@@ -99,6 +101,7 @@ private struct Layout {
         self.options = options
         self.assetsBaseURL = assetsBaseURL
         embeddedFonts = try PDFEmbeddedFontCatalog(fonts: options.embeddedFonts)
+        taggedContentBuilder = options.taggedPDF.isEnabled ? PDFTaggedContentBuilder() : nil
         y = options.pageSize.height - options.margins.top
     }
 
@@ -131,6 +134,7 @@ private struct Layout {
             images: images,
             title: options.title,
             streamCompression: options.streamCompression,
+            taggedContent: taggedContentBuilder?.build(language: options.taggedPDF.language),
         ).data()
     }
 
@@ -154,6 +158,8 @@ private struct Layout {
     private mutating func render(_ block: MarkdownBlock) throws {
         switch block {
         case let .heading(level, content):
+            let element = beginStructureElement(.heading(level: level))
+            defer { endStructureElement(element) }
             let size = headingSize(level)
             let topSpacing = headingTopSpacing(level)
             ensureSpace(size * 1.8 + topSpacing)
@@ -170,6 +176,8 @@ private struct Layout {
             if try renderStandaloneImage(content) {
                 y -= 12
             } else {
+                let element = beginStructureElement(.paragraph)
+                defer { endStructureElement(element) }
                 try drawWrapped(
                     flatten(content, font: .helvetica, size: options.baseFontSize),
                     x: options.margins.left,
@@ -179,6 +187,8 @@ private struct Layout {
                 y -= paragraphSpacing
             }
         case let .blockQuote(blocks):
+            let element = beginStructureElement(.blockQuote)
+            defer { endStructureElement(element) }
             ensureSpace(24)
             let savedLeft = options.margins.left
             options.margins.left += 14
@@ -204,6 +214,8 @@ private struct Layout {
             try renderTable(table)
         case .thematicBreak:
             ensureSpace(18)
+            let artifact = beginArtifactIfTagged()
+            defer { endMarkedContentIfNeeded(artifact) }
             currentPage.drawLine(
                 x1: options.margins.left,
                 y1: y,
@@ -214,6 +226,8 @@ private struct Layout {
             )
             y -= 18
         case let .html(html):
+            let element = beginStructureElement(.paragraph)
+            defer { endStructureElement(element) }
             try drawWrapped(
                 [PDFTextRun(text: html, font: .courier, size: options.baseFontSize * 0.9, color: .gray)],
                 x: options.margins.left,
@@ -235,6 +249,9 @@ private struct Layout {
     }
 
     private mutating func renderTableOfContents(_ entries: [TableOfContentsEntry]) throws {
+        let tocElement = beginStructureElement(.tableOfContents)
+        defer { endStructureElement(tocElement) }
+
         let titleSize = options.baseFontSize * 1.55
         let entrySize = options.baseFontSize * 0.95
         let lineHeight = entrySize * 1.35
@@ -245,11 +262,13 @@ private struct Layout {
         let title = options.tableOfContents.title.trimmingCharacters(in: .whitespacesAndNewlines)
 
         ensureSpace(titleSize * 2.2 + lineHeight)
+        let titleElement = beginStructureElement(.paragraph)
         try drawRuns(
             [PDFTextRun(text: title.isEmpty ? "Table of Contents" : title, font: .helveticaBold, size: titleSize)],
             x: options.margins.left,
             y: y,
         )
+        endStructureElement(titleElement)
         y -= titleSize * 1.45
 
         for entry in entries {
@@ -270,6 +289,9 @@ private struct Layout {
         lineHeight: Double,
         pageColumnWidth: Double,
     ) throws {
+        let itemElement = beginStructureElement(.tableOfContentsItem)
+        defer { endStructureElement(itemElement) }
+
         let indent = Double(max(0, entry.level - 1)) * 14
         let x = options.margins.left + indent
         let pageText = "\(entry.pageNumber)"
@@ -313,6 +335,8 @@ private struct Layout {
             return
         }
 
+        let artifact = beginArtifactIfTagged()
+        defer { endMarkedContentIfNeeded(artifact) }
         currentPage.drawLine(
             x1: startX,
             y1: y,
@@ -327,32 +351,48 @@ private struct Layout {
         items: [MarkdownBlock.ListItem],
         start: Int?,
     ) throws {
+        let listElement = beginStructureElement(
+            .list,
+            attributes: PDFTaggedContent.Attributes(
+                listNumbering: start == nil ? .unordered : .ordered,
+            ),
+        )
+        defer { endStructureElement(listElement) }
+
         var number = start ?? 0
         listDepth += 1
         defer { listDepth -= 1 }
         for item in items {
+            let itemElement = beginStructureElement(.listItem)
             ensureSpace(bodyLineHeight)
             if start != nil {
-                try currentPage.drawTextRun(
-                    PDFTextRun(text: "\(number).", font: .helvetica, size: options.baseFontSize),
+                let labelElement = beginStructureElement(.listLabel)
+                try drawRuns(
+                    [PDFTextRun(text: "\(number).", font: .helvetica, size: options.baseFontSize)],
                     x: options.margins.left,
                     y: y,
-                    fontSet: options.fontSet,
-                    embeddedFonts: embeddedFonts,
+                    applyBidi: false,
                 )
+                endStructureElement(labelElement)
                 number += 1
             }
             let savedLeft = options.margins.left
             options.margins.left += 24
+            let bodyElement = beginStructureElement(.listBody)
             for block in item.blocks {
                 try render(block)
             }
+            endStructureElement(bodyElement)
             options.margins.left = savedLeft
+            endStructureElement(itemElement)
         }
         y -= listTrailingSpacing
     }
 
     private mutating func renderCodeBlock(_ code: String, info: String? = nil) throws {
+        let codeElement = beginStructureElement(.code)
+        defer { endStructureElement(codeElement) }
+
         let size = options.baseFontSize * 0.9
         let lineHeight = size * 1.4
         let padding = codeBlockPadding
@@ -482,7 +522,14 @@ private struct Layout {
             switch try mermaidRenderPlan(for: diagram) {
             case let .plan(plan):
                 ensureSpace(plan.height + 12)
+                let figureElement = beginStructureElement(
+                    .figure,
+                    attributes: PDFTaggedContent.Attributes(alternateDescription: "Mermaid diagram"),
+                )
+                let marked = beginMarkedContentForCurrentElement()
                 try drawMermaidPlan(plan)
+                endMarkedContentIfNeeded(marked)
+                endStructureElement(figureElement)
                 y -= plan.height + 12
             case let .fallback(reason):
                 try renderUnsupportedMermaid(reason: reason, code: code)
@@ -515,13 +562,38 @@ private struct Layout {
             ensureSpace(plan.height + 12)
             switch try chartRenderPlan(for: chart) {
             case let .plan(positionedPlan):
+                let figureElement = beginStructureElement(
+                    .figure,
+                    attributes: PDFTaggedContent.Attributes(
+                        alternateDescription: chartAlternateDescription(positionedPlan.chart),
+                    ),
+                )
+                let marked = beginMarkedContentForCurrentElement()
                 try drawChartPlan(positionedPlan)
+                endMarkedContentIfNeeded(marked)
+                endStructureElement(figureElement)
                 y -= positionedPlan.height + 12
             case let .fallback(reason):
                 try renderCodeBlock("\(fallbackPrefix): \(reason)\n\(sourceCode)")
             }
         case let .fallback(reason):
             try renderCodeBlock("\(fallbackPrefix): \(reason)\n\(sourceCode)")
+        }
+    }
+
+    private func chartAlternateDescription(_ chart: ChartBlock) -> String {
+        if let title = chart.title, !title.isEmpty {
+            return title
+        }
+        return switch chart.kind {
+        case .pie:
+            "Pie chart"
+        case .bar:
+            "Bar chart"
+        case .line:
+            "Line chart"
+        case .scatter:
+            "Scatter chart"
         }
     }
 
@@ -1469,6 +1541,9 @@ private struct Layout {
     }
 
     private mutating func renderTable(_ table: MarkdownBlock.Table) throws {
+        let tableElement = beginStructureElement(.table)
+        defer { endStructureElement(tableElement) }
+
         let cellPadding = 4.0
         let fontSize = options.baseFontSize * 0.9
         let lineHeight = fontSize * 1.35
@@ -1744,6 +1819,8 @@ private struct Layout {
         }
 
         if source.hasPrefix("http://") || source.hasPrefix("https://") {
+            let element = beginStructureElement(.paragraph)
+            defer { endStructureElement(element) }
             try drawWrapped(
                 [PDFTextRun(text: "[Remote image: \(alt.isEmpty ? source : alt)]", font: .helveticaOblique, size: options.baseFontSize, color: .gray)],
                 x: options.margins.left,
@@ -1764,6 +1841,13 @@ private struct Layout {
         let drawHeight = Double(image.height) * scale
 
         ensureSpace(drawHeight)
+        let figureElement = beginStructureElement(
+            .figure,
+            attributes: PDFTaggedContent.Attributes(
+                alternateDescription: alt.isEmpty ? source : alt,
+            ),
+        )
+        let marked = beginMarkedContentForCurrentElement()
         currentPage.drawImage(
             name: image.name,
             x: options.margins.left,
@@ -1771,6 +1855,8 @@ private struct Layout {
             width: drawWidth,
             height: drawHeight,
         )
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figureElement)
         y -= drawHeight
         return true
     }
@@ -1878,6 +1964,7 @@ private struct Layout {
     ) throws {
         let topY = y
         let height = Double(lines.count) * lineHeight + padding * 2
+        let artifact = beginArtifactIfTagged()
         currentPage.drawRectangle(
             x: options.margins.left,
             y: topY - height,
@@ -1886,6 +1973,7 @@ private struct Layout {
             stroke: nil,
             fill: PDFColor(red: 0.95, green: 0.95, blue: 0.95),
         )
+        endMarkedContentIfNeeded(artifact)
 
         var lineY = topY - padding - size
         for line in lines {
@@ -1931,12 +2019,16 @@ private struct Layout {
         lineOffset: Int,
         lineCount: Int,
     ) throws {
+        let rowElement = beginStructureElement(.tableRow)
+        defer { endStructureElement(rowElement) }
+
         let rowHeight = Double(lineCount) * lineHeight + cellPadding * 2
         let rowBottom = y - rowHeight
         var x = options.margins.left
 
         for column in 0 ..< cellLines.count {
             let columnWidth = column < columnWidths.count ? columnWidths[column] : 0
+            let artifact = beginArtifactIfTagged()
             currentPage.drawRectangle(
                 x: x,
                 y: rowBottom,
@@ -1945,8 +2037,13 @@ private struct Layout {
                 stroke: .gray,
                 fill: header ? PDFColor(red: 0.93, green: 0.93, blue: 0.93) : nil,
             )
+            endMarkedContentIfNeeded(artifact)
 
             let visibleLines = cellLines[column].dropFirst(lineOffset).prefix(lineCount)
+            let cellElement = beginStructureElement(
+                header ? .tableHeader : .tableCell,
+                attributes: header ? PDFTaggedContent.Attributes(tableHeaderScope: .column) : PDFTaggedContent.Attributes(),
+            )
             var lineY = y - cellPadding - fontSize
             for line in visibleLines {
                 let width = try textWidth(Array(line))
@@ -1963,6 +2060,7 @@ private struct Layout {
                 try drawRuns(Array(line), x: textX, y: lineY, maxWidth: drawWidth)
                 lineY -= lineHeight
             }
+            endStructureElement(cellElement)
             x += columnWidth
         }
         y = rowBottom
@@ -2054,13 +2152,71 @@ private struct Layout {
         return tokens
     }
 
-    private func drawRuns(
+    private mutating func beginStructureElement(
+        _ role: PDFTaggedContent.Role,
+        attributes: PDFTaggedContent.Attributes = PDFTaggedContent.Attributes(),
+    ) -> Int? {
+        guard var builder = taggedContentBuilder else {
+            return nil
+        }
+        let id = builder.beginElement(role: role, attributes: attributes)
+        taggedContentBuilder = builder
+        return id
+    }
+
+    private mutating func endStructureElement(_ id: Int?) {
+        guard let id, var builder = taggedContentBuilder else {
+            return
+        }
+        builder.endElement(id)
+        taggedContentBuilder = builder
+    }
+
+    private mutating func beginMarkedContentForCurrentElement() -> Bool {
+        guard markedContentDepth == 0,
+              var builder = taggedContentBuilder,
+              let mark = builder.markCurrentElement(onPage: currentPageIndex)
+        else {
+            return false
+        }
+
+        taggedContentBuilder = builder
+        markedContentDepth += 1
+        currentPage.beginMarkedContent(tag: PDFSyntax.Name(mark.role.rawValue), mcid: mark.mcid)
+        return true
+    }
+
+    private mutating func endMarkedContentIfNeeded(_ didBegin: Bool) {
+        guard didBegin else {
+            return
+        }
+        currentPage.endMarkedContent()
+        markedContentDepth = max(0, markedContentDepth - 1)
+    }
+
+    private mutating func beginArtifactIfTagged() -> Bool {
+        guard markedContentDepth == 0, taggedContentBuilder != nil else {
+            return false
+        }
+        markedContentDepth += 1
+        currentPage.beginArtifact()
+        return true
+    }
+
+    private mutating func drawRuns(
         _ runs: [PDFTextRun],
         x: Double,
         y: Double,
         maxWidth: Double? = nil,
         applyBidi: Bool = true,
     ) throws {
+        guard !runs.isEmpty else {
+            return
+        }
+
+        let marked = beginMarkedContentForCurrentElement()
+        defer { endMarkedContentIfNeeded(marked) }
+
         if applyBidi, let bidiLine = try bidiLine(from: runs, x: x, maxWidth: maxWidth) {
             for run in bidiLine.visualRuns.sorted(by: { $0.sourceScalarOffset < $1.sourceScalarOffset }) {
                 try drawBidiPositionedRun(run, y: y)
@@ -2458,6 +2614,10 @@ private struct Layout {
 
     private var currentPage: PDFPageCanvas {
         pages[pages.count - 1]
+    }
+
+    private var currentPageIndex: Int {
+        pages.count - 1
     }
 
     private var chartTitleSize: Double {

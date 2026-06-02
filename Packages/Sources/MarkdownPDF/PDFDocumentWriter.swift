@@ -7,6 +7,7 @@ struct PDFDocumentWriter {
     var images: [PDFImage]
     var title: String?
     var streamCompression: PDFOptions.StreamCompression = .disabled
+    var taggedContent: PDFTaggedContent?
 
     func data() throws -> Data {
         var builder = Builder(streamCompression: streamCompression)
@@ -71,6 +72,7 @@ struct PDFDocumentWriter {
                     resources: resources(for: page).pdfDictionary,
                     contents: contentRef,
                     annotations: annotationRefs,
+                    structParents: taggedContent?.structParents(for: pageRefs.count),
                 ).pdfDictionary,
                 style: .multiline,
             )
@@ -91,6 +93,9 @@ struct PDFDocumentWriter {
             : PDFNamedDestinations(destinations: resolvedDestinations).pdfDictionary
         let metadata = PDFDocumentMetadata(title: title)
         let metadataRefs = metadata.isEmpty ? nil : builder.addMetadata(metadata)
+        let taggedRefs = taggedContent.map {
+            builder.addTaggedContent($0, pageReferences: pageRefs)
+        }
 
         builder.set(
             pagesRef,
@@ -104,7 +109,10 @@ struct PDFDocumentWriter {
                     outlines: outlineRef,
                     names: names,
                     metadata: metadataRefs?.xmp,
-                    displayDocumentTitle: title?.isEmpty == false,
+                    structTreeRoot: taggedRefs?.structTreeRoot,
+                    language: taggedContent?.language,
+                    marked: taggedContent != nil,
+                    displayDocumentTitle: title?.isEmpty == false || taggedContent != nil,
                 ).pdfDictionary,
             ),
         )
@@ -234,6 +242,30 @@ struct PDFDocumentWriter {
                 info: addDictionary(metadata.infoDictionary),
                 xmp: addStream(dictionary: metadata.xmpDictionary, data: metadata.xmpData),
             )
+        }
+
+        mutating func addTaggedContent(
+            _ taggedContent: PDFTaggedContent,
+            pageReferences: [PDFSyntax.Reference],
+        ) -> (structTreeRoot: PDFSyntax.Reference, parentTree: PDFSyntax.Reference) {
+            let structTreeRoot = reserve()
+            let parentTree = reserve()
+            let elementReferences = taggedContent.elements.map { _ in reserve() }
+            let graph = PDFTaggedContentObjectGraph(
+                taggedContent: taggedContent,
+                structTreeRoot: structTreeRoot,
+                parentTree: parentTree,
+                elementReferences: elementReferences,
+                pageReferences: pageReferences,
+            )
+
+            set(structTreeRoot, .dictionary(graph.structTreeRootDictionary))
+            set(parentTree, .dictionary(graph.parentTreeDictionary))
+            for element in taggedContent.elements {
+                set(elementReferences[element.id], .dictionary(graph.elementDictionary(for: element)))
+            }
+
+            return (structTreeRoot: structTreeRoot, parentTree: parentTree)
         }
 
         mutating func addOutline(destinations: [PDFNamedDestinations.ResolvedDestination]) -> PDFSyntax.Reference? {

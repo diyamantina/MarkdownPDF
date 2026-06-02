@@ -15,6 +15,18 @@ final class PDFPageCanvas {
         contentStream.serialized
     }
 
+    func beginMarkedContent(tag: PDFSyntax.Name, mcid: Int) {
+        contentStream.append(.beginMarkedContent(tag, mcid: mcid))
+    }
+
+    func beginArtifact() {
+        contentStream.append(.beginArtifact)
+    }
+
+    func endMarkedContent() {
+        contentStream.append(.endMarkedContent)
+    }
+
     func drawTextRun(
         _ run: PDFTextRun,
         x: Double,

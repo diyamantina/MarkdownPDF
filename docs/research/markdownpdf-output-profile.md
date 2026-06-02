@@ -40,11 +40,11 @@ The PDF compatibility target is a conservative PDF 1.4 file:
 - Link annotations for URI links and internal destination links.
 - Named destinations, outlines, metadata, and generated ToC when input and
   options require them.
+- Optional tagged PDF structure when `PDFOptions.taggedPDF` is enabled.
 
-The profile does not claim PDF/A, PDF/UA, tagged PDF, linearized PDF,
-incremental updates, encryption, digital signatures, object streams, xref
-streams, JavaScript actions, embedded fonts, SVG import, or arbitrary Mermaid
-language support.
+The profile does not claim PDF/A, PDF/UA, linearized PDF, incremental updates,
+encryption, digital signatures, object streams, xref streams, JavaScript
+actions, SVG import, or arbitrary Mermaid language support.
 
 ## File envelope
 
@@ -98,6 +98,8 @@ The current order is:
 7. Outline root and outline item objects when headings exist.
 8. Metadata `/Info` dictionary and XMP metadata stream when `PDFOptions.title`
    is non-empty.
+9. Tagged structure objects when `PDFOptions.taggedPDF` is enabled:
+   `/StructTreeRoot`, `/ParentTree`, and `/StructElem` objects.
 
 The minimal one-page text PDF has five in-use objects:
 
@@ -123,11 +125,13 @@ Optional entries are emitted only when the corresponding feature is active:
 - `/Outlines` and `/PageMode /UseOutlines` when headings produce outline items.
 - `/Names << /Dests ... >>` when headings produce named destinations.
 - `/Metadata` when `PDFOptions.title` produces an XMP metadata stream.
-- `/ViewerPreferences << /DisplayDocTitle true >>` when title metadata exists.
+- `/MarkInfo`, `/StructTreeRoot`, and `/Lang` when `PDFOptions.taggedPDF` is
+  enabled.
+- `/ViewerPreferences << /DisplayDocTitle true >>` when title metadata exists or
+  tagged PDF structure is enabled.
 
-The catalog does not emit `/MarkInfo`, `/StructTreeRoot`, `/OpenAction`,
-JavaScript, output intents, PDF/A conformance declarations, or PDF/UA
-structures.
+The catalog does not emit `/OpenAction`, JavaScript, output intents, PDF/A
+conformance declarations, or PDF/UA conformance declarations.
 
 ## Page tree and pages
 
@@ -145,11 +149,15 @@ Each page dictionary contains:
 /MediaBox [0 0 width height]
 /Resources << ... >>
 /Contents content-ref 0 R
+optional /StructParents integer
 >>
 ```
 
 `/Annots` is present only when a page has link annotations. Empty annotation
 arrays are omitted.
+
+`/StructParents` is present only when `PDFOptions.taggedPDF` is enabled and the
+page owns marked content.
 
 Heading destinations are recorded during layout and then used by document-level
 named destinations and outline objects. They do not add keys to page
@@ -202,7 +210,9 @@ The renderer currently emits visible content for:
 - Block quotes.
 - Ordered and unordered lists.
 - Fenced code blocks.
-- Tables as visual cell borders and text, not tagged table structure.
+- Tables as visual cell borders and text. When `PDFOptions.taggedPDF` is
+  enabled, the same visible table receives Table, TR, TH, and TD structure
+  elements.
 - Thematic breaks.
 - Raw HTML as visible monospaced text, not interpreted HTML.
 - Inline emphasis, strong text, strike-through, inline code, links, images as
@@ -214,11 +224,36 @@ Long tokens are split by measured font width before they exceed the line width.
 This protects headings, ToC entries, URLs, and identifiers from colliding with
 page bounds or neighboring text.
 
+## Tagged structure
+
+Tagged structure is opt in through `PDFOptions.taggedPDF`. The writer emits:
+
+- Catalog `/MarkInfo << /Marked true >>`.
+- Catalog `/Lang`, defaulting to `en-US`.
+- Catalog `/StructTreeRoot`.
+- Page `/StructParents` keys for pages that contain marked content.
+- BDC/EMC marked-content sections with deterministic per-page MCIDs.
+- `/StructTreeRoot`, `/ParentTree`, and `/StructElem` objects.
+
+The first tagged profile maps Markdown blocks to standard PDF structure roles:
+H1 through H6, P, BlockQuote, L, LI, Lbl, LBody, Table, TR, TH, TD, Figure,
+TOC, and TOCI. Code blocks use `/Code` and a RoleMap entry to `/Span`.
+
+Figure elements receive `/Alt` from Markdown image alt text, chart titles, or a
+deterministic fallback description. Table header cells receive column scope.
+Decorative rules, table cell borders, code block backgrounds, and ToC leaders
+are emitted as `/Artifact` marked content.
+
+This profile is a structural spine. It does not claim PDF/UA or PDF/A
+conformance, and it does not yet emit PDF/A output intents or veraPDF
+conformance declarations.
+
 ## Tables
 
 Tables render as portable PDF page content: stroked cell rectangles, optional
-header fill rectangles, and text runs. The output is not tagged PDF table
-structure.
+header fill rectangles, and text runs. When tagged output is enabled, the visual
+table also emits Table/TR/TH/TD structure elements and artifacts for the cell
+borders and header fill.
 
 Column widths are measured from the header cells and all body rows before the
 table is drawn. The width plan uses standard-font text metrics to compute a
@@ -518,7 +553,7 @@ The following remain future profiles or unsupported features:
 - Linearization.
 - Encryption and permission dictionaries.
 - Digital signatures.
-- Tagged PDF, PDF/UA, and structure trees.
+- PDF/UA validation and full conformance declarations.
 - PDF/A output intents, metadata, and conformance declarations.
 - Embedded fonts and font subsetting.
 - `/ToUnicode` maps.
