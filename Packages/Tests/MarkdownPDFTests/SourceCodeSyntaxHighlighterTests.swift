@@ -42,4 +42,30 @@ struct SourceCodeSyntaxHighlighterTests {
         #expect(SourceCodeLanguage(hint: "plain") == nil)
         #expect(SourceCodeLanguage(hint: nil) == nil)
     }
+
+    @Test("Keeps numeric operators separate from number tokens")
+    func keepsNumericOperatorsSeparateFromNumberTokens() {
+        var highlighter = SourceCodeSyntaxHighlighter(language: .swift)
+        let tokens = highlighter.tokens(for: "let value = 1+2-3 * 4 / 5")
+
+        #expect(tokens.contains(SourceCodeToken(text: "1", kind: .number)))
+        #expect(tokens.contains(SourceCodeToken(text: "+", kind: .operatorToken)))
+        #expect(tokens.contains(SourceCodeToken(text: "2", kind: .number)))
+        #expect(tokens.contains(SourceCodeToken(text: "-", kind: .operatorToken)))
+        #expect(tokens.contains(SourceCodeToken(text: "3", kind: .number)))
+        #expect(!tokens.contains(SourceCodeToken(text: "1+2-3", kind: .number)))
+    }
+
+    @Test("Keeps ranges and exponents distinct")
+    func keepsRangesAndExponentsDistinct() {
+        var highlighter = SourceCodeSyntaxHighlighter(language: .swift)
+        let tokens = highlighter.tokens(for: "let values = 0..<18 + 1.5e-2 + 0x2A")
+
+        #expect(tokens.contains(SourceCodeToken(text: "0", kind: .number)))
+        #expect(tokens.contains(SourceCodeToken(text: "..<", kind: .operatorToken)))
+        #expect(tokens.contains(SourceCodeToken(text: "18", kind: .number)))
+        #expect(tokens.contains(SourceCodeToken(text: "1.5e-2", kind: .number)))
+        #expect(tokens.contains(SourceCodeToken(text: "0x2A", kind: .number)))
+        #expect(!tokens.contains(SourceCodeToken(text: "0..", kind: .number)))
+    }
 }

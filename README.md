@@ -412,7 +412,7 @@ swiftlint --config .swiftlint.yml
   source-code formatting research and implementation, including the reported
   quote-stroke, crammed-layout, glyph-overlap, and image-presence regressions.
   Issue [#120](https://github.com/mihaelamj/MarkdownPDF/issues/120) is the
-  active portable syntax-coloring implementation.
+  portable syntax-coloring implementation under review.
 - Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) tracks
   named PDF page sizes, including A1, A3, A4, and A5.
 - Apple system font names remain available through

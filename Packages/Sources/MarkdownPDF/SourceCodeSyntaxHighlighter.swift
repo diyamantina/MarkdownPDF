@@ -112,21 +112,76 @@ struct SourceCodeSyntaxHighlighter {
 
     private func numberEnd(in line: String, from start: String.Index) -> String.Index {
         var index = start
-        while index < line.endIndex,
-              isNumberBody(line[index])
+
+        if line[index] == "." {
+            index = line.index(after: index)
+            while index < line.endIndex, isDecimalBody(line[index]) {
+                index = line.index(after: index)
+            }
+            return exponentEnd(in: line, from: index)
+        }
+
+        if starts(with: "0x", in: line, at: index) || starts(with: "0X", in: line, at: index) {
+            index = line.index(index, offsetBy: 2)
+            while index < line.endIndex, isHexBody(line[index]) {
+                index = line.index(after: index)
+            }
+            return index
+        }
+
+        while index < line.endIndex, isDecimalBody(line[index]) {
+            index = line.index(after: index)
+        }
+
+        if index < line.endIndex,
+           line[index] == ".",
+           hasDecimalDigitAfterDot(in: line, at: index)
         {
+            index = line.index(after: index)
+            while index < line.endIndex, isDecimalBody(line[index]) {
+                index = line.index(after: index)
+            }
+        }
+
+        return exponentEnd(in: line, from: index)
+    }
+
+    private func exponentEnd(in line: String, from start: String.Index) -> String.Index {
+        guard start < line.endIndex,
+              line[start] == "e" || line[start] == "E"
+        else {
+            return start
+        }
+
+        var digitStart = line.index(after: start)
+        if digitStart < line.endIndex,
+           line[digitStart] == "+" || line[digitStart] == "-"
+        {
+            digitStart = line.index(after: digitStart)
+        }
+
+        guard digitStart < line.endIndex, line[digitStart].isNumber else {
+            return start
+        }
+
+        var index = digitStart
+        while index < line.endIndex, isDecimalBody(line[index]) {
             index = line.index(after: index)
         }
         return index
     }
 
-    private func isNumberBody(_ character: Character) -> Bool {
-        character.isNumber
-            || character.isHexLetter
-            || character == "."
-            || character == "_"
-            || character == "+"
-            || character == "-"
+    private func hasDecimalDigitAfterDot(in line: String, at dotIndex: String.Index) -> Bool {
+        let next = line.index(after: dotIndex)
+        return next < line.endIndex && line[next].isNumber
+    }
+
+    private func isDecimalBody(_ character: Character) -> Bool {
+        character.isNumber || character == "_"
+    }
+
+    private func isHexBody(_ character: Character) -> Bool {
+        character.isNumber || character.isHexLetter || character == "_"
     }
 
     private func isIdentifierStart(_ character: Character) -> Bool {
@@ -172,7 +227,7 @@ private extension Character {
 
     var isHexLetter: Bool {
         switch self {
-        case "a" ... "f", "A" ... "F", "x", "X":
+        case "a" ... "f", "A" ... "F":
             true
         default:
             false
