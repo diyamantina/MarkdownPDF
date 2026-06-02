@@ -82,6 +82,7 @@ The rules articles define the conventions for source layout, witness gates, cros
 - <doc:SourceCodeTypesettingLiterature>
 - <doc:SourceSnapshotPolicy>
 - <doc:TaggedPDFPDFAAccessibility>
+- <doc:VendoredAlgorithmReferences>
 - <doc:ThemingStylesheetModel>
 
 ### Staged source references
