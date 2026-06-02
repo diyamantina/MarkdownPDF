@@ -381,6 +381,8 @@ swiftlint --config .swiftlint.yml
 - [docs/research/portable-syntax-coloring.md](docs/research/portable-syntax-coloring.md):
   portable syntax-coloring recommendation, implementation policy, and witness
   requirements.
+- [docs/research/apple-and-custom-fonts.md](docs/research/apple-and-custom-fonts.md):
+  Apple system font naming limits and custom-font format policy.
 
 ## Platform Boundaries
 
@@ -413,16 +415,17 @@ swiftlint --config .swiftlint.yml
   quote-stroke, crammed-layout, glyph-overlap, and image-presence regressions.
   Issue [#120](https://github.com/mihaelamj/MarkdownPDF/issues/120) landed the
   portable syntax-coloring implementation. Issue
-  [#122](https://github.com/mihaelamj/MarkdownPDF/issues/122) is in review
-  for Unicode combining diacritics and CJK / kanji coverage. Issue
-  [#135](https://github.com/mihaelamj/MarkdownPDF/issues/135) is in review for
-  screenshot-reported source-code layout regressions across code, quotes,
-  headings, images, and fallback text. Issue
-  [#123](https://github.com/mihaelamj/MarkdownPDF/issues/123) is in review for
-  RTL manuscript hardening. Issue
-  [#141](https://github.com/mihaelamj/MarkdownPDF/issues/141) is in review in
-  PR [#140](https://github.com/mihaelamj/MarkdownPDF/pull/140) for the #135
-  negative-control proof. Issues
+  [#122](https://github.com/mihaelamj/MarkdownPDF/issues/122) landed Unicode
+  combining diacritics and CJK / kanji coverage. Issue
+  [#135](https://github.com/mihaelamj/MarkdownPDF/issues/135) landed
+  screenshot-reported source-code layout regression coverage across code,
+  quotes, headings, images, and fallback text. Issue
+  [#123](https://github.com/mihaelamj/MarkdownPDF/issues/123) landed RTL
+  manuscript hardening. Issue
+  [#141](https://github.com/mihaelamj/MarkdownPDF/issues/141) landed the #135
+  negative-control proof. Issue
+  [#146](https://github.com/mihaelamj/MarkdownPDF/issues/146) preserved staged
+  research for the next implementation shortlist. Issues
   [#142](https://github.com/mihaelamj/MarkdownPDF/issues/142) and
   [#143](https://github.com/mihaelamj/MarkdownPDF/issues/143) are queued
   follow-ups.
@@ -466,17 +469,18 @@ flowchart TD
     H2I["#118<br/>Roadmap colors<br/>Done"]
     H2J["#119<br/>Crazy markdown fixtures<br/>Done"]
     H2K["#120<br/>Portable syntax coloring<br/>Done"]
-    H2L["#122<br/>CJK + diacritics<br/>Review"]
-    H2M["#135<br/>Screenshot layout regressions<br/>Review"]
-    H2N["#123<br/>RTL manuscript<br/>Review"]
-    H2O["#141<br/>Prove #135 witness<br/>Review"]
+    H2L["#122<br/>CJK + diacritics<br/>Done"]
+    H2M["#135<br/>Screenshot layout regressions<br/>Done"]
+    H2N["#123<br/>RTL manuscript<br/>Done"]
+    H2O["#141<br/>Prove #135 witness<br/>Done"]
+    H2R["#146<br/>Preserve staged research<br/>Done"]
     H2P["#142<br/>Line-break correctness<br/>Todo"]
     H2Q["#143<br/>More syntax languages<br/>Todo"]
     H3["#100<br/>Named page sizes<br/>Todo"]
 
     H0 --> H1
     H1 --> H2
-    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M --> H2N --> H2O --> H2P --> H2Q
+    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M --> H2N --> H2O --> H2R --> H2P --> H2Q
     H1 --> H3
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
@@ -486,8 +490,8 @@ flowchart TD
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
     class H0,H1 done;
     class H2 active;
-    class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J,H2K done;
-    class H2L,H2M,H2N,H2O review;
+    class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J,H2K,H2L,H2M,H2N,H2O done;
+    class H2R done;
     class H2P,H2Q,H3 todo;
 ```
 
