@@ -3635,6 +3635,7 @@ private extension PDFTextRun {
             linkDestination: linkDestination,
             baselineOffset: baselineOffset,
             namedDestination: namedDestination,
+            inlineMathBox: inlineMathBox,
         )
     }
 }
