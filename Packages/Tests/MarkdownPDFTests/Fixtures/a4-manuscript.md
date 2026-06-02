@@ -211,21 +211,20 @@ tools only as test witnesses. That distinction matters because the public
 package must build and test on both macOS and Linux.
 
 Unsupported Mermaid diagrams must stay visible as fallback text. The following
-block uses a Mermaid chart type that is intentionally outside the supported
-flowchart subset.
+block uses a supported Mermaid pie chart so native chart rendering is witnessed
+inside the manuscript flow.
 
 ```mermaid
-pie title Unsupported A4 manuscript chart
+pie title A4 manuscript chart
     "Parsed" : 40
     "Measured" : 35
     "Serialized" : 25
 ```
 
-After the unsupported Mermaid fallback, prose continues again. The fallback text
-should be present in extracted text, and the document should still pass qpdf,
-Poppler, MuPDF, and raster comparison checks. This gives future chart work a
-clear baseline: unsupported charts are visible today, and supported chart
-rendering must improve the behavior without removing evidence.
+After the native chart, prose continues again. The chart labels should be
+present in extracted text, and the document should still pass qpdf, Poppler,
+MuPDF, and raster comparison checks. Unsupported Mermaid syntax still uses the
+visible fallback path elsewhere in the test suite.
 
 ## 7. Code Listing
 
@@ -254,6 +253,13 @@ sustained prose.
 
 The final paragraph repeats the key markers for automated extraction: Portable
 A4 Manuscript Fixture, A4 local chart, Remote A4 figure, Manuscript source,
-Open witnesses, Unsupported A4 manuscript chart, and A4 Manuscript Exit Marker.
+Open witnesses, A4 manuscript chart, and A4 Manuscript Exit Marker.
+
+The final audit paragraph keeps the manuscript witness populated after chart
+rendering changes page breaks. It repeats ordinary prose about extraction,
+geometry, raster comparison, table flow, code listing flow, and native chart
+flow so the last page remains a useful cross-reader page instead of a sparse
+tail artifact. The content is intentionally plain ASCII and carries no new
+feature claims.
 
 A4 Manuscript Exit Marker

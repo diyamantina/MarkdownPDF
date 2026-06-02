@@ -194,6 +194,8 @@ private struct Layout {
         case let .codeBlock(info, code):
             if isMermaidCodeBlock(info) {
                 try renderMermaidBlock(code)
+            } else if isChartCodeBlock(info) {
+                try renderChartFenceBlock(code)
             } else {
                 try renderCodeBlock(code, info: info)
             }
@@ -444,18 +446,36 @@ private struct Layout {
     }
 
     private func isMermaidCodeBlock(_ info: String?) -> Bool {
+        codeBlockLanguage(info) == "mermaid"
+    }
+
+    private func isChartCodeBlock(_ info: String?) -> Bool {
+        codeBlockLanguage(info) == "chart"
+    }
+
+    private func codeBlockLanguage(_ info: String?) -> String? {
         guard let language = info?
             .split(whereSeparator: \.isWhitespace)
             .first?
             .lowercased()
         else {
-            return false
+            return nil
         }
 
-        return language == "mermaid"
+        return language
     }
 
     private mutating func renderMermaidBlock(_ code: String) throws {
+        if ChartBlock.isMermaidPieCandidate(code) {
+            switch ChartBlock.parseMermaidPie(code) {
+            case let .chart(chart):
+                try renderChart(chart, sourceCode: code, fallbackPrefix: "Unsupported Mermaid chart")
+            case let .unsupported(reason):
+                try renderUnsupportedMermaid(reason: "unsupported Mermaid pie chart: \(reason)", code: code)
+            }
+            return
+        }
+
         switch MermaidDiagram.parse(code) {
         case let .diagram(diagram):
             switch try mermaidRenderPlan(for: diagram) {
@@ -473,6 +493,602 @@ private struct Layout {
 
     private mutating func renderUnsupportedMermaid(reason: String, code: String) throws {
         try renderCodeBlock("Unsupported Mermaid diagram: \(reason)\n\(code)")
+    }
+
+    private mutating func renderChartFenceBlock(_ code: String) throws {
+        switch ChartBlock.parseChartFence(code) {
+        case let .chart(chart):
+            try renderChart(chart, sourceCode: code, fallbackPrefix: "Unsupported chart")
+        case let .unsupported(reason):
+            try renderCodeBlock("Unsupported chart: \(reason)\n\(code)")
+        }
+    }
+
+    private mutating func renderChart(
+        _ chart: ChartBlock,
+        sourceCode: String,
+        fallbackPrefix: String,
+    ) throws {
+        switch try chartRenderPlan(for: chart) {
+        case let .plan(plan):
+            ensureSpace(plan.height + 12)
+            switch try chartRenderPlan(for: chart) {
+            case let .plan(positionedPlan):
+                try drawChartPlan(positionedPlan)
+                y -= positionedPlan.height + 12
+            case let .fallback(reason):
+                try renderCodeBlock("\(fallbackPrefix): \(reason)\n\(sourceCode)")
+            }
+        case let .fallback(reason):
+            try renderCodeBlock("\(fallbackPrefix): \(reason)\n\(sourceCode)")
+        }
+    }
+
+    private func chartRenderPlan(for chart: ChartBlock) throws -> ChartRenderPlanResult {
+        guard contentWidth >= 180 else {
+            return .fallback("content area is too narrow for native chart rendering")
+        }
+
+        let height = min(contentHeight, max(190, min(260, contentWidth * 0.55)))
+        guard height >= 170 else {
+            return .fallback("content area is too short for native chart rendering")
+        }
+        guard chart.series.count <= chartPalette.count else {
+            return .fallback("too many series for the portable chart palette")
+        }
+        if let title = chart.title,
+           try textWidth(PDFTextRun(text: title, font: .helveticaBold, size: chartTitleSize)) > contentWidth - 16
+        {
+            return .fallback("chart title is wider than the content area")
+        }
+        for series in chart.series {
+            guard !series.name.isEmpty else {
+                return .fallback("series names must not be empty")
+            }
+            guard try textWidth(PDFTextRun(text: series.name, font: .helvetica, size: chartLabelSize)) <= 92 else {
+                return .fallback("series label `\(series.name)` is too wide for the chart legend")
+            }
+        }
+        for label in chart.categories {
+            guard !label.isEmpty else {
+                return .fallback("category labels must not be empty")
+            }
+            guard try textWidth(PDFTextRun(text: label, font: .helvetica, size: chartLabelSize)) <= 80 else {
+                return .fallback("category label `\(label)` is too wide for the portable chart profile")
+            }
+        }
+
+        switch chart.kind {
+        case .pie:
+            return try pieChartRenderPlan(for: chart, height: height)
+        case .bar, .line, .scatter:
+            return try cartesianChartRenderPlan(for: chart, height: height)
+        }
+    }
+
+    private func pieChartRenderPlan(for chart: ChartBlock, height: Double) throws -> ChartRenderPlanResult {
+        guard let series = chart.series.first, !series.points.isEmpty else {
+            return .fallback("pie chart has no slices")
+        }
+        let titleHeight = chart.title == nil ? 8.0 : 26.0
+        let legendWidth = try max(92, min(150, widestChartLabelWidth(chart.categories) + 24))
+        let plotWidth = contentWidth - legendWidth - 18
+        let radius = min(plotWidth / 2 - 8, (height - titleHeight - 18) / 2)
+        guard radius >= 42 else {
+            return .fallback("pie chart leaves too little room for slices and legend")
+        }
+
+        return .plan(ChartRenderPlan(
+            chart: chart,
+            height: height,
+            plotFrame: nil,
+            xTicks: [],
+            yTicks: [],
+            xDomain: (0, 0),
+            yDomain: (0, 0),
+            pieRadius: radius,
+            legendWidth: legendWidth,
+        ))
+    }
+
+    private func cartesianChartRenderPlan(for chart: ChartBlock, height: Double) throws -> ChartRenderPlanResult {
+        let allPoints = chart.series.flatMap(\.points)
+        guard !allPoints.isEmpty else {
+            return .fallback("chart has no data points")
+        }
+
+        let yValues = allPoints.map(\.y) + (chart.kind == .bar ? [0] : [])
+        let yTicks = niceChartTicks(min: yValues.min() ?? 0, max: yValues.max() ?? 1, targetCount: 5)
+        guard let yFirst = yTicks.first, let yLast = yTicks.last, yLast > yFirst else {
+            return .fallback("chart y axis could not be scaled")
+        }
+        let yLabelWidth = try max(34, yTicks.map { try chartTextWidth(formatChartNumber($0)) }.max() ?? 34)
+        let leftAxisWidth = min(max(38, yLabelWidth + 10), 68)
+        let titleHeight = chart.title == nil ? 8.0 : 26.0
+        let legendHeight = 30.0
+        let bottomAxisHeight = chart.xLabel == nil ? 34.0 : 48.0
+        let plotFrame = ChartFrame(
+            left: options.margins.left + leftAxisWidth,
+            top: y - titleHeight - legendHeight,
+            width: contentWidth - leftAxisWidth - 12,
+            height: height - titleHeight - legendHeight - bottomAxisHeight,
+        )
+        guard plotFrame.width >= 96, plotFrame.height >= 72 else {
+            return .fallback("chart plot area is too small")
+        }
+
+        let xTicks: [Double]
+        let xDomain: (min: Double, max: Double)
+        switch chart.kind {
+        case .bar:
+            guard !chart.categories.isEmpty else {
+                return .fallback("bar charts require categories")
+            }
+            let bandWidth = plotFrame.width / Double(chart.categories.count)
+            for category in chart.categories {
+                if try chartTextWidth(category) > bandWidth * 0.92 {
+                    return .fallback("category label `\(category)` would overlap adjacent labels")
+                }
+            }
+            xTicks = chart.series[0].points.map(\.x)
+            xDomain = (0, Double(max(0, chart.categories.count - 1)))
+        case .line:
+            let values = allPoints.map(\.x)
+            xDomain = expandedDomain(min: values.min() ?? 0, max: values.max() ?? 1)
+            xTicks = chart.categories.isEmpty ? niceChartTicks(min: xDomain.min, max: xDomain.max, targetCount: 5) : chart.series[0].points.map(\.x)
+            if !chart.categories.isEmpty {
+                let bandWidth = plotFrame.width / Double(chart.categories.count)
+                for category in chart.categories where try chartTextWidth(category) > bandWidth * 0.92 {
+                    return .fallback("category label `\(category)` would overlap adjacent labels")
+                }
+            }
+        case .scatter:
+            let values = allPoints.map(\.x)
+            let domain = expandedDomain(min: values.min() ?? 0, max: values.max() ?? 1)
+            xTicks = niceChartTicks(min: domain.min, max: domain.max, targetCount: 5)
+            xDomain = (xTicks.first ?? domain.min, xTicks.last ?? domain.max)
+            if let reason = try chartTickOverlapReason(ticks: xTicks, domain: xDomain, plotFrame: plotFrame) {
+                return .fallback(reason)
+            }
+        case .pie:
+            xTicks = []
+            xDomain = (0, 0)
+        }
+
+        return .plan(ChartRenderPlan(
+            chart: chart,
+            height: height,
+            plotFrame: plotFrame,
+            xTicks: xTicks,
+            yTicks: yTicks,
+            xDomain: xDomain,
+            yDomain: (yFirst, yLast),
+            pieRadius: nil,
+            legendWidth: nil,
+        ))
+    }
+
+    private func chartTickOverlapReason(
+        ticks: [Double],
+        domain: (min: Double, max: Double),
+        plotFrame: ChartFrame,
+    ) throws -> String? {
+        guard ticks.count > 1, domain.max > domain.min else {
+            return nil
+        }
+        let positions = ticks.map { plotFrame.left + ($0 - domain.min) / (domain.max - domain.min) * plotFrame.width }
+        let widths = try ticks.map { try chartTextWidth(formatChartNumber($0)) }
+        for index in 1 ..< ticks.count {
+            let previousRight = positions[index - 1] + widths[index - 1] / 2
+            let currentLeft = positions[index] - widths[index] / 2
+            if currentLeft < previousRight + 4 {
+                return "x axis tick labels would overlap"
+            }
+        }
+        return nil
+    }
+
+    private mutating func drawChartPlan(_ plan: ChartRenderPlan) throws {
+        let topY = y
+        currentPage.drawRectangle(
+            x: options.margins.left - 4,
+            y: topY - plan.height,
+            width: contentWidth + 8,
+            height: plan.height,
+            stroke: PDFColor(red: 0.72, green: 0.76, blue: 0.80),
+            fill: PDFColor(red: 0.98, green: 0.985, blue: 0.99),
+        )
+
+        if let title = plan.chart.title {
+            try drawChartText(
+                title,
+                x: options.margins.left + contentWidth / 2,
+                y: topY - 17,
+                font: .helveticaBold,
+                size: chartTitleSize,
+                alignment: .center,
+            )
+        }
+
+        switch plan.chart.kind {
+        case .pie:
+            try drawPieChart(plan, topY: topY)
+        case .bar:
+            try drawBarChart(plan, topY: topY)
+        case .line:
+            try drawLineChart(plan, topY: topY)
+        case .scatter:
+            try drawScatterChart(plan, topY: topY)
+        }
+    }
+
+    private mutating func drawPieChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let radius = plan.pieRadius,
+              let legendWidth = plan.legendWidth,
+              let series = plan.chart.series.first
+        else {
+            return
+        }
+
+        let titleHeight = plan.chart.title == nil ? 8.0 : 26.0
+        let centerX = options.margins.left + radius + 14
+        let centerY = topY - titleHeight - (plan.height - titleHeight) / 2
+        let total = series.points.reduce(0) { $0 + $1.y }
+        var angle = Double.pi / 2
+
+        for (index, point) in series.points.enumerated() {
+            let sweep = -Double.pi * 2 * point.y / total
+            let nextAngle = angle + sweep
+            currentPage.drawPieSlice(
+                centerX: centerX,
+                centerY: centerY,
+                radius: radius,
+                startAngle: angle,
+                endAngle: nextAngle,
+                fill: chartPalette[index % chartPalette.count],
+            )
+            angle = nextAngle
+        }
+
+        let legendX = options.margins.left + contentWidth - legendWidth + 4
+        var legendY = topY - titleHeight - 16
+        for (index, point) in series.points.enumerated() {
+            let color = chartPalette[index % chartPalette.count]
+            currentPage.drawRectangle(x: legendX, y: legendY - 8, width: 9, height: 9, stroke: nil, fill: color)
+            try drawChartText(
+                "\(point.label ?? "") \(formatChartNumber(point.y))",
+                x: legendX + 14,
+                y: legendY - 7,
+                size: chartLabelSize,
+            )
+            legendY -= 15
+        }
+    }
+
+    private mutating func drawBarChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let plotFrame = plan.plotFrame else {
+            return
+        }
+        try drawCartesianBase(plan, plotFrame: plotFrame, topY: topY)
+
+        let baselineY = chartY(0, domain: plan.yDomain, frame: plotFrame)
+        let bandWidth = plotFrame.width / Double(plan.chart.categories.count)
+        let groupWidth = bandWidth * 0.68
+        let barWidth = max(2, groupWidth / Double(plan.chart.series.count))
+
+        for (seriesIndex, series) in plan.chart.series.enumerated() {
+            let color = chartPalette[seriesIndex % chartPalette.count]
+            for (pointIndex, point) in series.points.enumerated() {
+                let x = plotFrame.left
+                    + Double(pointIndex) * bandWidth
+                    + (bandWidth - groupWidth) / 2
+                    + Double(seriesIndex) * barWidth
+                let valueY = chartY(point.y, domain: plan.yDomain, frame: plotFrame)
+                let y = min(baselineY, valueY)
+                currentPage.drawRectangle(
+                    x: x,
+                    y: y,
+                    width: max(1.5, barWidth - 1),
+                    height: max(0.8, abs(valueY - baselineY)),
+                    stroke: nil,
+                    fill: color,
+                )
+            }
+        }
+
+        try drawCategoricalXAxis(categories: plan.chart.categories, plotFrame: plotFrame)
+        try drawChartLegend(plan.chart.series.map(\.name), topY: topY)
+    }
+
+    private mutating func drawLineChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let plotFrame = plan.plotFrame else {
+            return
+        }
+        try drawCartesianBase(plan, plotFrame: plotFrame, topY: topY)
+
+        for (seriesIndex, series) in plan.chart.series.enumerated() {
+            let color = chartPalette[seriesIndex % chartPalette.count]
+            let points = series.points.map {
+                PDFPageCanvas.Point(
+                    x: chartX($0.x, domain: plan.xDomain, frame: plotFrame),
+                    y: chartY($0.y, domain: plan.yDomain, frame: plotFrame),
+                )
+            }
+            currentPage.drawPolyline(points: points, width: 1.2, color: color)
+            for point in points {
+                currentPage.drawCircle(x: point.x, y: point.y, radius: 2.5, stroke: .white, fill: color)
+            }
+        }
+
+        if plan.chart.categories.isEmpty {
+            try drawNumericXAxis(ticks: plan.xTicks, domain: plan.xDomain, plotFrame: plotFrame)
+        } else {
+            try drawCategoricalXAxis(categories: plan.chart.categories, plotFrame: plotFrame)
+        }
+        try drawChartLegend(plan.chart.series.map(\.name), topY: topY)
+    }
+
+    private mutating func drawScatterChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let plotFrame = plan.plotFrame else {
+            return
+        }
+        try drawCartesianBase(plan, plotFrame: plotFrame, topY: topY)
+
+        for (seriesIndex, series) in plan.chart.series.enumerated() {
+            let color = chartPalette[seriesIndex % chartPalette.count]
+            for point in series.points {
+                let marker = PDFPageCanvas.Point(
+                    x: chartX(point.x, domain: plan.xDomain, frame: plotFrame),
+                    y: chartY(point.y, domain: plan.yDomain, frame: plotFrame),
+                )
+                if seriesIndex % 3 == 2 {
+                    currentPage.drawPolygon(
+                        points: [
+                            PDFPageCanvas.Point(x: marker.x, y: marker.y + 3.2),
+                            PDFPageCanvas.Point(x: marker.x - 3.2, y: marker.y - 2.8),
+                            PDFPageCanvas.Point(x: marker.x + 3.2, y: marker.y - 2.8),
+                        ],
+                        stroke: .white,
+                        fill: color,
+                    )
+                } else if seriesIndex % 3 == 1 {
+                    currentPage.drawRectangle(
+                        x: marker.x - 2.8,
+                        y: marker.y - 2.8,
+                        width: 5.6,
+                        height: 5.6,
+                        stroke: .white,
+                        fill: color,
+                    )
+                } else {
+                    currentPage.drawCircle(x: marker.x, y: marker.y, radius: 3, stroke: .white, fill: color)
+                }
+            }
+        }
+
+        try drawNumericXAxis(ticks: plan.xTicks, domain: plan.xDomain, plotFrame: plotFrame)
+        try drawChartLegend(plan.chart.series.map(\.name), topY: topY)
+    }
+
+    private mutating func drawCartesianBase(
+        _ plan: ChartRenderPlan,
+        plotFrame: ChartFrame,
+        topY _: Double,
+    ) throws {
+        for tick in plan.yTicks {
+            let tickY = chartY(tick, domain: plan.yDomain, frame: plotFrame)
+            currentPage.drawLine(
+                x1: plotFrame.left,
+                y1: tickY,
+                x2: plotFrame.right,
+                y2: tickY,
+                width: 0.25,
+                color: PDFColor(red: 0.84, green: 0.86, blue: 0.88),
+            )
+            try drawChartText(
+                formatChartNumber(tick),
+                x: plotFrame.left - 6,
+                y: tickY - chartLabelSize * 0.35,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .right,
+            )
+        }
+
+        currentPage.drawLine(x1: plotFrame.left, y1: plotFrame.bottom, x2: plotFrame.left, y2: plotFrame.top, width: 0.65)
+        currentPage.drawLine(x1: plotFrame.left, y1: plotFrame.bottom, x2: plotFrame.right, y2: plotFrame.bottom, width: 0.65)
+
+        if let yLabel = plan.chart.yLabel {
+            try drawChartText(
+                yLabel,
+                x: plotFrame.left,
+                y: plotFrame.top - chartLabelSize - 5,
+                size: chartLabelSize,
+                color: .gray,
+            )
+        }
+        if let xLabel = plan.chart.xLabel {
+            try drawChartText(
+                xLabel,
+                x: plotFrame.left + plotFrame.width / 2,
+                y: plotFrame.bottom - 36,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .center,
+            )
+        }
+    }
+
+    private mutating func drawCategoricalXAxis(categories: [String], plotFrame: ChartFrame) throws {
+        let bandWidth = plotFrame.width / Double(categories.count)
+        for (index, category) in categories.enumerated() {
+            try drawChartText(
+                category,
+                x: plotFrame.left + Double(index) * bandWidth + bandWidth / 2,
+                y: plotFrame.bottom - 13,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .center,
+            )
+        }
+    }
+
+    private mutating func drawNumericXAxis(
+        ticks: [Double],
+        domain: (min: Double, max: Double),
+        plotFrame: ChartFrame,
+    ) throws {
+        for tick in ticks {
+            let tickX = chartX(tick, domain: domain, frame: plotFrame)
+            currentPage.drawLine(
+                x1: tickX,
+                y1: plotFrame.bottom,
+                x2: tickX,
+                y2: plotFrame.top,
+                width: 0.2,
+                color: PDFColor(red: 0.88, green: 0.89, blue: 0.91),
+            )
+            try drawChartText(
+                formatChartNumber(tick),
+                x: tickX,
+                y: plotFrame.bottom - 13,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .center,
+            )
+        }
+    }
+
+    private mutating func drawChartLegend(_ labels: [String], topY: Double) throws {
+        guard !labels.isEmpty else {
+            return
+        }
+
+        let y = topY - (labels.count > 1 ? 39 : 33)
+        let textX = options.margins.left + 18
+        let spacer = "   "
+        let spacerWidth = try chartTextWidth(spacer)
+        var textCursor = textX
+        var legendText = ""
+
+        for (index, label) in labels.enumerated() {
+            let color = chartPalette[index % chartPalette.count]
+            currentPage.drawRectangle(x: textCursor - 14, y: y - 7, width: 10, height: 8, stroke: nil, fill: color)
+            let labelWidth = try chartTextWidth(label)
+            textCursor += labelWidth
+            legendText += label
+            if index < labels.count - 1 {
+                textCursor += spacerWidth
+                legendText += spacer
+            }
+        }
+        try drawChartText(legendText, x: textX, y: y - 6, size: chartLabelSize)
+    }
+
+    private mutating func drawChartText(
+        _ text: String,
+        x: Double,
+        y: Double,
+        font: StandardFont = .helvetica,
+        size: Double? = nil,
+        color: PDFColor = .black,
+        alignment: ChartTextAlignment = .left,
+    ) throws {
+        let run = PDFTextRun(text: text, font: font, size: size ?? chartLabelSize, color: color)
+        let width = try textWidth(run)
+        let drawX = switch alignment {
+        case .left:
+            x
+        case .center:
+            x - width / 2
+        case .right:
+            x - width
+        }
+        try currentPage.drawTextRun(run, x: drawX, y: y, fontSet: options.fontSet, embeddedFonts: embeddedFonts)
+    }
+
+    private func chartX(_ value: Double, domain: (min: Double, max: Double), frame: ChartFrame) -> Double {
+        guard domain.max > domain.min else {
+            return frame.left
+        }
+        return frame.left + (value - domain.min) / (domain.max - domain.min) * frame.width
+    }
+
+    private func chartY(_ value: Double, domain: (min: Double, max: Double), frame: ChartFrame) -> Double {
+        guard domain.max > domain.min else {
+            return frame.bottom
+        }
+        return frame.bottom + (value - domain.min) / (domain.max - domain.min) * frame.height
+    }
+
+    private func niceChartTicks(min rawMin: Double, max rawMax: Double, targetCount: Int) -> [Double] {
+        let domain = expandedDomain(min: rawMin, max: rawMax)
+        let span = niceChartNumber(domain.max - domain.min, round: false)
+        let step = niceChartNumber(span / Double(max(1, targetCount - 1)), round: true)
+        let graphMin = floor(domain.min / step) * step
+        let graphMax = ceil(domain.max / step) * step
+        var ticks: [Double] = []
+        var value = graphMin
+        while value <= graphMax + step * 0.5, ticks.count < 20 {
+            ticks.append(value)
+            value += step
+        }
+        return ticks
+    }
+
+    private func niceChartNumber(_ value: Double, round: Bool) -> Double {
+        guard value > 0 else {
+            return 1
+        }
+        let exponent = floor(log10(value))
+        let fraction = value / pow(10, exponent)
+        let niceFraction: Double = if round {
+            if fraction < 1.5 {
+                1
+            } else if fraction < 3 {
+                2
+            } else if fraction < 7 {
+                5
+            } else {
+                10
+            }
+        } else if fraction <= 1 {
+            1
+        } else if fraction <= 2 {
+            2
+        } else if fraction <= 5 {
+            5
+        } else {
+            10
+        }
+        return niceFraction * pow(10, exponent)
+    }
+
+    private func expandedDomain(min rawMin: Double, max rawMax: Double) -> (min: Double, max: Double) {
+        if rawMax > rawMin {
+            return (rawMin, rawMax)
+        }
+        let padding = max(1, abs(rawMin) * 0.1)
+        return (rawMin - padding, rawMax + padding)
+    }
+
+    private func formatChartNumber(_ value: Double) -> String {
+        if abs(value.rounded() - value) < 0.0001 {
+            return "\(Int(value.rounded()))"
+        }
+        let absValue = abs(value)
+        if absValue >= 10 {
+            return String(format: "%.1f", value)
+        }
+        return String(format: "%.2f", value)
+    }
+
+    private func chartTextWidth(_ text: String) throws -> Double {
+        try textWidth(PDFTextRun(text: text, font: .helvetica, size: chartLabelSize))
+    }
+
+    private func widestChartLabelWidth(_ labels: [String]) throws -> Double {
+        try labels.map { try chartTextWidth($0) }.max() ?? 0
     }
 
     private func mermaidRenderPlan(for diagram: MermaidDiagram) throws -> MermaidRenderPlanResult {
@@ -1841,6 +2457,65 @@ private struct Layout {
 
     private var currentPage: PDFPageCanvas {
         pages[pages.count - 1]
+    }
+
+    private var chartTitleSize: Double {
+        options.baseFontSize * 0.95
+    }
+
+    private var chartLabelSize: Double {
+        max(7.2, options.baseFontSize * 0.72)
+    }
+
+    private var chartPalette: [PDFColor] {
+        [
+            PDFColor(red: 0.11, green: 0.47, blue: 0.71),
+            PDFColor(red: 0.89, green: 0.47, blue: 0.20),
+            PDFColor(red: 0.20, green: 0.63, blue: 0.17),
+            PDFColor(red: 0.58, green: 0.40, blue: 0.74),
+            PDFColor(red: 0.55, green: 0.34, blue: 0.29),
+            PDFColor(red: 0.89, green: 0.10, blue: 0.11),
+            PDFColor(red: 0.50, green: 0.50, blue: 0.50),
+            PDFColor(red: 0.74, green: 0.74, blue: 0.13),
+        ]
+    }
+
+    private enum ChartTextAlignment {
+        case left
+        case center
+        case right
+    }
+
+    private enum ChartRenderPlanResult {
+        case plan(ChartRenderPlan)
+        case fallback(String)
+    }
+
+    private struct ChartRenderPlan {
+        var chart: ChartBlock
+        var height: Double
+        var plotFrame: ChartFrame?
+        var xTicks: [Double]
+        var yTicks: [Double]
+        var xDomain: (min: Double, max: Double)
+        var yDomain: (min: Double, max: Double)
+        var pieRadius: Double?
+        var legendWidth: Double?
+    }
+
+    private struct ChartFrame {
+        var left: Double
+        var top: Double
+        var width: Double
+        var height: Double
+
+        var right: Double {
+            left + width
+        }
+
+        var bottom: Double {
+            top - height
+        }
     }
 
     private enum MermaidMeasurementResult {

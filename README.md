@@ -163,6 +163,27 @@ swift run resumepdf input.json output.pdf
 See [docs/RESUME_TEMPLATE.md](docs/RESUME_TEMPLATE.md) for the resume JSON
 shape and journal inputs behind it.
 
+## Roadmap Legend
+
+The first Mermaid diagram is the shared legend for roadmap status colors.
+
+```mermaid
+flowchart LR
+    L0["Done"]:::done
+    L1["Active"]:::active
+    L2["Review"]:::review
+    L3["Next"]:::next
+    L4["Todo"]:::todo
+
+    L0 --> L1 --> L2 --> L3 --> L4
+
+    classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
+    classDef active fill:#e3f2fd,stroke:#1565c0,color:#111;
+    classDef review fill:#f3e5f5,stroke:#7b1fa2,color:#111;
+    classDef next fill:#fff8e1,stroke:#f9a825,color:#111;
+    classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
+```
+
 ## Canonical PDF roadmap
 
 Epic [#27](https://github.com/mihaelamj/MarkdownPDF/issues/27) tracks the
@@ -457,6 +478,9 @@ swiftlint --config .swiftlint.yml
 
 ## Current Hardening
 
+For issue #145, update this diagram after every child PR merge before starting
+the next child issue.
+
 ```mermaid
 flowchart TD
     H0["#95<br/>Hard Markdown fixture corpus<br/>Done"]
@@ -480,11 +504,20 @@ flowchart TD
     H2R["#146<br/>Preserve staged research<br/>Done"]
     H2P["#142<br/>Line-break correctness<br/>Done"]
     H2Q["#143<br/>More syntax languages<br/>Done"]
+    H4["#145<br/>Staged-research shortlist epic<br/>Active"]
+    H4A["#126<br/>Native charts<br/>Done"]
+    H4B["#127<br/>Pure-Swift DEFLATE<br/>Next"]
+    H4C["#128<br/>Tagged PDF and PDF/A<br/>Todo"]
+    H4D["#129<br/>Footnotes and tasks<br/>Todo"]
+    H4E["#130<br/>Theming model<br/>Todo"]
+    H4F["#131<br/>Math typesetting<br/>Todo"]
+    H4G["#138<br/>Apple and custom fonts<br/>Todo"]
     H3["#100<br/>Named page sizes<br/>Todo"]
 
     H0 --> H1
     H1 --> H2
     H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M --> H2N --> H2O --> H2R --> H2P --> H2Q
+    H2Q --> H4 --> H4A --> H4B --> H4C --> H4D --> H4E --> H4F --> H4G
     H1 --> H3
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
@@ -496,6 +529,10 @@ flowchart TD
     class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J,H2K,H2L,H2M,H2N,H2O done;
     class H2P,H2R done;
     class H2Q done;
+    class H4 active;
+    class H4A done;
+    class H4B next;
+    class H4C,H4D,H4E,H4F,H4G todo;
     class H3 todo;
 ```
 

@@ -155,13 +155,13 @@ Text after the supported flowchart checks that diagram height does not consume
 too little or too much vertical space.
 
 ```mermaid
-pie title Unsupported crazy chart
+pie title Crazy chart
     "Pass" : 5
     "Fail" : 1
 ```
 
-The unsupported chart must remain visible fallback text and must not leak a
-false claim of chart support.
+The supported pie chart must remain extractable text and must not leak raw
+Mermaid source.
 
 ## 10. Raw HTML and Footnote-like Notes
 
@@ -187,7 +187,7 @@ the caller.
 
 This closing section repeats stable extraction anchors: Crazy Markdown Torture
 Manuscript, DeepListLevelThreeMarker, QuoteBulletTwoMarker, Raw HTML fallback,
-Unsupported crazy chart, Reference-style chart placeholder, Crazy remote chart,
+Crazy chart, Reference-style chart placeholder, Crazy remote chart,
 and Crazy Torture Exit Marker.
 
 Another dense paragraph adds enough tail content for raster witnesses to find

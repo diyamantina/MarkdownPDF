@@ -1,6 +1,11 @@
 import Foundation
 
 final class PDFPageCanvas {
+    struct Point: Equatable {
+        var x: Double
+        var y: Double
+    }
+
     private var contentStream = PDFContentStream()
     private(set) var linkAnnotations: [PDFLinkAnnotation] = []
     private(set) var headingDestinations: [PDFHeadingDestination] = []
@@ -120,6 +125,121 @@ final class PDFPageCanvas {
         ])
     }
 
+    func drawPolyline(
+        points: [Point],
+        width: Double,
+        color: PDFColor = .black,
+    ) {
+        guard let first = points.first, points.count > 1 else {
+            return
+        }
+
+        setStrokeColor(color)
+        contentStream.append(
+            [
+                .setLineWidth(width),
+                .moveTo(x: first.x, y: first.y),
+            ] + points.dropFirst().map { .lineTo(x: $0.x, y: $0.y) } + [
+                .stroke,
+            ],
+        )
+    }
+
+    func drawPolygon(
+        points: [Point],
+        stroke: PDFColor? = .black,
+        fill: PDFColor? = nil,
+        lineWidth: Double = 0.5,
+    ) {
+        guard let first = points.first, points.count > 1 else {
+            return
+        }
+
+        if let fill, let stroke {
+            setFillColor(fill)
+            setStrokeColor(stroke)
+            contentStream.append(
+                [
+                    .setLineWidth(lineWidth),
+                    .moveTo(x: first.x, y: first.y),
+                ] + points.dropFirst().map { .lineTo(x: $0.x, y: $0.y) } + [
+                    .closePath,
+                    .fillAndStroke,
+                ],
+            )
+        } else if let fill {
+            setFillColor(fill)
+            contentStream.append(
+                [
+                    .moveTo(x: first.x, y: first.y),
+                ] + points.dropFirst().map { .lineTo(x: $0.x, y: $0.y) } + [
+                    .closePath,
+                    .fill,
+                ],
+            )
+        } else if let stroke {
+            setStrokeColor(stroke)
+            contentStream.append(
+                [
+                    .setLineWidth(lineWidth),
+                    .moveTo(x: first.x, y: first.y),
+                ] + points.dropFirst().map { .lineTo(x: $0.x, y: $0.y) } + [
+                    .closePath,
+                    .stroke,
+                ],
+            )
+        }
+    }
+
+    func drawCircle(
+        x: Double,
+        y: Double,
+        radius: Double,
+        stroke: PDFColor? = .black,
+        fill: PDFColor? = nil,
+        lineWidth: Double = 0.5,
+    ) {
+        let kappa = 0.5522847498307936 * radius
+        let operators: [PDFContentStream.Operator] = [
+            .moveTo(x: x + radius, y: y),
+            .curveTo(x1: x + radius, y1: y + kappa, x2: x + kappa, y2: y + radius, x3: x, y3: y + radius),
+            .curveTo(x1: x - kappa, y1: y + radius, x2: x - radius, y2: y + kappa, x3: x - radius, y3: y),
+            .curveTo(x1: x - radius, y1: y - kappa, x2: x - kappa, y2: y - radius, x3: x, y3: y - radius),
+            .curveTo(x1: x + kappa, y1: y - radius, x2: x + radius, y2: y - kappa, x3: x + radius, y3: y),
+            .closePath,
+        ]
+        drawPath(operators: operators, stroke: stroke, fill: fill, lineWidth: lineWidth)
+    }
+
+    func drawPieSlice(
+        centerX: Double,
+        centerY: Double,
+        radius: Double,
+        startAngle: Double,
+        endAngle: Double,
+        stroke: PDFColor? = .white,
+        fill: PDFColor,
+        lineWidth: Double = 0.5,
+    ) {
+        let sweep = endAngle - startAngle
+        if abs(abs(sweep) - Double.pi * 2) < 0.0001 {
+            drawCircle(x: centerX, y: centerY, radius: radius, stroke: stroke, fill: fill, lineWidth: lineWidth)
+            return
+        }
+
+        let start = arcPoint(centerX: centerX, centerY: centerY, radius: radius, angle: startAngle)
+        var operators: [PDFContentStream.Operator] = [
+            .moveTo(x: centerX, y: centerY),
+            .lineTo(x: start.x, y: start.y),
+        ]
+        operators += arcOperators(centerX: centerX, centerY: centerY, radius: radius, startAngle: startAngle, endAngle: endAngle)
+        operators += [
+            .lineTo(x: centerX, y: centerY),
+            .closePath,
+        ]
+        drawPath(operators: operators, stroke: stroke, fill: fill, lineWidth: lineWidth)
+    }
+
     func drawRectangle(
         x: Double,
         y: Double,
@@ -167,6 +287,75 @@ final class PDFPageCanvas {
 
     private func setStrokeColor(_ color: PDFColor) {
         contentStream.append(.setStrokeColor(color))
+    }
+
+    private func drawPath(
+        operators: [PDFContentStream.Operator],
+        stroke: PDFColor?,
+        fill: PDFColor?,
+        lineWidth: Double,
+    ) {
+        guard !operators.isEmpty else {
+            return
+        }
+
+        if let fill, let stroke {
+            setFillColor(fill)
+            setStrokeColor(stroke)
+            contentStream.append([.setLineWidth(lineWidth)] + operators + [.fillAndStroke])
+        } else if let fill {
+            setFillColor(fill)
+            contentStream.append(operators + [.fill])
+        } else if let stroke {
+            setStrokeColor(stroke)
+            contentStream.append([.setLineWidth(lineWidth)] + operators + [.stroke])
+        }
+    }
+
+    private func arcOperators(
+        centerX: Double,
+        centerY: Double,
+        radius: Double,
+        startAngle: Double,
+        endAngle: Double,
+    ) -> [PDFContentStream.Operator] {
+        let sweep = endAngle - startAngle
+        guard sweep != 0 else {
+            return []
+        }
+
+        let direction = sweep > 0 ? 1.0 : -1.0
+        let segmentCount = max(1, Int(ceil(abs(sweep) / (Double.pi / 2))))
+        let segmentSweep = sweep / Double(segmentCount)
+        var angle = startAngle
+        var operators: [PDFContentStream.Operator] = []
+
+        for _ in 0 ..< segmentCount {
+            let nextAngle = angle + segmentSweep
+            let k = 4.0 / 3.0 * tan(abs(segmentSweep) / 4.0) * radius * direction
+            let start = arcPoint(centerX: centerX, centerY: centerY, radius: radius, angle: angle)
+            let end = arcPoint(centerX: centerX, centerY: centerY, radius: radius, angle: nextAngle)
+            let control1 = Point(x: start.x - sin(angle) * k, y: start.y + cos(angle) * k)
+            let control2 = Point(x: end.x + sin(nextAngle) * k, y: end.y - cos(nextAngle) * k)
+            operators.append(.curveTo(
+                x1: control1.x,
+                y1: control1.y,
+                x2: control2.x,
+                y2: control2.y,
+                x3: end.x,
+                y3: end.y,
+            ))
+            angle = nextAngle
+        }
+
+        return operators
+    }
+
+    private func arcPoint(centerX: Double, centerY: Double, radius: Double, angle: Double) -> Point {
+        Point(
+            x: centerX + cos(angle) * radius,
+            y: centerY + sin(angle) * radius,
+        )
     }
 
     private func drawDecorations(

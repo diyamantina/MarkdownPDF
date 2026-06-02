@@ -112,16 +112,16 @@ After the supported flowchart, text should resume with enough separation from
 nodes and edge labels. A collision here usually means the diagram height or
 edge-label fallback policy changed.
 
-## 8. Unsupported Mermaid Fallback
+## 8. Native Mermaid Pie Chart
 
 ```mermaid
-pie title Unsupported hard corpus chart
+pie title Hard corpus chart
     "Passed" : 4
     "Failed" : 1
 ```
 
-The unsupported chart must remain visible as fallback text. It should not claim
-chart support, shell out to another renderer, or disappear from extracted text.
+The supported pie chart must render as native PDF drawing operators. It should
+not shell out to another renderer or disappear from extracted text.
 
 ## Repeated Heading
 
@@ -152,6 +152,6 @@ and link annotations stable across pages.
 
 Another paragraph names the expected extraction anchors outside the diagram:
 Portable Hard Markdown Corpus, Raw HTML fallback for the hard corpus,
-Unsupported hard corpus chart, and Hard Fixture Exit Marker.
+Hard corpus chart, and Hard Fixture Exit Marker.
 
 Hard Fixture Exit Marker

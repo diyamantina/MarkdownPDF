@@ -215,20 +215,38 @@ A chart type cannot be documented as supported until it passes:
 
 Unsupported chart inputs (log axes, time axes, unknown chart kinds, more series
 than the palette safely distinguishes) must render visible fallback text, never a
-silently wrong chart. This matches the current Mermaid chart fallback policy in
-`portable-mermaid-flowcharts.md`.
+silently wrong chart. Mermaid pie charts are the first chart syntax promoted out
+of fallback into the native chart profile.
+
+## Implemented first profile
+
+Issue #126 implements the first portable chart profile in Swift. The renderer
+recognizes Mermaid `pie` blocks and fenced `chart` blocks with `type: bar`,
+`type: line`, or `type: scatter`.
+
+The fenced chart grammar is intentionally small:
+
+- Common keys: `type`, `title`, `x-label`, `y-label`.
+- Bar and line charts: `categories: Q1, Q2` plus `series: Name = 1, 2`, or
+  numeric `x: 2024, 2025` for line charts.
+- Scatter charts: `series: Name = (1, 2), (2, 4)`.
+- Pie charts: Mermaid `pie title ...` with `label : value` entries, or fenced
+  chart `slice: Label = value` entries.
+
+The first profile uses direct PDF operators only: `re`/`f` for bars and legend
+swatches, `m`/`l`/`S` for axes and line series, cubic `c` Beziers for pies and
+circle markers, and ordinary text runs for titles, axis labels, tick labels, and
+legend labels. Dense or unknown inputs still render visible fallback text.
 
 ## Ordered work
 
-1. #126 Research note and chart-block boundary (this document).
-2. Parse a minimal chart block grammar (kind, axis types, series) with strict
-   typed errors for unsupported features.
-3. Implement `NiceTicks` (Heckbert fallback + extended Talbot) with unit tests
-   against published example labelings.
-4. Implement `ChartScale`, `ArcPath`, and the `Palette`/WCAG contrast helpers.
-5. Implement `ChartPlanner` + collision checks reusing the font width tables.
-6. Implement `ChartEmitter` for bar, then line, then scatter, then pie.
-7. Add the full witness suite per type; only then mark each type supported.
+1. #126 First native chart profile: Mermaid pie, fenced bar, fenced line, and
+   fenced scatter charts.
+2. Add extended Talbot tick scoring when the simple Heckbert 1-2-5 fallback
+   produces crowded labels.
+3. Add richer label collision handling for outside pie callouts and dense
+   categorical axes.
+4. Add grouped and stacked bar variants once their witness fixtures exist.
 
 ## Platform notes
 

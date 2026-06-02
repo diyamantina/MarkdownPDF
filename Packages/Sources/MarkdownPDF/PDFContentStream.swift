@@ -37,9 +37,12 @@ struct PDFContentStream {
         case setLineWidth(Double)
         case moveTo(x: Double, y: Double)
         case lineTo(x: Double, y: Double)
+        case curveTo(x1: Double, y1: Double, x2: Double, y2: Double, x3: Double, y3: Double)
         case rectangle(x: Double, y: Double, width: Double, height: Double)
+        case closePath
         case stroke
         case fill
+        case fillAndStroke
         case saveGraphicsState
         case restoreGraphicsState
         case concatenateMatrix(
@@ -76,12 +79,18 @@ struct PDFContentStream {
                 "\(pdfNumber(x)) \(pdfNumber(y)) m"
             case let .lineTo(x, y):
                 "\(pdfNumber(x)) \(pdfNumber(y)) l"
+            case let .curveTo(x1, y1, x2, y2, x3, y3):
+                "\(pdfNumber(x1)) \(pdfNumber(y1)) \(pdfNumber(x2)) \(pdfNumber(y2)) \(pdfNumber(x3)) \(pdfNumber(y3)) c"
             case let .rectangle(x, y, width, height):
                 "\(pdfNumber(x)) \(pdfNumber(y)) \(pdfNumber(width)) \(pdfNumber(height)) re"
+            case .closePath:
+                "h"
             case .stroke:
                 "S"
             case .fill:
                 "f"
+            case .fillAndStroke:
+                "B"
             case .saveGraphicsState:
                 "q"
             case .restoreGraphicsState:

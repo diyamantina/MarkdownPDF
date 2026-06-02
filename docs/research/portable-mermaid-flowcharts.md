@@ -59,14 +59,13 @@ out to platform-specific or external renderers.
 Examples of unsupported syntax in the first subset:
 
 - `sequenceDiagram`
-- class diagrams, state diagrams, ER diagrams, Gantt charts, pie charts, and
-  mind maps
+- class diagrams, state diagrams, ER diagrams, Gantt charts, and mind maps
 - Styled nodes, classes, themes, subgraphs, shapes other than rectangles, and
   HTML labels
 - Dashed or thick arrows such as `-.->`, `---`, or `==>`
 - Cyclic flowcharts, because the first layout pass is a deterministic DAG layer
   layout
-- Mermaid chart syntax, including pie charts
+- Mermaid chart syntax outside the supported pie profile
 
 ## Validation
 
@@ -81,7 +80,7 @@ The implementation is validated through:
   node.
 - Fixture validation using the scientific article fixture.
 - Poppler word-box and MuPDF character-quad visual layout tests, now including
-  edge-labeled Mermaid diagrams and unsupported chart fallback, to catch label
+  edge-labeled Mermaid diagrams and native Mermaid pie charts, to catch label
   overlap.
 
 ## Edge label placement
@@ -98,10 +97,10 @@ CoreText, SVG conversion, or browser measurement.
 
 ## Chart policy
 
-Portable chart rendering is not part of this subset. Mermaid chart syntax,
-including pie charts, remains visible fallback text. A future chart profile must
-be typed PDF drawing code in Swift and must use structural, text, geometry, and
-raster witnesses before it can be documented as supported.
+Portable flowchart rendering remains a strict Mermaid subset. Mermaid pie charts
+are now routed to the native chart renderer, which emits typed PDF drawing
+operators in Swift. Other Mermaid chart syntaxes remain visible fallback text
+until they have the same structural, text, geometry, and raster witnesses.
 
 ## Platform note
 

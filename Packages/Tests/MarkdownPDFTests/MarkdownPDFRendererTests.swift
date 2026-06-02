@@ -729,6 +729,102 @@ struct MarkdownPDFRendererTests {
         #expect(textResult.output.contains("sequenceDiagram"))
     }
 
+    @Test("Renders Mermaid pie charts through native PDF path operators")
+    func rendersMermaidPieChartsThroughNativePDFPathOperators() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: """
+        ```mermaid
+        pie title Browser Share
+            "Desktop" : 62
+            "Mobile" : 31
+            "Tablet" : 7
+        ```
+        """)
+        let inspector = PDFInspector(data)
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "mermaid-pie-chart")
+
+        #expect(streamText.contains(" c"))
+        #expect(streamText.contains(" f"))
+        #expect(!streamText.contains("(pie title Browser Share)"))
+        #expect(textResult.exitCode == 0, "pdftotext failed for Mermaid pie chart:\n\(textResult.output)")
+        #expect(textResult.output.contains("Browser Share"))
+        #expect(textResult.output.contains("Desktop 62"))
+        #expect(textResult.output.contains("Mobile 31"))
+        #expect(!textResult.output.contains("Unsupported Mermaid diagram"))
+        #expect(
+            inspector.canonicalStructureIssues().isEmpty,
+            "Canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
+        )
+    }
+
+    @Test("Renders native chart blocks and preserves labels")
+    func rendersNativeChartBlocksAndPreservesLabels() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: """
+        ```chart
+        type: bar
+        title: Quarterly Revenue
+        categories: Q1, Q2, Q3
+        y-label: USD
+        series: Actual = 3, 5, 4
+        series: Forecast = 4, 6, 5
+        ```
+
+        ```chart
+        type: line
+        title: Adoption Trend
+        categories: Jan, Feb, Mar
+        x-label: month
+        y-label: users
+        series: Accounts = 2, 4, 7
+        ```
+
+        ```chart
+        type: scatter
+        title: Impact Map
+        x-label: effort
+        y-label: impact
+        series: Trials = (1, 2), (2, 4), (4, 7)
+        ```
+        """)
+        let inspector = PDFInspector(data)
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "native-chart-blocks")
+
+        #expect(streamText.contains(" re f"))
+        #expect(streamText.contains(" l"))
+        #expect(streamText.contains(" c"))
+        #expect(textResult.exitCode == 0, "pdftotext failed for native charts:\n\(textResult.output)")
+        #expect(textResult.output.contains("Quarterly Revenue"))
+        #expect(textResult.output.contains("Actual"))
+        #expect(textResult.output.contains("Forecast"))
+        #expect(textResult.output.contains("Adoption Trend"))
+        #expect(textResult.output.contains("Accounts"))
+        #expect(textResult.output.contains("Impact Map"))
+        #expect(textResult.output.contains("Trials"))
+        #expect(!textResult.output.contains("Unsupported chart"))
+        #expect(
+            inspector.canonicalStructureIssues().isEmpty,
+            "Canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
+        )
+    }
+
+    @Test("Falls back visibly for invalid native chart blocks")
+    func fallsBackVisiblyForInvalidNativeChartBlocks() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: """
+        ```chart
+        type: heatmap
+        title: Unsupported Density
+        series: Values = 1, 2, 3
+        ```
+        """)
+        let textResult = try PDFValidation.pdftotext(data: data, name: "unsupported-chart-block")
+
+        #expect(textResult.exitCode == 0, "pdftotext failed for unsupported chart fallback:\n\(textResult.output)")
+        #expect(textResult.output.contains("Unsupported chart"))
+        #expect(textResult.output.contains("heatmap"))
+        #expect(textResult.output.contains("Unsupported Density"))
+    }
+
     @Test("Renders Mermaid edge labels into extractable PDF text")
     func rendersMermaidEdgeLabelsIntoExtractablePDFText() throws {
         let data = try MarkdownPDFRenderer().render(markdown: """

@@ -403,6 +403,7 @@ Portable Mermaid support is intentionally a subset.
 Supported:
 
 - `flowchart` and `graph` diagrams.
+- Mermaid `pie` charts through the native chart renderer.
 - `TD`, `TB`, `BT`, `LR`, and `RL` directions.
 - One statement per line.
 - Node declarations with plain or quoted labels.
@@ -421,10 +422,11 @@ when each label box stays inside the diagram content area and does not intersect
 any planned node box. If an edge label cannot be placed safely, the whole
 Mermaid block falls back visibly rather than rendering overlapping text.
 
-General chart syntax, including Mermaid pie charts, remains outside the portable
-diagram subset. Chart blocks fall back visibly as unsupported Mermaid. Future
-chart support must be implemented as typed PDF drawing operations in Swift and
-must use the same witness stack before it becomes part of the profile.
+Native chart support covers Mermaid `pie` plus fenced `chart` blocks for bar,
+line, and scatter charts. Supported charts emit typed PDF drawing operations in
+Swift: rectangles, paths, cubic Bezier arcs, polylines, markers, and text. Other
+Mermaid chart syntaxes remain visible fallback text until they pass the same
+witness stack.
 
 ## Metadata
 

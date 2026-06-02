@@ -585,7 +585,7 @@ struct PDFVisualLayoutValidationTests {
         #expect(normalizedText.contains("Portable A4 Manuscript Fixture"))
         #expect(normalizedText.contains("Table of Contents"))
         #expect(normalizedText.contains("A4 Manuscript Exit Marker"))
-        #expect(normalizedText.contains("Unsupported A4 manuscript chart"))
+        #expect(normalizedText.contains("A4 manuscript chart"))
 
         let tsvResult = try PDFValidation.pdftotextTSV(url: url)
         try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
@@ -1165,8 +1165,130 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
-    @Test("Diagram policy witness covers edge labels and chart fallback")
-    func diagramPolicyWitnessCoversEdgeLabelsAndChartFallback() throws {
+    @Test("Native charts pass visual witness stack")
+    func nativeChartsPassVisualWitnessStack() throws {
+        let markdown = """
+        # Native Chart Witness
+
+        ```mermaid
+        pie title Deployment Share
+            "Stable" : 68
+            "Canary" : 22
+            "Experimental" : 10
+        ```
+
+        ```chart
+        type: bar
+        title: Quarterly Revenue
+        categories: Q1, Q2, Q3, Q4
+        y-label: USD
+        series: Actual = 3, 5, 4, 7
+        series: Forecast = 4, 6, 5, 8
+        ```
+
+        ```chart
+        type: line
+        title: Adoption Trend
+        categories: Jan, Feb, Mar, Apr
+        x-label: month
+        y-label: users
+        series: Accounts = 2, 4, 7, 9
+        ```
+
+        ```chart
+        type: scatter
+        title: Impact Map
+        x-label: effort
+        y-label: impact
+        series: Trials = (1, 2), (2, 4), (4, 7), (5, 9)
+        ```
+        """
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 320, height: 420),
+                margins: PDFOptions.Margins(top: 30, right: 28, bottom: 30, left: 28),
+                baseFontSize: 9,
+            ),
+        ).render(markdown: markdown)
+        let url = try PDFValidation.temporaryPDF(name: "native-charts", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+
+        #expect(pageCount >= 2)
+        #expect(streamText.contains(" c"))
+        #expect(streamText.contains(" re f"))
+        #expect(streamText.contains(" l"))
+        try PDFValidation.writeArtifact(data, name: "native-charts.pdf")
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "native-charts/text.txt")
+        #expect(textResult.output.contains("Deployment Share"))
+        #expect(textResult.output.contains("Stable 68"))
+        #expect(textResult.output.contains("Quarterly Revenue"))
+        #expect(textResult.output.contains("Actual"))
+        #expect(textResult.output.contains("Adoption Trend"))
+        #expect(textResult.output.contains("Accounts"))
+        #expect(textResult.output.contains("Impact Map"))
+        #expect(textResult.output.contains("Trials"))
+        #expect(!textResult.output.contains("Unsupported chart"))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "native-charts/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+        #expect(
+            popplerIssues.isEmpty,
+            "Native chart Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "native-charts/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+        #expect(
+            mupdfIssues.isEmpty,
+            "Native chart MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "native-charts/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "native-charts/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "native-charts-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "native-charts-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "Native chart raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
+    @Test("Diagram policy witness covers edge labels, native charts, and fallback")
+    func diagramPolicyWitnessCoversEdgeLabelsNativeChartsAndFallback() throws {
         let markdown = """
         # Diagram Policy
 
@@ -1177,9 +1299,14 @@ struct PDFVisualLayoutValidationTests {
         ```
 
         ```mermaid
-        pie title Unsupported chart
+        pie title Native chart
             "Alpha" : 3
             "Beta" : 2
+        ```
+
+        ```mermaid
+        sequenceDiagram
+            Alice->>Bob: still unsupported
         ```
         """
         let data = try MarkdownPDFRenderer(
@@ -1207,8 +1334,11 @@ struct PDFVisualLayoutValidationTests {
         #expect(textResult.output.contains("draw"))
         #expect(!textResult.output.contains("Source[\"Markdown input\"]"))
         #expect(!textResult.output.contains("Parser[\"Flow parser\"]"))
+        #expect(textResult.output.contains("Native chart"))
+        #expect(textResult.output.contains("Alpha 3"))
+        #expect(textResult.output.contains("Beta 2"))
         #expect(textResult.output.contains("Unsupported Mermaid diagram"))
-        #expect(textResult.output.contains("pie title Unsupported chart"))
+        #expect(textResult.output.contains("sequenceDiagram"))
 
         let tsvResult = try PDFValidation.pdftotextTSV(url: url)
         try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
