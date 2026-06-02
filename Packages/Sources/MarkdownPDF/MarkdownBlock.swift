@@ -7,6 +7,7 @@ public enum MarkdownBlock: Equatable, Sendable {
     case unorderedList([ListItem])
     case orderedList(start: Int, items: [ListItem])
     case codeBlock(info: String?, code: String)
+    case displayMath(MarkdownMath)
     case table(Table)
     case thematicBreak
     case html(String)

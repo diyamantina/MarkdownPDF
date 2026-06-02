@@ -8,6 +8,26 @@ drawing, with no external math engine. It is portable macOS and Linux research.
 It is not an implementation promise: source, fixtures, and witnesses must exist
 before any support is claimed.
 
+## Implementation status
+
+The first portable product slice is implemented as an opt-in feature through
+`PDFOptions.MathTypesetting`. The default remains disabled so CommonMark dollar
+text stays literal. When enabled, MarkdownPDF parses inline `$...$` and display
+`$$...$$` math with a Pure Swift scanner. Supported inline formulas render as
+positioned PDF text, with fraction and radical constructs linearized when they
+cannot be overlaid inside the current line wrapper. Supported display formulas
+render as PDF text plus filled rule rectangles. Unsupported input renders its
+original source visibly. The witnessed subset covers superscripts, subscripts,
+fractions, radicals, big operators with display limits, Greek command names, and
+common ASCII-safe symbols. Display math wraps the visual operators in PDF
+ActualText so `pdftotext` can extract the deterministic linearized formula.
+
+This first slice does not yet read the OpenType `MATH` table, does not assemble
+stretchy glyph variants, and does not require or bundle an embedded math font.
+Those remain the next implementation gates before claiming a production math
+font profile. Current rendering intentionally uses ASCII-safe names for Greek
+commands so the base-font path remains extractable and Linux-buildable.
+
 ## Product boundary
 
 Hard constraints, restated so they cannot drift:

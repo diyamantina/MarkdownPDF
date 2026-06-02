@@ -65,6 +65,35 @@ struct MarkdownParserTests {
         ])
     }
 
+    @Test("Leaves dollar math literal unless math parsing is enabled")
+    func leavesDollarMathLiteralUnlessEnabled() {
+        let document = MarkdownParser().parse("Price is $5 and math is $x^2$.")
+
+        #expect(document.blocks == [
+            .paragraph([.text("Price is $5 and math is $x^2$.")]),
+        ])
+    }
+
+    @Test("Parses opt-in inline and display math")
+    func parsesOptInMath() {
+        let document = MarkdownParser(options: .init(mathTypesetting: true)).parse("""
+        Inline $x^2$ and escaped \\$5.
+
+        $$
+        \\frac{a}{b}
+        $$
+        """)
+
+        #expect(document.blocks == [
+            .paragraph([
+                .text("Inline "),
+                .inlineMath(MarkdownMath(source: "x^2", mode: .inline)),
+                .text(" and escaped $5."),
+            ]),
+            .displayMath(MarkdownMath(source: "\\frac{a}{b}", mode: .display)),
+        ])
+    }
+
     @Test("Parses GFM footnote references and definitions")
     func parsesGFMFootnotes() {
         let document = MarkdownParser().parse("""

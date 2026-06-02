@@ -1,20 +1,35 @@
 import Foundation
 
 public struct MarkdownParser: Sendable {
-    public init() {}
+    public struct Options: Equatable, Sendable {
+        public var mathTypesetting: Bool
+
+        public init(mathTypesetting: Bool = false) {
+            self.mathTypesetting = mathTypesetting
+        }
+    }
+
+    public var options: Options
+
+    public init(options: Options = Options()) {
+        self.options = options
+    }
 
     public func parse(_ markdown: String) -> MarkdownDocument {
-        var parser = BlockParser(markdown: markdown)
+        var parser = BlockParser(markdown: markdown, options: options)
         return MarkdownDocument(blocks: parser.parseBlocks())
     }
 }
 
 private struct BlockParser {
-    private let inlineParser = InlineParser()
+    private let options: MarkdownParser.Options
+    private let inlineParser: InlineParser
     private var lines: [String]
     private var index: Int = 0
 
-    init(markdown: String) {
+    init(markdown: String, options: MarkdownParser.Options) {
+        self.options = options
+        inlineParser = InlineParser(options: options)
         lines = Self.stripFrontMatter(
             markdown
                 .replacingOccurrences(of: "\r\n", with: "\n")
@@ -51,6 +66,8 @@ private struct BlockParser {
             } else if let block = parseBlockQuote() {
                 blocks.append(block)
             } else if let block = parseFootnoteDefinition() {
+                blocks.append(block)
+            } else if let block = parseDisplayMathBlock() {
                 blocks.append(block)
             } else if let block = parseTable() {
                 blocks.append(block)
@@ -132,8 +149,43 @@ private struct BlockParser {
             index += 1
         }
 
-        var nested = BlockParser(markdown: quoteLines.joined(separator: "\n"))
+        var nested = BlockParser(markdown: quoteLines.joined(separator: "\n"), options: options)
         return .blockQuote(nested.parseBlocks())
+    }
+
+    private mutating func parseDisplayMathBlock() -> MarkdownBlock? {
+        guard options.mathTypesetting else {
+            return nil
+        }
+
+        let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("$$") else {
+            return nil
+        }
+
+        if trimmed.count > 4, trimmed.hasSuffix("$$") {
+            let start = trimmed.index(trimmed.startIndex, offsetBy: 2)
+            let end = trimmed.index(trimmed.endIndex, offsetBy: -2)
+            index += 1
+            return .displayMath(MarkdownMath(source: String(trimmed[start ..< end]), mode: .display))
+        }
+
+        guard trimmed == "$$" else {
+            return nil
+        }
+
+        var mathLines: [String] = []
+        var cursor = index + 1
+        while cursor < lines.count {
+            if lines[cursor].trimmingCharacters(in: .whitespaces) == "$$" {
+                index = cursor + 1
+                return .displayMath(MarkdownMath(source: mathLines.joined(separator: "\n"), mode: .display))
+            }
+            mathLines.append(lines[cursor])
+            cursor += 1
+        }
+
+        return nil
     }
 
     private mutating func parseTable() -> MarkdownBlock? {
@@ -240,7 +292,7 @@ private struct BlockParser {
         }
 
         let body = definitionLines.joined(separator: "\n")
-        var nested = BlockParser(markdown: body)
+        var nested = BlockParser(markdown: body, options: options)
         return .footnoteDefinition(label: marker.label, blocks: nested.parseBlocks())
     }
 
@@ -283,6 +335,7 @@ private struct BlockParser {
             trimmed.hasPrefix("~~~") ||
             stripBlockQuoteMarker(from: line) != nil ||
             footnoteDefinitionMarker(in: line) != nil ||
+            (options.mathTypesetting && trimmed.hasPrefix("$$")) ||
             unorderedMarker(in: line) != nil ||
             orderedMarker(in: line) != nil ||
             isThematicBreak(line)

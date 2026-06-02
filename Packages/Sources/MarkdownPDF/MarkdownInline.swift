@@ -5,6 +5,7 @@ public enum MarkdownInline: Equatable, Sendable {
     case softBreak
     case lineBreak
     case code(String)
+    case inlineMath(MarkdownMath)
     case emphasis([MarkdownInline])
     case strong([MarkdownInline])
     case strikethrough([MarkdownInline])

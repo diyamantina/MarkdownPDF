@@ -9,6 +9,7 @@ public struct PDFOptions: Equatable, Sendable {
     public var title: String?
     public var tableOfContents: TableOfContents
     public var codeSyntaxHighlighting: CodeSyntaxHighlighting
+    public var mathTypesetting: MathTypesetting
     public var theme: Theme
     public var streamCompression: StreamCompression
     public var taggedPDF: TaggedPDF
@@ -23,6 +24,7 @@ public struct PDFOptions: Equatable, Sendable {
         title: String? = nil,
         tableOfContents: TableOfContents = .disabled,
         codeSyntaxHighlighting: CodeSyntaxHighlighting = .disabled,
+        mathTypesetting: MathTypesetting = .disabled,
         theme: Theme = .default,
         streamCompression: StreamCompression = .disabled,
         taggedPDF: TaggedPDF = .disabled,
@@ -36,6 +38,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.title = title
         self.tableOfContents = tableOfContents
         self.codeSyntaxHighlighting = codeSyntaxHighlighting
+        self.mathTypesetting = mathTypesetting
         self.theme = theme
         self.streamCompression = streamCompression
         self.taggedPDF = taggedPDF
@@ -214,6 +217,24 @@ public struct PDFOptions: Equatable, Sendable {
 
         public static let disabled = CodeSyntaxHighlighting(isEnabled: false)
         public static let enabled = CodeSyntaxHighlighting(isEnabled: true)
+    }
+
+    /// Controls opt-in TeX-style math parsing and PDF drawing.
+    ///
+    /// The default value is ``disabled`` so CommonMark dollar-sign text remains
+    /// literal. When enabled, `$...$` and `$$...$$` are parsed by a Pure Swift
+    /// TeX-subset parser. Supported inline formulas render as positioned PDF
+    /// text, supported display formulas add rule rectangles for fractions and
+    /// radicals, and unsupported input renders its original source visibly.
+    public struct MathTypesetting: Equatable, Sendable {
+        public var isEnabled: Bool
+
+        public init(isEnabled: Bool) {
+            self.isEnabled = isEnabled
+        }
+
+        public static let disabled = MathTypesetting(isEnabled: false)
+        public static let enabled = MathTypesetting(isEnabled: true)
     }
 
     /// A complete document theme resolved by the portable renderer.
@@ -426,6 +447,8 @@ public struct PDFOptions: Equatable, Sendable {
         case listMarker
         case link
         case inlineCode
+        case inlineMath
+        case displayMath
         case codeBlock
         case tableHeader
         case tableCell
@@ -809,6 +832,18 @@ private extension PDFOptions.Theme {
                 fontRole: .monospaced,
                 sizeMultiplier: 0.95,
                 color: bodyColor,
+            ),
+            .inlineMath: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                color: bodyColor,
+            ),
+            .displayMath: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                sizeMultiplier: 1.08,
+                lineHeightMultiplier: 1.35,
+                color: bodyColor,
+                spacingBeforeMultiplier: 0.45,
+                spacingAfterMultiplier: 0.55,
             ),
             .codeBlock: PDFOptions.ElementStyle(
                 fontRole: .monospaced,

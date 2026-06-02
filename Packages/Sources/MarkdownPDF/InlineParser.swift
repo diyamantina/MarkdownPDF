@@ -1,17 +1,21 @@
 import Foundation
 
 struct InlineParser {
+    var options: MarkdownParser.Options = .init()
+
     func parse(_ text: String) -> [MarkdownInline] {
-        var parser = Scanner(source: text)
+        var parser = Scanner(source: text, options: options)
         return parser.parse()
     }
 
     private struct Scanner {
         var source: String
         var index: String.Index
+        var options: MarkdownParser.Options
 
-        init(source: String) {
+        init(source: String, options: MarkdownParser.Options) {
             self.source = source
+            self.options = options
             index = source.startIndex
         }
 
@@ -33,6 +37,8 @@ struct InlineParser {
                     result.append(link)
                 } else if let code = parseCodeSpan() {
                     result.append(code)
+                } else if let math = parseInlineMath() {
+                    result.append(math)
                 } else if let strong = parseDelimited(marker: "**", transform: MarkdownInline.strong) {
                     result.append(strong)
                 } else if let strong = parseDelimited(marker: "__", transform: MarkdownInline.strong) {
@@ -68,7 +74,7 @@ struct InlineParser {
 
             let raw = String(source[contentStart ..< close])
             index = source.index(close, offsetBy: marker.count)
-            return transform(InlineParser().parse(raw))
+            return transform(InlineParser(options: options).parse(raw))
         }
 
         private mutating func parseEscape() -> MarkdownInline? {
@@ -100,6 +106,44 @@ struct InlineParser {
             let raw = String(source[contentStart ..< close])
             index = source.index(after: close)
             return .code(raw.replacingOccurrences(of: "\n", with: " "))
+        }
+
+        private mutating func parseInlineMath() -> MarkdownInline? {
+            guard options.mathTypesetting,
+                  source[index] == "$",
+                  !source[index...].hasPrefix("$$")
+            else {
+                return nil
+            }
+
+            let contentStart = source.index(after: index)
+            guard contentStart < source.endIndex else {
+                return nil
+            }
+
+            var cursor = contentStart
+            var escaped = false
+            while cursor < source.endIndex {
+                let character = source[cursor]
+                if escaped {
+                    escaped = false
+                } else if character == "\\" {
+                    escaped = true
+                } else if character == "$" {
+                    let raw = String(source[contentStart ..< cursor])
+                    guard isInlineMathContent(raw) else {
+                        return nil
+                    }
+                    index = source.index(after: cursor)
+                    return .inlineMath(MarkdownMath(source: raw, mode: .inline))
+                } else if character == "\n" {
+                    return nil
+                }
+
+                cursor = source.index(after: cursor)
+            }
+
+            return nil
         }
 
         private mutating func parseImage() -> MarkdownInline? {
@@ -147,7 +191,7 @@ struct InlineParser {
             index = destination.end
             let label = String(source[labelStart ..< labelEnd])
             return .link(
-                children: InlineParser().parse(label),
+                children: InlineParser(options: options).parse(label),
                 destination: destination.url,
                 title: destination.title,
             )
@@ -231,6 +275,7 @@ struct InlineParser {
                     source[index...].hasPrefix("*") ||
                     source[index...].hasPrefix("_") ||
                     source[index...].hasPrefix("`") ||
+                    (options.mathTypesetting && source[index...].hasPrefix("$")) ||
                     source[index...].hasPrefix("<") ||
                     source[index...].hasPrefix("\\") ||
                     source[index...].hasPrefix("\n")
@@ -280,6 +325,17 @@ struct InlineParser {
                 || (0x3A ... 0x40).contains(scalar.value)
                 || (0x5B ... 0x60).contains(scalar.value)
                 || (0x7B ... 0x7E).contains(scalar.value)
+        }
+
+        private func isInlineMathContent(_ raw: String) -> Bool {
+            guard !raw.isEmpty,
+                  raw.first?.isWhitespace == false,
+                  raw.last?.isWhitespace == false
+            else {
+                return false
+            }
+
+            return !raw.contains("\n")
         }
 
         private mutating func consume(_ prefix: String) -> Bool {

@@ -46,6 +46,7 @@ struct PDFContentStream {
         case saveGraphicsState
         case restoreGraphicsState
         case beginMarkedContent(PDFSyntax.Name, mcid: Int)
+        case beginActualText(PDFSyntax.LiteralString)
         case beginArtifact
         case endMarkedContent
         case concatenateMatrix(
@@ -100,6 +101,8 @@ struct PDFContentStream {
                 "Q"
             case let .beginMarkedContent(tag, mcid):
                 "\(tag.serialized) << /MCID \(mcid) >> BDC"
+            case let .beginActualText(text):
+                "/Span << /ActualText \(text.serialized) >> BDC"
             case .beginArtifact:
                 "/Artifact BMC"
             case .endMarkedContent:

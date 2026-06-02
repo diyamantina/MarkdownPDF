@@ -155,6 +155,63 @@ struct MarkdownPDFRendererTests {
         )
     }
 
+    @Test("Renders opt-in TeX math subset with extraction and rule witnesses")
+    func rendersOptInTeXMathSubset() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(mathTypesetting: .enabled),
+        ).render(markdown: """
+        Inline $x^2 + \\alpha_i$ remains in the paragraph.
+
+        $$
+        \\frac{x^2}{\\sqrt{y+1}}
+        $$
+
+        $$
+        \\sum_{i=1}^n i
+        $$
+        """)
+        let inspector = PDFInspector(data)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-typesetting-subset")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "math-typesetting-subset-text")
+        let mupdf = try PDFValidation.mutoolStructuredText(data: data, name: "math-typesetting-subset-mupdf")
+        let extractedText = normalizedExtractedText(textResult.output)
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try #require(mupdf.exitCode == 0, "mutool structured text failed:\n\(mupdf.output)")
+        let structuredText = try MuPDFStructuredText(xml: mupdf.output)
+        let visibleGlyphCount = structuredText.glyphs.count(where: { !$0.isWhitespace })
+        let geometryIssues = structuredText.characterQuadIssues()
+
+        #expect(extractedText.contains("Inline"))
+        #expect(extractedText.contains("frac(x^{2}, sqrt(y+1))"), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(extractedText.contains("sum_{i=1}^{n} i"), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(streamText.contains("/ActualText (frac\\(x^{2}, sqrt\\(y+1\\)\\))"))
+        #expect(streamText.components(separatedBy: " re f").count - 1 >= 2)
+        #expect(visibleGlyphCount >= 20)
+        #expect(
+            geometryIssues.isEmpty,
+            "MuPDF character layout has visual issues:\n\(geometryIssues.joined(separator: "\n"))",
+        )
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+    }
+
+    @Test("Unsupported math renders visible source fallback")
+    func unsupportedMathRendersVisibleSourceFallback() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(mathTypesetting: .enabled),
+        ).render(markdown: #"Unsupported $\unknown{x}$ stays visible."#)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "unsupported-math-fallback")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "unsupported-math-fallback-text")
+        let extractedText = normalizedExtractedText(textResult.output)
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        #expect(extractedText.contains(#"$\unknown{x}$"#), "Unexpected extracted text:\n\(textResult.output)")
+    }
+
     @Test("Block quotes indent without vertical border strokes")
     func blockQuotesDoNotEmitVerticalBorderStrokes() throws {
         let data = try MarkdownPDFRenderer().render(markdown: """

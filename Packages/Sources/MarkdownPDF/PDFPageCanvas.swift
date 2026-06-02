@@ -20,6 +20,10 @@ final class PDFPageCanvas {
         contentStream.append(.beginMarkedContent(tag, mcid: mcid))
     }
 
+    func beginActualText(_ text: String) {
+        contentStream.append(.beginActualText(PDFSyntax.LiteralString(PDFTextEncoding.portableText(for: text))))
+    }
+
     func beginArtifact() {
         contentStream.append(.beginArtifact)
     }

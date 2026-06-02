@@ -11,7 +11,9 @@ public struct MarkdownPDFRenderer: Sendable {
         markdown: String,
         assetsBaseURL: URL? = nil,
     ) throws -> Data {
-        let document = MarkdownParser().parse(markdown)
+        let document = MarkdownParser(
+            options: MarkdownParser.Options(mathTypesetting: options.mathTypesetting.isEnabled),
+        ).parse(markdown)
         if options.tableOfContents.isEnabled {
             return try renderWithTableOfContents(document, assetsBaseURL: assetsBaseURL)
         }
@@ -132,7 +134,7 @@ private struct FootnoteResolver {
             for item in items.flatMap(\.blocks) {
                 collectDefinitions(in: item, into: &definitions)
             }
-        case .heading, .paragraph, .codeBlock, .table, .thematicBreak, .html:
+        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .html:
             break
         }
     }
@@ -165,7 +167,7 @@ private struct FootnoteResolver {
                     )
                 },
             )
-        case .heading, .paragraph, .codeBlock, .table, .thematicBreak, .html:
+        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .html:
             return block
         }
     }
@@ -191,7 +193,7 @@ private struct FootnoteResolver {
             for item in table.headers + table.rows.flatMap(\.self) {
                 collectReferences(in: item, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
             }
-        case .codeBlock, .thematicBreak, .html, .footnoteDefinition:
+        case .codeBlock, .displayMath, .thematicBreak, .html, .footnoteDefinition:
             break
         }
     }
@@ -213,7 +215,7 @@ private struct FootnoteResolver {
                 collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
             case let .link(children, _, _):
                 collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
-            case .text, .softBreak, .lineBreak, .code, .image:
+            case .text, .softBreak, .lineBreak, .code, .inlineMath, .image:
                 break
             }
         }
@@ -396,6 +398,8 @@ private struct Layout {
             } else {
                 try renderCodeBlock(code, info: info)
             }
+        case let .displayMath(math):
+            try renderDisplayMath(math)
         case let .table(table):
             try renderTable(table)
         case .thematicBreak:
@@ -664,6 +668,8 @@ private struct Layout {
             content
         case let .codeBlock(_, code):
             [.code(code)]
+        case let .displayMath(math):
+            [.inlineMath(MarkdownMath(source: math.source, mode: .inline))]
         case let .html(html):
             [.text(html)]
         case let .blockQuote(blocks):
@@ -810,6 +816,82 @@ private struct Layout {
         }
 
         y -= codeBlockFollowingGap
+    }
+
+    private mutating func renderDisplayMath(_ math: MarkdownMath) throws {
+        let mathElement = beginStructureElement(.paragraph)
+        defer { endStructureElement(mathElement) }
+
+        let style = style(for: .displayMath)
+        let size = fontSize(for: .displayMath)
+        let topSpacing = options.baseFontSize * style.spacingBeforeMultiplier
+        let bottomSpacing = options.baseFontSize * style.spacingAfterMultiplier
+
+        do {
+            let parsed = try MarkdownMathParser().parse(math.source)
+            let layout = MarkdownMathLayout(
+                font: standardFont(for: style.fontRole),
+                color: style.color,
+                measureText: textWidth,
+            )
+            let box = try layout.layout(parsed.root, size: size, displayStyle: true)
+            let totalHeight = topSpacing + box.height + box.depth + bottomSpacing
+            ensureSpace(totalHeight)
+            y -= topSpacing
+            let baselineY = y - box.height
+            let x = options.margins.left + max(0, (contentWidth - box.width) / 2)
+
+            currentPage.beginActualText(parsed.linearizedText)
+            defer { currentPage.endMarkedContent() }
+            try drawMathBox(box, x: x, baselineY: baselineY)
+            y = baselineY - box.depth - bottomSpacing
+        } catch {
+            let fallback = math.delimitedSource
+            let runs = [
+                PDFTextRun(
+                    text: fallback,
+                    font: standardFont(for: style.fontRole),
+                    size: size,
+                    color: style.color,
+                ),
+            ]
+            let lineHeight = size * style.lineHeightMultiplier
+            ensureSpace(topSpacing + lineHeight + bottomSpacing)
+            y -= topSpacing
+            try drawWrapped(runs, x: options.margins.left, maxWidth: contentWidth, lineHeight: lineHeight)
+            y -= bottomSpacing
+        }
+    }
+
+    private mutating func drawMathBox(
+        _ box: MarkdownMathLayoutBox,
+        x: Double,
+        baselineY: Double,
+    ) throws {
+        let marked = beginMarkedContentForCurrentElement()
+        defer { endMarkedContentIfNeeded(marked) }
+
+        for element in box.elements {
+            switch element {
+            case let .text(run, offsetX, offsetY):
+                try currentPage.drawTextRun(
+                    run,
+                    x: x + offsetX,
+                    y: baselineY + offsetY,
+                    fontSet: options.fontSet,
+                    embeddedFonts: embeddedFonts,
+                )
+            case let .rule(offsetX, offsetY, width, height, color):
+                currentPage.drawRectangle(
+                    x: x + offsetX,
+                    y: baselineY + offsetY,
+                    width: width,
+                    height: height,
+                    stroke: nil,
+                    fill: color,
+                )
+            }
+        }
     }
 
     private func syntaxHighlighter(for info: String?) -> SourceCodeSyntaxHighlighter? {
@@ -2276,6 +2358,15 @@ private struct Layout {
                     strikethrough: strikethrough,
                     linkDestination: linkDestination,
                 ))
+            case let .inlineMath(math):
+                runs.append(contentsOf: inlineMathRuns(
+                    math,
+                    size: size,
+                    inheritedColor: color,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ))
             case let .emphasis(children):
                 runs.append(contentsOf: flatten(
                     children,
@@ -2350,6 +2441,159 @@ private struct Layout {
         }
 
         return runs
+    }
+
+    private func inlineMathRuns(
+        _ math: MarkdownMath,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) -> [PDFTextRun] {
+        do {
+            let parsed = try MarkdownMathParser().parse(math.source)
+            return inlineMathRuns(
+                for: parsed.root,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )
+        } catch {
+            return [inlineMathTextRun(
+                math.delimitedSource,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        }
+    }
+
+    private func inlineMathRuns(
+        for node: MarkdownMathNode,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) -> [PDFTextRun] {
+        switch node {
+        case let .sequence(children):
+            return children.flatMap {
+                inlineMathRuns(
+                    for: $0,
+                    size: size,
+                    inheritedColor: inheritedColor,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                )
+            }
+        case let .text(text):
+            return [inlineMathTextRun(
+                text,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case let .symbol(display, _, _):
+            return [inlineMathTextRun(
+                display,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case .fraction, .radical:
+            return [inlineMathTextRun(
+                MarkdownMathLinearizer().linearize(node),
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case let .scripts(base, subscriptNode, superscriptNode):
+            let scriptSize = size * 0.68
+            var runs = inlineMathRuns(
+                for: base,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )
+            if let subscriptNode {
+                runs += inlineMathRuns(
+                    for: subscriptNode,
+                    size: scriptSize,
+                    inheritedColor: inheritedColor,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ).map { run in
+                    PDFTextRun(
+                        text: run.text,
+                        font: run.font,
+                        size: run.size,
+                        color: run.color,
+                        underline: run.underline,
+                        strikethrough: run.strikethrough,
+                        linkDestination: run.linkDestination,
+                        baselineOffset: run.baselineOffset - size * 0.22,
+                    )
+                }
+            }
+            if let superscriptNode {
+                runs += inlineMathRuns(
+                    for: superscriptNode,
+                    size: scriptSize,
+                    inheritedColor: inheritedColor,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ).map { run in
+                    PDFTextRun(
+                        text: run.text,
+                        font: run.font,
+                        size: run.size,
+                        color: run.color,
+                        underline: run.underline,
+                        strikethrough: run.strikethrough,
+                        linkDestination: run.linkDestination,
+                        baselineOffset: run.baselineOffset + size * 0.38,
+                    )
+                }
+            }
+            return runs
+        }
+    }
+
+    private func inlineMathTextRun(
+        _ text: String,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) -> PDFTextRun {
+        let mathStyle = style(for: .inlineMath)
+        return PDFTextRun(
+            text: text,
+            font: standardFont(for: mathStyle.fontRole),
+            size: size * mathStyle.sizeMultiplier,
+            color: inheritedColor == style(for: .body).color ? mathStyle.color : inheritedColor,
+            underline: underline,
+            strikethrough: strikethrough,
+            linkDestination: linkDestination,
+        )
     }
 
     private mutating func drawWrapped(
@@ -2986,6 +3230,8 @@ private struct Layout {
         switch inline {
         case let .text(text), let .code(text):
             text
+        case let .inlineMath(math):
+            (try? MarkdownMathParser().parse(math.source))?.linearizedText ?? math.delimitedSource
         case .softBreak, .lineBreak:
             " "
         case let .emphasis(children), let .strong(children), let .strikethrough(children):
@@ -3009,6 +3255,8 @@ private struct Layout {
             items.flatMap(\.blocks).map(plainText).joined(separator: " ")
         case let .codeBlock(_, code):
             code
+        case let .displayMath(math):
+            (try? MarkdownMathParser().parse(math.source))?.linearizedText ?? math.delimitedSource
         case let .table(table):
             (table.headers + table.rows.flatMap(\.self)).map { plainText($0) }.joined(separator: " ")
         case .thematicBreak:
