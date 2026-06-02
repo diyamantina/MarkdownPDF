@@ -221,7 +221,7 @@ struct MarkdownPDFRendererTests {
     func inlineFractionsTypesetAsBoxes() throws {
         let data = try MarkdownPDFRenderer(
             options: PDFOptions(mathTypesetting: .enabled),
-        ).render(markdown: "Pressure is $\\frac{a}{b}$ and the bound is $\\sqrt{x}$ inline.")
+        ).render(markdown: "Pressure is $\\frac{a}{b}$, the bound is $\\sqrt{x}$, and a power $x^{\\frac{1}{2}}$ inline.")
         let inspector = PDFInspector(data)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
         let qpdf = try PDFValidation.qpdfCheck(data: data, name: "inline-math-box")
@@ -230,9 +230,11 @@ struct MarkdownPDFRendererTests {
         let extracted = normalizedExtractedText(textResult.output)
 
         #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        // The inline fraction bar and radical overbar emit rule rectangles in the
-        // text flow rather than the parenthesized prose fallback.
-        #expect(streamText.components(separatedBy: " re f").count - 1 >= 2)
+        // The inline fraction bar, radical overbar, and the fraction nested inside
+        // the superscript each emit rule rectangles in the text flow rather than
+        // the parenthesized prose fallback. The superscript fraction proves the
+        // box survives the scripts reconstruction.
+        #expect(streamText.components(separatedBy: " re f").count - 1 >= 3)
         // ActualText preserves a readable linearization for extraction.
         #expect(extracted.contains("frac(a, b)"), "Unexpected extraction:\n\(textResult.output)")
         #expect(extracted.contains("sqrt(x)"), "Unexpected extraction:\n\(textResult.output)")

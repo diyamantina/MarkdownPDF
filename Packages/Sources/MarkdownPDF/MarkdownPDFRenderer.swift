@@ -2571,6 +2571,7 @@ private struct Layout {
                         strikethrough: run.strikethrough,
                         linkDestination: run.linkDestination,
                         baselineOffset: run.baselineOffset - size * 0.22,
+                        inlineMathBox: run.inlineMathBox,
                     )
                 }
             }
@@ -2592,6 +2593,7 @@ private struct Layout {
                         strikethrough: run.strikethrough,
                         linkDestination: run.linkDestination,
                         baselineOffset: run.baselineOffset + size * 0.38,
+                        inlineMathBox: run.inlineMathBox,
                     )
                 }
             }
