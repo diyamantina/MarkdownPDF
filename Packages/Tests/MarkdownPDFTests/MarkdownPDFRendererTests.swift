@@ -10,6 +10,24 @@ import Testing
 
 @Suite("PDF renderer")
 struct MarkdownPDFRendererTests {
+    @Test("Named page sizes set the page MediaBox")
+    func namedPageSizesSetTheMediaBox() throws {
+        #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
+        #expect(PDFOptions.PageSize.a1 == PDFOptions.PageSize(width: 1683.78, height: 2383.94))
+        #expect(PDFOptions.PageSize.a3 == PDFOptions.PageSize(width: 841.89, height: 1190.55))
+        #expect(PDFOptions.PageSize.a5 == PDFOptions.PageSize(width: 419.53, height: 595.28))
+        #expect(PDFOptions.PageSize.a6 == PDFOptions.PageSize(width: 297.64, height: 419.53))
+        #expect(PDFOptions.PageSize.legal == PDFOptions.PageSize(width: 612, height: 1008))
+        #expect(PDFOptions.PageSize.tabloid == PDFOptions.PageSize(width: 792, height: 1224))
+
+        let data = try MarkdownPDFRenderer(options: PDFOptions(pageSize: .a3)).render(markdown: "# A3 page")
+        let inspector = PDFInspector(data)
+        #expect(inspector.text.contains("841.89"))
+        #expect(inspector.text.contains("1190.55"))
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+    }
+
     @Test("Renders a compact PDF with base fonts and no embedded fonts")
     func rendersPDF() throws {
         let markdown = """

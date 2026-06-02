@@ -438,8 +438,9 @@ The catalog landing page groups every article under Topics.
   syntax-coloring coverage with data-driven comment delimiters for shell,
   YAML, XML/HTML, Pascal, Lisp-family, SQL, Lua, Haskell, Ada, Erlang, LaTeX,
   and Visual Basic hints.
-- Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) tracks
-  named PDF page sizes, including A1, A3, A4, and A5.
+- Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) added named
+  PDF page sizes through `PDFOptions.PageSize`: the A-series A0 through A6 plus
+  `letter`, `legal`, and `tabloid`.
 - Apple system font names remain available through
   `PDFOptions.FontSet.appleSystem`, but the public repo does not embed font
   files.
@@ -496,7 +497,7 @@ flowchart TD
     H4E["#130<br/>Theming model<br/>Done"]
     H4F["#131<br/>Fixed delimiters merged<br/>Active"]
     H4G["#138<br/>Apple and custom fonts<br/>Todo"]
-    H3["#100<br/>Named page sizes<br/>Todo"]
+    H3["#100<br/>Named page sizes<br/>Done"]
     H4H["#137<br/>Vendor canonical references<br/>Todo"]
 
     H0 --> H1
@@ -523,7 +524,7 @@ flowchart TD
     class H4F active;
     class H4G todo;
     class H4H todo;
-    class H3 todo;
+    class H3 done;
 ```
 
 ## Math typesetting roadmap

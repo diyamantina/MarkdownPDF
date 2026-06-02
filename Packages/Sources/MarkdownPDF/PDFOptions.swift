@@ -54,8 +54,16 @@ public struct PDFOptions: Equatable, Sendable {
             self.height = height
         }
 
+        public static let a0 = PageSize(width: 2383.94, height: 3370.39)
+        public static let a1 = PageSize(width: 1683.78, height: 2383.94)
+        public static let a2 = PageSize(width: 1190.55, height: 1683.78)
+        public static let a3 = PageSize(width: 841.89, height: 1190.55)
         public static let a4 = PageSize(width: 595.28, height: 841.89)
+        public static let a5 = PageSize(width: 419.53, height: 595.28)
+        public static let a6 = PageSize(width: 297.64, height: 419.53)
         public static let letter = PageSize(width: 612, height: 792)
+        public static let legal = PageSize(width: 612, height: 1008)
+        public static let tabloid = PageSize(width: 792, height: 1224)
     }
 
     public struct Margins: Equatable, Sendable {
