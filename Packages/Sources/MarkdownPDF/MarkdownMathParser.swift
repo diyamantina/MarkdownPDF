@@ -158,7 +158,10 @@ struct MarkdownMathParser {
                 return try .radical(radicand: parseRequiredGroup(for: command))
             case "left":
                 return try parseDelimitedExpression()
-            case "right", "begin", "end", "newcommand", "operatorname":
+            case "operatorname":
+                let name = try MarkdownMathLinearizer().linearize(parseRequiredGroup(for: command))
+                return .symbol(display: name, linearized: name, isBigOperator: false)
+            case "right", "begin", "end", "newcommand":
                 throw ParseError.unsupportedControlWord(command)
             default:
                 if let accent = Self.accents[command] {

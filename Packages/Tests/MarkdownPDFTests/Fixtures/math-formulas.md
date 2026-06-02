@@ -79,6 +79,8 @@ $$\tan \theta = \frac{\sin \theta}{\cos \theta}$$
 
 $$\log_b x = \frac{\ln x}{\ln b}$$
 
+$$\operatorname{argmax}_x f(x)$$
+
 ## Famous formulas
 
 $$e^{i\pi} + 1 = 0$$

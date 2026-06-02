@@ -58,4 +58,12 @@ struct MarkdownMathParserTests {
         #expect(try parser.parse(#"\vec{v}"#).linearizedText == "vec(v)")
         #expect(try parser.parse(#"\bar{y} + \tilde{z}"#).linearizedText == "bar(y) + tilde(z)")
     }
+
+    @Test("Parses operatorname as an upright multi-character operator")
+    func parsesOperatorname() throws {
+        let parser = MarkdownMathParser()
+
+        #expect(try parser.parse(#"\operatorname{argmax}_x f"#).linearizedText == "argmax_{x} f")
+        #expect(try parser.parse(#"\operatorname{Var}(X)"#).linearizedText == "Var(X)")
+    }
 }
