@@ -416,8 +416,14 @@ swiftlint --config .swiftlint.yml
   [#135](https://github.com/mihaelamj/MarkdownPDF/issues/135) is in review for
   screenshot-reported source-code layout regressions across code, quotes,
   headings, images, and fallback text. Issue
-  [#123](https://github.com/mihaelamj/MarkdownPDF/issues/123) is queued next for
-  RTL manuscript hardening.
+  [#123](https://github.com/mihaelamj/MarkdownPDF/issues/123) is in review for
+  RTL manuscript hardening. Issue
+  [#141](https://github.com/mihaelamj/MarkdownPDF/issues/141) is in review in
+  PR [#140](https://github.com/mihaelamj/MarkdownPDF/pull/140) for the #135
+  negative-control proof. Issues
+  [#142](https://github.com/mihaelamj/MarkdownPDF/issues/142) and
+  [#143](https://github.com/mihaelamj/MarkdownPDF/issues/143) are queued
+  follow-ups.
 - Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) tracks
   named PDF page sizes, including A1, A3, A4, and A5.
 - Apple system font names remain available through
@@ -460,12 +466,15 @@ flowchart TD
     H2K["#120<br/>Portable syntax coloring<br/>Done"]
     H2L["#122<br/>CJK + diacritics<br/>Review"]
     H2M["#135<br/>Screenshot layout regressions<br/>Review"]
-    H2N["#123<br/>RTL manuscript<br/>Next"]
+    H2N["#123<br/>RTL manuscript<br/>Review"]
+    H2O["#141<br/>Prove #135 witness<br/>Review"]
+    H2P["#142<br/>Line-break correctness<br/>Todo"]
+    H2Q["#143<br/>More syntax languages<br/>Todo"]
     H3["#100<br/>Named page sizes<br/>Todo"]
 
     H0 --> H1
     H1 --> H2
-    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M --> H2N
+    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M --> H2N --> H2O --> H2P --> H2Q
     H1 --> H3
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
@@ -476,9 +485,8 @@ flowchart TD
     class H0,H1 done;
     class H2 active;
     class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J,H2K done;
-    class H2L,H2M review;
-    class H2N next;
-    class H3 todo;
+    class H2L,H2M,H2N,H2O review;
+    class H2P,H2Q,H3 todo;
 ```
 
 ## License
