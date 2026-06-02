@@ -8,6 +8,7 @@ enum PDFEmbeddedFontError: Error, Equatable, LocalizedError {
     case conflictingToUnicodeMapping(code: UInt16, existing: String, duplicate: String)
     case unsupportedShapedToUnicodeCluster(sourceRange: Range<Int>, glyphCount: Int, scalarCount: Int)
     case unsupportedComplexScriptScalar(scalar: UnicodeScalar)
+    case unavailableMirroredGlyphCode(source: UnicodeScalar, display: UnicodeScalar)
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +26,8 @@ enum PDFEmbeddedFontError: Error, Equatable, LocalizedError {
             "Shaped cluster \(sourceRange) has \(glyphCount) glyphs for \(scalarCount) source scalars, which is not supported for PDF emission yet."
         case let .unsupportedComplexScriptScalar(scalar):
             "Embedded-font PDF emission does not yet support complex-script scalar U+\(Self.hex(scalar.value))."
+        case let .unavailableMirroredGlyphCode(source, display):
+            "Embedded-font PDF emission cannot allocate a mirrored glyph code for U+\(Self.hex(source.value)) displayed as U+\(Self.hex(display.value))."
         }
     }
 
@@ -44,6 +47,8 @@ enum PDFEmbeddedFontError: Error, Equatable, LocalizedError {
             "Keep this shaped run on an explicit unsupported path until its PDF ToUnicode mapping policy is defined."
         case .unsupportedComplexScriptScalar:
             "Keep complex-script text on an explicit unsupported path until shaping, ordering, extraction, and geometry witnesses cover that script."
+        case .unavailableMirroredGlyphCode:
+            "Use a font with spare CID space for mirrored punctuation or keep the input on an explicit unsupported path."
         }
     }
 

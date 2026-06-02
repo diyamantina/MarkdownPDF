@@ -464,10 +464,10 @@ struct MarkdownPDFRendererTests {
         do {
             _ = try MarkdownPDFRenderer(
                 options: PDFOptions(embeddedFonts: PDFOptions.EmbeddedFonts(regular: source)),
-            ).render(markdown: "\u{0633}\u{0644}\u{0627}\u{0645}")
+            ).render(markdown: "\u{0905}\u{0906}")
             Issue.record("Expected unsupported complex-script shaping error")
         } catch let error as PDFEmbeddedFontError {
-            #expect(error == .unsupportedComplexScriptScalar(scalar: "\u{0633}"))
+            #expect(error == .unsupportedComplexScriptScalar(scalar: "\u{0905}"))
             #expect(error.errorDescription != nil)
             #expect(error.recoverySuggestion != nil)
         } catch {

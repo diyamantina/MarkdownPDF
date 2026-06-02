@@ -123,6 +123,10 @@ enum PDFValidation {
         try Tool.run("pdftotext", arguments: [url.path, "-"])
     }
 
+    static func pdftotextRaw(url: URL) throws -> Result {
+        try Tool.run("pdftotext", arguments: ["-raw", url.path, "-"])
+    }
+
     static func pdftotextTSV(data: some DataProtocol, name: String) throws -> Result {
         let url = try temporaryPDF(name: name, data: data)
         return try pdftotextTSV(url: url)

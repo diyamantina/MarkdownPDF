@@ -140,6 +140,131 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("RTL manuscript passes visual witness stack")
+    func rtlManuscriptPassesVisualWitnessStack() throws {
+        let data = try rtlManuscriptPDF()
+        let url = try PDFValidation.temporaryPDF(name: "rtl-manuscript", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+        let hebrewWord = "\u{05D0}\u{05D1}\u{05D2}\u{05D3}"
+        let arabicWord = "\u{0633}\u{0644}\u{0627}\u{0645}"
+        let arabicIndic12 = "\u{0661}\u{0662}"
+
+        #expect(pageCount >= 2)
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+        #expect(
+            inspector.canonicalStructureIssues().isEmpty,
+            "RTL manuscript PDF structure issues:\n\(inspector.canonicalStructureIssues().joined(separator: "\n"))",
+        )
+        #expect(inspector.text.contains("/Subtype /Type0"))
+        #expect(inspector.text.contains("/Subtype /CIDFontType2"))
+        #expect(inspector.text.contains("/FontFile2"))
+        #expect(inspector.text.contains("/ToUnicode"))
+        let mirrorCIDBase = try Int(TrueTypeFontParser()
+            .parse(SyntheticTrueTypeFont.data(glyphProfile: .rtlWitness, includeGlyphOutlines: true))
+            .maxp
+            .numGlyphs)
+        let mirroredCodes = (1 ... 8).map { mirrorCIDBase + $0 }
+        for code in mirroredCodes {
+            let codeHex = Self.pdfHex(code)
+            #expect(
+                inspector.streams.contains { $0.body.contains("\(codeHex) Tj") },
+                "RTL manuscript did not emit mirrored CID \(codeHex)",
+            )
+        }
+        #expect(inspector.text.contains("\(Self.pdfHex(mirrorCIDBase + 1)) \(Self.pdfHex(mirrorCIDBase + 2)) <0028>"))
+        #expect(inspector.text.contains("\(Self.pdfHex(mirrorCIDBase + 3)) <003C>"))
+        #expect(inspector.text.contains("\(Self.pdfHex(mirrorCIDBase + 4)) <003E>"))
+        #expect(inspector.text.contains("\(Self.pdfHex(mirrorCIDBase + 5)) <005B>"))
+        #expect(inspector.text.contains("\(Self.pdfHex(mirrorCIDBase + 6)) <005D>"))
+        #expect(inspector.text.contains("\(Self.pdfHex(mirrorCIDBase + 7)) <007B>"))
+        #expect(inspector.text.contains("\(Self.pdfHex(mirrorCIDBase + 8)) <007D>"))
+
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        try PDFValidation.writeTextArtifact(Self.rtlManuscriptManifest, name: "rtl-manuscript/README.txt")
+        try PDFValidation.writeArtifact(data, name: "rtl-manuscript.pdf")
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "rtl-manuscript/text.txt")
+        let normalizedText = normalizedExtractedText(textResult.output)
+        #expect(normalizedText.contains("RTLPARATOKENA"))
+        #expect(normalizedText.contains("ULISTTOKENA"))
+        #expect(normalizedText.contains("OLISTTOKENA"))
+        #expect(normalizedText.contains("QUOTETOKENA"))
+        #expect(normalizedText.contains("ROWA"))
+
+        let rawTextResult = try PDFValidation.pdftotextRaw(url: url)
+        try #require(rawTextResult.exitCode == 0, "pdftotext -raw failed:\n\(rawTextResult.output)")
+        try PDFValidation.writeTextArtifact(rawTextResult.output, name: "rtl-manuscript/raw-text.txt")
+        let compactRawText = compactLogicalExtractedText(rawTextResult.output)
+        #expect(compactRawText.contains("\(hebrewWord)(123)CODE\(arabicWord)\(arabicIndic12)RTLPARATOKENA."))
+        #expect(compactRawText.contains("\(arabicWord)[CODE]\(hebrewWord)ULISTTOKENA."))
+        #expect(compactRawText.contains("\(hebrewWord)\"CODE\"\(arabicWord)OLISTTOKENA."))
+        #expect(compactRawText.contains("\(arabicWord)(123)\(hebrewWord)QUOTETOKENA."))
+        #expect(compactRawText.contains("\(hebrewWord)HEADER"))
+        #expect(compactRawText.contains("\(arabicWord)\(arabicIndic12)ROWA"))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "rtl-manuscript/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+
+        #expect(popplerLayout.pages.count == pageCount)
+        #expect(popplerLayout.words.count > 90)
+        #expect(
+            popplerIssues.isEmpty,
+            "RTL manuscript Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "rtl-manuscript/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues(allowRightToLeftRuns: true)
+
+        #expect(mupdfLayout.pages.count == pageCount)
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 500)
+        #expect(
+            mupdfIssues.isEmpty,
+            "RTL manuscript MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "rtl-manuscript/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "rtl-manuscript/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "rtl-manuscript-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "rtl-manuscript-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "RTL manuscript raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("Generated PDFs do not have overlapping MuPDF character quads")
     func generatedPDFsDoNotHaveOverlappingMuPDFCharacterQuads() throws {
         let data = try visualValidationPDF()
@@ -1974,6 +2099,54 @@ struct PDFVisualLayoutValidationTests {
         return data
     }
 
+    private func rtlManuscriptPDF() throws -> Data {
+        let hebrewWord = "\u{05D0}\u{05D1}\u{05D2}\u{05D3}"
+        let hebrewPair = "\u{05D0}\u{05D1}"
+        let arabicWord = "\u{0633}\u{0644}\u{0627}\u{0645}"
+        let arabicIndic12 = "\u{0661}\u{0662}"
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .rtlWitness, includeGlyphOutlines: true)
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "MarkdownPDF RTL Witness")
+        let repeatedParagraphs = ["A", "B", "C", "D", "E", "F", "G", "H"].map { suffix in
+            "\(hebrewWord) (123) CODE \(arabicWord) \(arabicIndic12) RTLPARATOKEN\(suffix)."
+        }.joined(separator: "\n\n")
+        let markdown = """
+        # \(hebrewWord) RTL MANUSCRIPT
+
+        ## \(arabicWord) CODE 123 \(hebrewWord)
+
+        \(repeatedParagraphs)
+
+        - \(arabicWord) [CODE] \(hebrewWord) ULISTTOKENA.
+        - \(hebrewWord) {CODE} \(arabicWord) ULISTTOKENB.
+
+        1. \(hebrewWord) "CODE" \(arabicWord) OLISTTOKENA.
+        2. \(arabicWord) <CODE> \(hebrewPair) OLISTTOKENB.
+
+        > \(arabicWord) (123) \(hebrewWord) QUOTETOKENA.
+        > \(hebrewWord) '\(arabicWord)' QUOTETOKENB.
+
+        | \(hebrewWord) HEADER | \(arabicWord) HEADER |
+        |---|---|
+        | \(hebrewWord) (123) CODE | \(arabicWord) \(arabicIndic12) ROWA |
+        | \(arabicWord) [CODE] | \(hebrewWord) 123 ROWB |
+        | \(hebrewPair) {CODE} | \(arabicWord) 123 ROWC |
+
+        \(arabicWord) (123) \(hebrewWord) RTLMIRRORTOKEN.
+        """
+
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 300, height: 360),
+                margins: PDFOptions.Margins(top: 28, right: 28, bottom: 28, left: 28),
+                baseFontSize: 10,
+                embeddedFonts: .allRoles(source),
+                title: "RTL Manuscript Witness",
+            ),
+        ).render(markdown: markdown)
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        return data
+    }
+
     private func a4ManuscriptFixturePDF() throws -> Data {
         let assetsBaseURL = try TestImageAssets.directoryWithChartPNG()
         let data = try MarkdownPDFRenderer(
@@ -2366,6 +2539,18 @@ struct PDFVisualLayoutValidationTests {
     syntax-coloring-manuscript-pages/
     Poppler and MuPDF page rasters for the syntax-coloring manuscript.
 
+    rtl-manuscript.pdf
+    Focused manuscript proving Arabic and Hebrew bidi ordering with embedded fonts, logical ToUnicode extraction, bracket mirroring, and geometry witnesses.
+
+    rtl-manuscript/README.txt
+    Manifest for the RTL manuscript witness tokens, extraction expectations, and artifact paths.
+
+    rtl-manuscript/
+    Text, geometry, structured text, and render logs for the RTL manuscript.
+
+    rtl-manuscript-pages/
+    Poppler and MuPDF page rasters for the RTL manuscript.
+
     text-encoding-profile.pdf
     One-page PDF proving the portable text encoding replacement profile.
 
@@ -2494,6 +2679,34 @@ struct PDFVisualLayoutValidationTests {
     - screenshot-source-code-regressions-pages/mupdf/
     """
 
+    private static let rtlManuscriptManifest = """
+    RTL manuscript witness
+
+    Expected embedded font resources: Type0, CIDFontType2, FontFile2, ToUnicode.
+    Expected extraction policy: content is emitted in logical source order with ToUnicode mappings while glyphs are positioned in visual order.
+    Expected visual policy: RTL visual runs are reordered and paired punctuation is mirrored before drawing.
+
+    Required extracted tokens:
+    - RTLPARATOKENA
+    - ULISTTOKENA
+    - OLISTTOKENA
+    - QUOTETOKENA
+    - HEADER
+    - ROWA
+    - RTLMIRRORTOKEN
+
+    Required artifacts:
+    - rtl-manuscript.pdf
+    - rtl-manuscript/text.txt
+    - rtl-manuscript/raw-text.txt
+    - rtl-manuscript/poppler.tsv
+    - rtl-manuscript/mupdf-stext.xml
+    - rtl-manuscript/poppler-render.log
+    - rtl-manuscript/mupdf-render.log
+    - rtl-manuscript-pages/poppler/
+    - rtl-manuscript-pages/mupdf/
+    """
+
     private func tableRectangleWidths(in inspector: PDFInspector) -> [Double] {
         inspector.streams
             .flatMap { stream in
@@ -2546,6 +2759,32 @@ struct PDFVisualLayoutValidationTests {
 
     private func normalizedExtractedText(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    private func compactLogicalExtractedText(_ text: String) -> String {
+        text.unicodeScalars
+            .filter { scalar in
+                !CharacterSet.whitespacesAndNewlines.contains(scalar)
+                    && !isBidiFormattingScalar(scalar)
+            }
+            .map(String.init)
+            .joined()
+    }
+
+    private func isBidiFormattingScalar(_ scalar: UnicodeScalar) -> Bool {
+        switch scalar.value {
+        case 0x061C,
+             0x200E ... 0x200F,
+             0x202A ... 0x202E,
+             0x2066 ... 0x2069:
+            true
+        default:
+            false
+        }
+    }
+
+    private static func pdfHex(_ value: Int) -> String {
+        String(format: "<%04X>", locale: Locale(identifier: "en_US_POSIX"), value)
     }
 
     private func inkOverlapRatio(_ left: PNMImage.InkBox, _ right: PNMImage.InkBox) -> Double {

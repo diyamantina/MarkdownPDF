@@ -79,6 +79,7 @@ final class PDFPageCanvas {
         x: Double,
         y: Double,
         color: PDFColor = .black,
+        decorationsFor decoratedRun: PDFTextRun? = nil,
     ) throws {
         guard !mapping.glyphs.isEmpty else {
             return
@@ -93,6 +94,9 @@ final class PDFPageCanvas {
             .showCIDText(mapping.clusters.flatMap(\.pdfCharacterCodes)),
             .endText,
         ])
+        if let decoratedRun {
+            drawDecorations(for: decoratedRun, x: x, y: y, width: mapping.totalAdvance)
+        }
     }
 
     func addHeadingDestination(_ destination: PDFHeadingDestination) {

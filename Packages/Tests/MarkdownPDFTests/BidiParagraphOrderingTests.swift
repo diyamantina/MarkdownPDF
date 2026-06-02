@@ -129,6 +129,23 @@ struct BidiParagraphOrderingTests {
         ])
     }
 
+    @Test("Mirrors paired punctuation in RTL visual runs")
+    func mirrorsPairedPunctuationInRightToLeftVisualRuns() throws {
+        let paragraph = try BidiParagraphOrdering().order(BidiFixtureText.hebrewAB + " (123) " + BidiFixtureText.hebrewGD)
+
+        #expect(paragraph.baseDirection == .rightToLeft)
+        #expect(paragraph.visualRuns.map(\.displayText).joined() == BidiFixtureText.hebrewGDVisual + " (123) " + BidiFixtureText.hebrewABVisual)
+    }
+
+    @Test("Detects RTL text")
+    func detectsRightToLeftText() {
+        let ordering = BidiParagraphOrdering()
+
+        #expect(ordering.containsRightToLeftText(BidiFixtureText.hebrewAB))
+        #expect(ordering.containsRightToLeftText("CODE " + BidiFixtureText.arabicSalam))
+        #expect(!ordering.containsRightToLeftText("CODE 123"))
+    }
+
     @Test("Rejects explicit bidi formatting controls")
     func rejectsExplicitBidiFormattingControls() throws {
         let controls: [UInt32] = [
@@ -177,4 +194,5 @@ private enum BidiFixtureText {
     static let hebrewDEVisual = "\u{05D4}\u{05D3}"
     static let hebrewGDVisual = "\u{05D3}\u{05D2}"
     static let arabicIndic12 = "\u{0661}\u{0662}"
+    static let arabicSalam = "\u{0633}\u{0644}\u{0627}\u{0645}"
 }

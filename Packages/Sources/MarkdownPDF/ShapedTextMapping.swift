@@ -86,6 +86,7 @@ struct ShapedTextMapping: Equatable {
         var advanceWidth: UInt16
         var advance: Double
         var offset: Offset
+        var cmapScalar: UnicodeScalar?
 
         init(
             glyphID: UInt16,
@@ -94,6 +95,7 @@ struct ShapedTextMapping: Equatable {
             advanceWidth: UInt16,
             advance: Double,
             offset: Offset = .zero,
+            cmapScalar: UnicodeScalar? = nil,
         ) {
             self.glyphID = glyphID
             self.cid = cid
@@ -101,9 +103,14 @@ struct ShapedTextMapping: Equatable {
             self.advanceWidth = advanceWidth
             self.advance = advance
             self.offset = offset
+            self.cmapScalar = cmapScalar
         }
 
-        init(_ glyph: TrueTypeGlyphMapper.Glyph, offset: Offset = .zero) {
+        init(
+            _ glyph: TrueTypeGlyphMapper.Glyph,
+            offset: Offset = .zero,
+            cmapScalar: UnicodeScalar? = nil,
+        ) {
             self.init(
                 glyphID: glyph.glyphID,
                 cid: glyph.cid,
@@ -111,6 +118,7 @@ struct ShapedTextMapping: Equatable {
                 advanceWidth: glyph.advanceWidth,
                 advance: glyph.width,
                 offset: offset,
+                cmapScalar: cmapScalar,
             )
         }
     }

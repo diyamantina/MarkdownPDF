@@ -29,6 +29,10 @@ struct BidiParagraphOrdering {
         return Paragraph(baseDirection: baseDirection, visualRuns: visualRuns.map(displayRun))
     }
 
+    func containsRightToLeftText(_ text: String) -> Bool {
+        text.unicodeScalars.contains(where: isRightToLeftScalar)
+    }
+
     private func bidiUnits(in text: String) throws -> [BidiUnit] {
         var units: [BidiUnit] = []
         var index = text.startIndex
@@ -105,10 +109,43 @@ struct BidiParagraphOrdering {
         Run(
             sourceScalarRange: run.sourceScalarRange,
             sourceText: run.sourceText,
-            displayText: run.direction == .rightToLeft ? String(run.sourceText.reversed()) : run.sourceText,
+            displayText: run.direction == .rightToLeft ? mirroredReversedText(run.sourceText) : run.sourceText,
             direction: run.direction,
             embeddingLevel: run.embeddingLevel,
         )
+    }
+
+    private func mirroredReversedText(_ text: String) -> String {
+        String(text.reversed().map(mirroredCharacter))
+    }
+
+    private func mirroredCharacter(_ character: Character) -> Character {
+        guard let scalar = character.unicodeScalars.first,
+              character.unicodeScalars.count == 1
+        else {
+            return character
+        }
+
+        switch scalar.value {
+        case 0x28:
+            return ")"
+        case 0x29:
+            return "("
+        case 0x3C:
+            return ">"
+        case 0x3E:
+            return "<"
+        case 0x5B:
+            return "]"
+        case 0x5D:
+            return "["
+        case 0x7B:
+            return "}"
+        case 0x7D:
+            return "{"
+        default:
+            return character
+        }
     }
 
     private func resolvedDirection(for bidiClass: BidiClass, baseDirection: Direction) -> Direction {

@@ -73,6 +73,17 @@ private struct TablePreparedRow {
     var cellLines: [[[PDFTextRun]]]
 }
 
+private struct BidiLine {
+    var visualRuns: [BidiPositionedRun]
+}
+
+private struct BidiPositionedRun {
+    var sourceTextRun: PDFTextRun
+    var displayText: String
+    var x: Double
+    var sourceScalarOffset: Int
+}
+
 private struct Layout {
     var options: PDFOptions
     var assetsBaseURL: URL?
@@ -1237,7 +1248,7 @@ private struct Layout {
     ) throws {
         for line in try wrappedLines(runs, maxWidth: maxWidth) {
             ensureSpace(lineHeight)
-            try drawRuns(line, x: x, y: y)
+            try drawRuns(line, x: x, y: y, maxWidth: maxWidth)
             y -= lineHeight
         }
     }
@@ -1261,7 +1272,7 @@ private struct Layout {
 
         var lineY = topY - padding - size
         for line in lines {
-            try drawRuns(line, x: options.margins.left + padding, y: lineY)
+            try drawRuns(line, x: options.margins.left + padding, y: lineY, applyBidi: false)
             lineY -= lineHeight
         }
         y = topY - height
@@ -1331,7 +1342,8 @@ private struct Layout {
                 case .trailing:
                     x + columnWidth - cellPadding - width
                 }
-                try drawRuns(Array(line), x: textX, y: lineY)
+                let drawWidth = alignment == .leading ? max(0, columnWidth - cellPadding * 2) : nil
+                try drawRuns(Array(line), x: textX, y: lineY, maxWidth: drawWidth)
                 lineY -= lineHeight
             }
             x += columnWidth
@@ -1429,7 +1441,16 @@ private struct Layout {
         _ runs: [PDFTextRun],
         x: Double,
         y: Double,
+        maxWidth: Double? = nil,
+        applyBidi: Bool = true,
     ) throws {
+        if applyBidi, let bidiLine = try bidiLine(from: runs, x: x, maxWidth: maxWidth) {
+            for run in bidiLine.visualRuns.sorted(by: { $0.sourceScalarOffset < $1.sourceScalarOffset }) {
+                try drawBidiPositionedRun(run, y: y)
+            }
+            return
+        }
+
         var cursor = x
         for run in runs {
             try currentPage.drawTextRun(
@@ -1441,6 +1462,212 @@ private struct Layout {
             )
             cursor += try textWidth(run)
         }
+    }
+
+    private func bidiLine(
+        from runs: [PDFTextRun],
+        x: Double,
+        maxWidth: Double?,
+    ) throws -> BidiLine? {
+        guard let template = runs.first,
+              runs.allSatisfy({ isSingleStyleBidiRun($0, matching: template) })
+        else {
+            return nil
+        }
+
+        let logicalText = runs.map(\.text).joined()
+        let ordering = BidiParagraphOrdering()
+        guard ordering.containsRightToLeftText(logicalText) else {
+            return nil
+        }
+
+        let paragraph = try ordering.order(logicalText)
+        let visualRuns = paragraph.visualRuns.map { run in
+            template.withText(run.displayText)
+        }
+        let lineWidth = try textWidth(visualRuns)
+        var cursor = x
+        if paragraph.baseDirection == .rightToLeft, let maxWidth {
+            cursor += max(0, maxWidth - lineWidth)
+        }
+
+        var positionedRuns: [BidiPositionedRun] = []
+        for run in paragraph.visualRuns {
+            let positioned = try positionedBidiRuns(for: run, template: template, x: cursor)
+            positionedRuns.append(contentsOf: positioned)
+            cursor += try textWidth(template.withText(run.displayText))
+        }
+        return BidiLine(visualRuns: positionedRuns)
+    }
+
+    private func drawBidiPositionedRun(_ run: BidiPositionedRun, y: Double) throws {
+        if let mapping = try mirroredBidiGlyphMapping(for: run),
+           let entry = embeddedFonts.entry(for: run.sourceTextRun.font)
+        {
+            try currentPage.drawCIDText(
+                mapping: mapping,
+                fontResource: entry.resource,
+                fontSize: run.sourceTextRun.size,
+                x: run.x,
+                y: y,
+                color: run.sourceTextRun.color,
+                decorationsFor: run.sourceTextRun,
+            )
+            return
+        }
+
+        try currentPage.drawTextRun(
+            run.sourceTextRun,
+            x: run.x,
+            y: y,
+            fontSet: options.fontSet,
+            embeddedFonts: embeddedFonts,
+        )
+    }
+
+    private func isSingleStyleBidiRun(_ run: PDFTextRun, matching template: PDFTextRun) -> Bool {
+        run.font == template.font
+            && run.size == template.size
+            && run.color == template.color
+            && run.underline == template.underline
+            && run.strikethrough == template.strikethrough
+            && run.linkDestination == nil
+    }
+
+    private func positionedBidiRuns(
+        for run: BidiParagraphOrdering.Run,
+        template: PDFTextRun,
+        x: Double,
+    ) throws -> [BidiPositionedRun] {
+        let sourceCharacters = Array(run.sourceText)
+        let displayCharacters = Array(run.displayText)
+        let sourceScalarOffsets = scalarOffsetsByCharacter(in: run.sourceText)
+        guard sourceCharacters.count == displayCharacters.count else {
+            return [
+                BidiPositionedRun(
+                    sourceTextRun: template.withText(run.sourceText),
+                    displayText: run.sourceText,
+                    x: x,
+                    sourceScalarOffset: run.sourceScalarRange.lowerBound,
+                ),
+            ]
+        }
+
+        var cursor = x
+        var positionedRuns: [BidiPositionedRun] = []
+        for displayIndex in sourceCharacters.indices {
+            let sourceIndex = run.direction == .rightToLeft
+                ? sourceCharacters.count - 1 - displayIndex
+                : displayIndex
+            let displayText = String(displayCharacters[displayIndex])
+            let textRun = template.withText(String(sourceCharacters[sourceIndex]))
+            positionedRuns.append(
+                BidiPositionedRun(
+                    sourceTextRun: textRun,
+                    displayText: displayText,
+                    x: cursor,
+                    sourceScalarOffset: run.sourceScalarRange.lowerBound + sourceScalarOffsets[sourceIndex],
+                ),
+            )
+            cursor += try textWidth(template.withText(displayText))
+        }
+        return positionedRuns
+    }
+
+    private func mirroredBidiGlyphMapping(for run: BidiPositionedRun) throws -> ShapedTextMapping? {
+        guard run.sourceTextRun.text != run.displayText,
+              let entry = embeddedFonts.entry(for: run.sourceTextRun.font),
+              let sourceScalar = onlyScalar(in: run.sourceTextRun.text),
+              let displayScalar = onlyScalar(in: run.displayText)
+        else {
+            return nil
+        }
+        let syntheticCode = try mirroredPDFCharacterCode(source: sourceScalar, display: displayScalar, entry: entry)
+
+        let displayMapping = try embeddedFonts.mapping(
+            for: run.sourceTextRun.withText(run.displayText),
+            entry: entry,
+        )
+        guard let displayGlyph = displayMapping.glyphs.first, displayMapping.glyphs.count == 1 else {
+            return nil
+        }
+
+        guard let syntheticScalar = UnicodeScalar(0x100000 + UInt32(syntheticCode)) else {
+            throw PDFEmbeddedFontError.unavailableMirroredGlyphCode(source: sourceScalar, display: displayScalar)
+        }
+        let glyph = ShapedTextMapping.Glyph(
+            glyphID: displayGlyph.glyphID,
+            cid: syntheticCode,
+            pdfCharacterCode: syntheticCode,
+            advanceWidth: displayGlyph.advanceWidth,
+            advance: displayGlyph.width,
+            cmapScalar: syntheticScalar,
+        )
+        return try ShapedTextMapping(
+            sourceText: run.sourceTextRun.text,
+            clusters: [
+                ShapedTextMapping.Cluster(
+                    sourceScalarRange: 0 ..< 1,
+                    normalizedText: run.displayText,
+                    glyphs: [glyph],
+                    toUnicodeScalars: [sourceScalar],
+                ),
+            ],
+        )
+    }
+
+    private func mirroredPDFCharacterCode(
+        source: UnicodeScalar,
+        display: UnicodeScalar,
+        entry: PDFEmbeddedFontCatalog.Entry,
+    ) throws -> UInt16 {
+        guard let pairOffset = mirroredPairOffset(source: source, display: display) else {
+            throw PDFEmbeddedFontError.unavailableMirroredGlyphCode(source: source, display: display)
+        }
+
+        let code = UInt32(entry.resource.metadata.maxp.numGlyphs) + UInt32(pairOffset)
+        guard code <= UInt16.max else {
+            throw PDFEmbeddedFontError.unavailableMirroredGlyphCode(source: source, display: display)
+        }
+        return UInt16(code)
+    }
+
+    private func mirroredPairOffset(source: UnicodeScalar, display: UnicodeScalar) -> UInt16? {
+        switch (source.value, display.value) {
+        case (0x28, 0x29):
+            1
+        case (0x29, 0x28):
+            2
+        case (0x3C, 0x3E):
+            3
+        case (0x3E, 0x3C):
+            4
+        case (0x5B, 0x5D):
+            5
+        case (0x5D, 0x5B):
+            6
+        case (0x7B, 0x7D):
+            7
+        case (0x7D, 0x7B):
+            8
+        default:
+            nil
+        }
+    }
+
+    private func onlyScalar(in text: String) -> UnicodeScalar? {
+        let scalars = Array(text.unicodeScalars)
+        return scalars.count == 1 ? scalars[0] : nil
+    }
+
+    private func scalarOffsetsByCharacter(in text: String) -> [Int] {
+        var offsets: [Int] = []
+        var scalarOffset = 0
+        for character in text {
+            offsets.append(scalarOffset)
+            scalarOffset += character.unicodeScalars.count
+        }
+        return offsets
     }
 
     private func textWidth(_ run: PDFTextRun) throws -> Double {

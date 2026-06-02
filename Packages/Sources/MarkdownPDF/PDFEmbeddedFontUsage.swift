@@ -36,7 +36,10 @@ struct PDFEmbeddedFontUsage: Equatable {
                 mappedGlyphs.append(
                     MappedGlyph(
                         glyph: TrueTypeGlyphMapper.Glyph(
-                            scalar: subsetCMapScalar(for: glyph.pdfCharacterCode, unicodeScalars: unicodeScalars),
+                            scalar: glyph.cmapScalar ?? subsetCMapScalar(
+                                for: glyph.pdfCharacterCode,
+                                unicodeScalars: unicodeScalars,
+                            ),
                             glyphID: glyph.glyphID,
                             cid: glyph.cid,
                             pdfCharacterCode: glyph.pdfCharacterCode,

@@ -75,7 +75,10 @@ struct MuPDFStructuredText {
         pages = try parser.parse(xml: xml)
     }
 
-    func characterQuadIssues(tolerance: Double = 0.75) -> [String] {
+    func characterQuadIssues(
+        tolerance: Double = 0.75,
+        allowRightToLeftRuns: Bool = false,
+    ) -> [String] {
         var issues: [String] = []
 
         for page in pages {
@@ -84,7 +87,13 @@ struct MuPDFStructuredText {
             }
 
             for line in page.lines {
-                validateLine(line, page: page, tolerance: tolerance, issues: &issues)
+                validateLine(
+                    line,
+                    page: page,
+                    tolerance: tolerance,
+                    allowRightToLeftRuns: allowRightToLeftRuns,
+                    issues: &issues,
+                )
             }
         }
 
@@ -95,16 +104,25 @@ struct MuPDFStructuredText {
         _ line: Line,
         page: Page,
         tolerance: Double,
+        allowRightToLeftRuns: Bool,
         issues: inout [String],
     ) {
-        if line.box.width <= 0 || line.box.height <= 0 {
+        let hasVisibleGlyphs = line.glyphs.contains { !$0.isWhitespace }
+        if hasVisibleGlyphs, line.box.height <= 0 || (!allowRightToLeftRuns && line.box.width <= 0) {
             issues.append("page \(page.number) line \(line.index) has non-positive size")
         }
 
         var visibleRun: [Glyph] = []
         for (glyphIndex, glyph) in line.glyphs.enumerated() {
             if glyph.isWhitespace {
-                validateVisibleRun(visibleRun, line: line, page: page, tolerance: tolerance, issues: &issues)
+                validateVisibleRun(
+                    visibleRun,
+                    line: line,
+                    page: page,
+                    tolerance: tolerance,
+                    allowRightToLeftRuns: allowRightToLeftRuns,
+                    issues: &issues,
+                )
                 visibleRun = []
                 continue
             }
@@ -120,7 +138,14 @@ struct MuPDFStructuredText {
             )
             visibleRun.append(glyph)
         }
-        validateVisibleRun(visibleRun, line: line, page: page, tolerance: tolerance, issues: &issues)
+        validateVisibleRun(
+            visibleRun,
+            line: line,
+            page: page,
+            tolerance: tolerance,
+            allowRightToLeftRuns: allowRightToLeftRuns,
+            issues: &issues,
+        )
     }
 
     private func validateGlyph(
@@ -194,13 +219,47 @@ struct MuPDFStructuredText {
         line: Line,
         page: Page,
         tolerance: Double,
+        allowRightToLeftRuns: Bool,
         issues: inout [String],
     ) {
+        guard !glyphs.isEmpty else {
+            return
+        }
+
+        if allowRightToLeftRuns {
+            let spatialGlyphs = glyphs.sorted { left, right in
+                if left.box.left == right.box.left {
+                    return left.index < right.index
+                }
+                return left.box.left < right.box.left
+            }
+            validateSpatialGlyphs(spatialGlyphs, line: line, page: page, tolerance: tolerance, issues: &issues)
+            return
+        }
+
         for (left, right) in zip(glyphs, glyphs.dropFirst()) {
             if right.box.left < left.box.left - tolerance {
                 issues.append(glyphDescription(right, line: line, page: page) + " moves left inside a text run")
             }
 
+            if right.box.left < left.box.right - tolerance {
+                issues.append(
+                    glyphDescription(left, line: line, page: page)
+                        + " overlaps "
+                        + glyphDescription(right, line: line, page: page),
+                )
+            }
+        }
+    }
+
+    private func validateSpatialGlyphs(
+        _ glyphs: [Glyph],
+        line: Line,
+        page: Page,
+        tolerance: Double,
+        issues: inout [String],
+    ) {
+        for (left, right) in zip(glyphs, glyphs.dropFirst()) {
             if right.box.left < left.box.right - tolerance {
                 issues.append(
                     glyphDescription(left, line: line, page: page)

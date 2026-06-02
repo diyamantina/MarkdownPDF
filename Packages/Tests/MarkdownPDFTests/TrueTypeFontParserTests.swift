@@ -351,6 +351,7 @@ enum SyntheticTrueTypeFont {
         case largeBMPWitness
         case latinWitness
         case latinLigature
+        case rtlWitness
     }
 
     static func data(
@@ -1093,6 +1094,8 @@ enum SyntheticTrueTypeFont {
                     GlyphRecord(scalar: "\u{0301}", advanceWidth: 0, xMin: 120, xMax: 260),
                     GlyphRecord(scalar: nil, name: "fi", advanceWidth: 620, xMin: 40, xMax: 570),
                 ]
+            case .rtlWitness:
+                Self.rtlWitnessGlyphs()
             }
         }
 
@@ -1121,7 +1124,7 @@ enum SyntheticTrueTypeFont {
             switch profile {
             case .basic:
                 2
-            case .compositeWitness, .cjkDiacriticWitness, .cjkWitness, .largeBMPWitness, .latinWitness, .latinLigature:
+            case .compositeWitness, .cjkDiacriticWitness, .cjkWitness, .largeBMPWitness, .latinWitness, .latinLigature, .rtlWitness:
                 numGlyphs
             }
         }
@@ -1154,6 +1157,55 @@ enum SyntheticTrueTypeFont {
                 640
             default:
                 600
+            }
+        }
+
+        private static func rtlWitnessGlyphs() -> [GlyphRecord] {
+            let punctuation: [UnicodeScalar] = [
+                " ",
+                ".",
+                ",",
+                ":",
+                ";",
+                "'",
+                "\"",
+                "(",
+                ")",
+                "[",
+                "]",
+                "{",
+                "}",
+                "<",
+                ">",
+            ]
+            let uppercase = (UInt8(ascii: "A") ... UInt8(ascii: "Z")).map(UnicodeScalar.init)
+            let digits = (UInt8(ascii: "0") ... UInt8(ascii: "9")).map(UnicodeScalar.init)
+            let hebrew = (0x05D0 ... 0x05D4).compactMap(UnicodeScalar.init)
+            let arabic = [0x0627, 0x0633, 0x0644, 0x0645].compactMap(UnicodeScalar.init)
+            let arabicIndicDigits = (0x0661 ... 0x0663).compactMap(UnicodeScalar.init)
+
+            return (punctuation + uppercase + digits + hebrew + arabic + arabicIndicDigits).map { scalar in
+                let width: UInt16 = switch scalar.value {
+                case 0x20:
+                    280
+                case 0x2C, 0x2E, 0x3A, 0x3B, 0x27, 0x22:
+                    300
+                case 0x28 ... 0x29, 0x3C ... 0x3E, 0x5B ... 0x5D, 0x7B ... 0x7D:
+                    360
+                case 0x30 ... 0x39, 0x0661 ... 0x0663:
+                    520
+                case 0x0590 ... 0x05FF, 0x0600 ... 0x06FF:
+                    610
+                default:
+                    Self.latinWitnessAdvanceWidth(for: scalar)
+                }
+
+                return GlyphRecord(
+                    scalar: scalar,
+                    advanceWidth: width,
+                    xMin: scalar.value == 0x20 ? nil : 40,
+                    xMax: scalar.value == 0x20 ? nil : Int16(max(90, Int(width) - 60)),
+                )
             }
         }
     }

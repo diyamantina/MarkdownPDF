@@ -70,14 +70,16 @@ struct PDFEmbeddedFontCatalog {
 
     private static func requiresExplicitShapingSupport(_ scalar: UnicodeScalar) -> Bool {
         switch scalar.value {
-        case 0x0590 ... 0x05FF, // Hebrew and RTL punctuation need explicit bidi witnesses before PDF emission.
-             0x0600 ... 0x06FF, // Arabic
-             0x0700 ... 0x074F, // Syriac
+        case 0x0700 ... 0x074F, // Syriac
+             0x0750 ... 0x077F, // Arabic Supplement
              0x0780 ... 0x07BF, // Thaana
              0x07C0 ... 0x07FF, // NKo
+             0x08A0 ... 0x08FF, // Arabic Extended-A
              0x0900 ... 0x0D7F, // Indic script blocks used by the first roadmap fixture set.
              0x0E00 ... 0x0E7F, // Thai
-             0x1780 ... 0x17FF: // Khmer
+             0x1780 ... 0x17FF, // Khmer
+             0xFB1D ... 0xFDFF, // Hebrew and Arabic presentation forms
+             0xFE70 ... 0xFEFF: // Arabic presentation forms
             true
         default:
             false
