@@ -963,6 +963,159 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("Source code witness stack catches crammed flow and glyph overlap")
+    func sourceCodeWitnessStackCatchesCrammedFlowAndGlyphOverlap() throws {
+        let longIdentifier = "PortableSourceCodeWitnessLongIdentifier"
+            + String(repeating: "Segment", count: 14)
+        let denseMetalLines = (1 ... 14).map { index in
+            [
+                "if ((rayMask & (1 << \(index))) != 0) {",
+                "\tlet sample_\(index) = trace(payload[\(index)], \(longIdentifier)\(index))",
+                "\taccumulator += sample_\(index).radiance * half3(0.125, 0.250, 0.500)",
+                "}",
+            ].joined(separator: "\n")
+        }.joined(separator: "\n")
+        let markdown = """
+        # Source Code Witness
+
+        This witness reproduces the code, quote, paragraph, and heading sequence
+        that looked crammed in manual PDF artifacts.
+
+        ```metal
+        struct SurfaceWitness {
+            half3 baseColor;
+            half roughness;
+            half metallic;
+        };
+        \(denseMetalLines)
+        let SourceCodeEndToken = "source-code-end"
+        ```
+
+        > QuoteStartToken quoted analysis begins after the source block and must
+        > not overlap the background rectangle or any glyph from the code block.
+        > Quoted analysis ends before normal paragraph flow resumes QuoteEndToken
+
+        AfterQuoteParagraph resumes normal flow after the quote with a visible gap AfterQuoteParagraphEndToken
+
+        ## AfterQuoteHeadingToken
+
+        AfterHeadingParagraph keeps heading flow away from the quote body.
+
+        ```swift
+        let wrappedSymbols = "\(String(repeating: "[]{}()<>+-=*/", count: 10))"
+        let wrappedIdentifier = "\(longIdentifier)"
+        let SecondCodeEndToken = "second-code-end"
+        ```
+
+        AfterSecondCodeParagraph resumes below the second code block.
+        """
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 360, height: 460),
+                margins: PDFOptions.Margins(top: 36, right: 34, bottom: 36, left: 34),
+                baseFontSize: 10,
+                title: "Source Code Witness",
+            ),
+        ).render(markdown: markdown)
+        let url = try PDFValidation.temporaryPDF(name: "source-code-spacing", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+
+        #expect(pageCount >= 4)
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        try PDFValidation.writeTextArtifact(Self.sourceCodeSpacingManifest, name: "source-code-spacing/README.txt")
+        try PDFValidation.writeArtifact(data, name: "source-code-spacing.pdf")
+
+        let verticalRuleLines = inspector.streams.flatMap { stream in
+            verticalRuleOperatorLines(in: stream.body)
+        }
+        #expect(
+            verticalRuleLines.isEmpty,
+            "Source code witness emitted unexpected vertical rule operators:\n\(verticalRuleLines.joined(separator: "\n"))",
+        )
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "source-code-spacing/text.txt")
+        let normalizedText = normalizedExtractedText(textResult.output)
+        #expect(normalizedText.contains("SourceCodeEndToken"))
+        #expect(normalizedText.contains("QuoteStartToken"))
+        #expect(normalizedText.contains("AfterQuoteHeadingToken"))
+        #expect(normalizedText.contains("SecondCodeEndToken"))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "source-code-spacing/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+
+        #expect(popplerLayout.pages.count == pageCount)
+        #expect(popplerLayout.words.count > 260)
+        #expect(
+            popplerIssues.isEmpty,
+            "Source code spacing Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let codeEnd = try word("SourceCodeEndToken", in: popplerLayout)
+        let quoteStart = try word("QuoteStartToken", in: popplerLayout)
+        let quoteEnd = try word("QuoteEndToken", in: popplerLayout)
+        let afterParagraph = try word("AfterQuoteParagraph", in: popplerLayout)
+        let afterParagraphEnd = try word("AfterQuoteParagraphEndToken", in: popplerLayout)
+        let afterHeading = try word("AfterQuoteHeadingToken", in: popplerLayout)
+        let secondCodeEnd = try word("SecondCodeEndToken", in: popplerLayout)
+        let afterSecondCode = try word("AfterSecondCodeParagraph", in: popplerLayout)
+
+        expectVerticalGap(after: codeEnd, before: quoteStart, minimum: 10, context: "code block to quote")
+        expectVerticalGap(after: quoteEnd, before: afterParagraph, minimum: 4, context: "quote to paragraph")
+        expectVerticalGap(after: afterParagraphEnd, before: afterHeading, minimum: 8, context: "paragraph to heading")
+        expectVerticalGap(after: secondCodeEnd, before: afterSecondCode, minimum: 8, context: "code block to paragraph")
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "source-code-spacing/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+
+        #expect(mupdfLayout.pages.count == pageCount)
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 1800)
+        #expect(
+            mupdfIssues.isEmpty,
+            "Source code spacing MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "source-code-spacing/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "source-code-spacing/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "source-code-spacing-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "source-code-spacing-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "Source code spacing raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("Visual layout validator rejects overlapping words")
     func visualLayoutValidatorRejectsOverlappingWords() throws {
         let layout = try PopplerTextLayout(tsv: """
@@ -1081,6 +1234,21 @@ struct PDFVisualLayoutValidationTests {
         """)
 
         #expect(layout.characterQuadIssues().contains { $0.contains("non-positive size") })
+    }
+
+    @Test("Source code witness rule detector rejects stroked and filled vertical rules")
+    func sourceCodeWitnessRuleDetectorRejectsStrokedAndFilledVerticalRules() {
+        let stream = """
+        q
+        54 700 m
+        54 620 l
+        S
+        54 620 1.5 80 re
+        f
+        Q
+        """
+
+        #expect(verticalRuleOperatorLines(in: stream) == ["S", "54 620 1.5 80 re"])
     }
 
     @Test("Raster comparison rejects divergent ink bounds")
@@ -1354,6 +1522,52 @@ struct PDFVisualLayoutValidationTests {
         try #require(layout.words.first { $0.text == text }, "Missing extracted word \(text)")
     }
 
+    private func expectVerticalGap(
+        after upper: PopplerTextLayout.Box,
+        before lower: PopplerTextLayout.Box,
+        minimum: Double,
+        context: String,
+    ) {
+        if lower.page == upper.page {
+            #expect(
+                lower.top > upper.bottom + minimum,
+                "\(context) gap was too small: \(lower.top - upper.bottom)",
+            )
+        } else {
+            #expect(lower.page > upper.page, "\(context) moved backward across pages")
+        }
+    }
+
+    private func verticalRuleOperatorLines(in stream: String) -> [String] {
+        let lines = stream
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        return lines.filter { line in
+            if isSkinnyVerticalRectangleOperator(line) {
+                return true
+            }
+
+            return line == "S"
+                || line == "s"
+                || line.hasSuffix(" S")
+                || line.hasSuffix(" s")
+        }
+    }
+
+    private func isSkinnyVerticalRectangleOperator(_ line: String) -> Bool {
+        let parts = line.split(separator: " ")
+        guard parts.count >= 5,
+              parts.last == "re",
+              let width = Double(parts[parts.count - 3]),
+              let height = Double(parts[parts.count - 2])
+        else {
+            return false
+        }
+
+        return abs(width) <= 3 && abs(height) >= 16
+    }
+
     private static let artifactManifest = """
     MarkdownPDF PDF witness artifacts
 
@@ -1417,6 +1631,18 @@ struct PDFVisualLayoutValidationTests {
     quote-spacing/
     Poppler TSV geometry and MuPDF structured text for the quote spacing witness.
 
+    source-code-spacing.pdf
+    Focused source-code witness for dense code, block quote, paragraph, heading, wrapping, and glyph spacing regressions.
+
+    source-code-spacing/README.txt
+    Manifest for source-code witness tokens, expected image count, and expected stroke behavior.
+
+    source-code-spacing/
+    Text, geometry, structured text, and render logs for the source-code witness.
+
+    source-code-spacing-pages/
+    Poppler and MuPDF page rasters for the source-code witness.
+
     text-encoding-profile.pdf
     One-page PDF proving the portable text encoding replacement profile.
 
@@ -1470,6 +1696,33 @@ struct PDFVisualLayoutValidationTests {
 
     embedded-font-public-api-pages/
     Poppler and MuPDF page rasters for the public embedded-font fixture.
+    """
+
+    private static let sourceCodeSpacingManifest = """
+    Source code spacing witness
+
+    Expected image references: 0.
+    Expected portable block quote strokes: 0.
+
+    Required extracted tokens:
+    - SourceCodeEndToken
+    - QuoteStartToken
+    - QuoteEndToken
+    - AfterQuoteParagraph
+    - AfterQuoteParagraphEndToken
+    - AfterQuoteHeadingToken
+    - SecondCodeEndToken
+    - AfterSecondCodeParagraph
+
+    Required artifacts:
+    - source-code-spacing.pdf
+    - source-code-spacing/text.txt
+    - source-code-spacing/poppler.tsv
+    - source-code-spacing/mupdf-stext.xml
+    - source-code-spacing/poppler-render.log
+    - source-code-spacing/mupdf-render.log
+    - source-code-spacing-pages/poppler/
+    - source-code-spacing-pages/mupdf/
     """
 
     private func tableRectangleWidths(in inspector: PDFInspector) -> [Double] {
