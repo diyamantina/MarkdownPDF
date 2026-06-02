@@ -455,6 +455,7 @@ struct FixtureTests {
         let data = try MarkdownPDFRenderer(
             options: PDFOptions(mathTypesetting: .enabled),
         ).render(markdown: fixture(named: "math-formulas.md"))
+        try PDFValidation.writeArtifact(data, name: "math-formulas.pdf")
         let inspector = PDFInspector(data)
         let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-formulas")
         let textResult = try PDFValidation.pdftotext(data: data, name: "math-formulas-text")

@@ -170,6 +170,7 @@ struct MarkdownPDFRendererTests {
         \\sum_{i=1}^n i
         $$
         """)
+        try PDFValidation.writeArtifact(data, name: "math-typesetting-subset.pdf")
         let inspector = PDFInspector(data)
         let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-typesetting-subset")
         let textResult = try PDFValidation.pdftotext(data: data, name: "math-typesetting-subset-text")
