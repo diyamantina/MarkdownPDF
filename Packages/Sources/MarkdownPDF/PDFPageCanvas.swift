@@ -9,6 +9,7 @@ final class PDFPageCanvas {
     private var contentStream = PDFContentStream()
     private(set) var linkAnnotations: [PDFLinkAnnotation] = []
     private(set) var headingDestinations: [PDFHeadingDestination] = []
+    private(set) var namedDestinations: [PDFHeadingDestination] = []
     private(set) var resourceUsage = PDFPageResourceUsage()
 
     var commands: String {
@@ -33,18 +34,19 @@ final class PDFPageCanvas {
         y: Double,
         fontSet: PDFOptions.FontSet,
     ) {
+        let baselineY = y + run.baselineOffset
         resourceUsage.useFont(run.font)
         setFillColor(run.color)
         contentStream.append([
             .beginText,
             .setFont(PDFSyntax.Name(run.font.rawValue), size: run.size),
-            .moveText(x: x, y: y),
+            .moveText(x: x, y: baselineY),
             .showText(PDFSyntax.LiteralString(run.portableText)),
             .endText,
         ])
 
         let width = run.width(fontSet: fontSet)
-        drawDecorations(for: run, x: x, y: y, width: width)
+        drawDecorations(for: run, x: x, y: baselineY, width: width)
     }
 
     func drawTextRun(
@@ -60,15 +62,16 @@ final class PDFPageCanvas {
         }
 
         let mapping = try embeddedFonts.shapedMapping(for: run, entry: entry)
+        let baselineY = y + run.baselineOffset
         try drawCIDText(
             mapping: mapping,
             fontResource: entry.resource,
             fontSize: run.size,
             x: x,
-            y: y,
+            y: baselineY,
             color: run.color,
         )
-        drawDecorations(for: run, x: x, y: y, width: mapping.totalAdvance)
+        drawDecorations(for: run, x: x, y: baselineY, width: mapping.totalAdvance)
     }
 
     func drawCIDText(
@@ -118,6 +121,10 @@ final class PDFPageCanvas {
 
     func addHeadingDestination(_ destination: PDFHeadingDestination) {
         headingDestinations.append(destination)
+    }
+
+    func addNamedDestination(_ destination: PDFHeadingDestination) {
+        namedDestinations.append(destination)
     }
 
     func drawLine(

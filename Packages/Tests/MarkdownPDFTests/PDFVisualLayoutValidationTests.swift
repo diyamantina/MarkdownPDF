@@ -2611,7 +2611,7 @@ struct PDFVisualLayoutValidationTests {
     Poppler and MuPDF page rasters for the hard Markdown fixture.
 
     crazy-markdown-torture.pdf
-    Crazy public Markdown fixture with dense lists, several code languages, tables, local and remote images, reference-style image syntax, raw HTML, footnote-like notes, non-ASCII replacement, and Mermaid.
+    Crazy public Markdown fixture with dense lists, several code languages, tables, local and remote images, reference-style image syntax, raw HTML, footnotes, non-ASCII replacement, and Mermaid.
 
     crazy-markdown-torture/
     Text, geometry, structured text, and render logs for the crazy Markdown fixture.

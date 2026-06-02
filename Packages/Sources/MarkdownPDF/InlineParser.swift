@@ -27,6 +27,8 @@ struct InlineParser {
                     result.append(escaped)
                 } else if let image = parseImage() {
                     result.append(image)
+                } else if let footnote = parseFootnoteReference() {
+                    result.append(footnote)
                 } else if let link = parseLink() {
                     result.append(link)
                 } else if let code = parseCodeSpan() {
@@ -149,6 +151,27 @@ struct InlineParser {
                 destination: destination.url,
                 title: destination.title,
             )
+        }
+
+        private mutating func parseFootnoteReference() -> MarkdownInline? {
+            guard source[index...].hasPrefix("[^") else {
+                return nil
+            }
+
+            let labelStart = source.index(index, offsetBy: 2)
+            guard let labelEnd = firstUnescaped("]", from: labelStart) else {
+                return nil
+            }
+
+            let label = String(source[labelStart ..< labelEnd])
+            guard !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !label.contains("\n")
+            else {
+                return nil
+            }
+
+            index = source.index(after: labelEnd)
+            return .footnoteReference(label: label)
         }
 
         private mutating func parseAutolink() -> MarkdownInline? {

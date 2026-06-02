@@ -115,6 +115,46 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.streamLengthsMatch())
     }
 
+    @Test("Renders GFM footnotes and task-list checkboxes")
+    func rendersGFMFootnotesAndTaskListCheckboxes() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: """
+        Alpha footnote[^beta] repeats[^beta] and dangling [^missing].
+
+        [^unused]: Hidden note.
+        > [^beta]: Beta **note** body.
+
+        - [ ] Open task
+        - [x] Done task
+        - [ ]not a task
+        """)
+        let inspector = PDFInspector(data)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "gfm-footnotes-tasklists")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "gfm-footnotes-tasklists-text")
+        let extractedText = normalizedExtractedText(textResult.output)
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        #expect(Set(inspector.namedDestinationNames).isSuperset(of: ["fn-1", "fnref-1"]))
+        #expect(inspector.outlineItemCount == 0)
+        #expect(inspector.internalLinkDestinationNames.count(where: { $0 == "fn-1" }) == 2)
+        #expect(inspector.internalLinkDestinationNames.contains("fnref-1"))
+        #expect(!inspector.namedDestinationNames.contains("fn-2"))
+        #expect(extractedText.contains("dangling [^missing]"))
+        #expect(extractedText.contains("Footnotes"))
+        #expect(extractedText.contains("1. Beta note body."))
+        #expect(!extractedText.contains("Hidden note"))
+        #expect(extractedText.contains("Open task"))
+        #expect(extractedText.contains("Done task"))
+        #expect(extractedText.contains("[ ]not a task"))
+        #expect(streamText.components(separatedBy: " re S").count - 1 >= 2)
+        #expect(streamText.components(separatedBy: " l ").count - 1 >= 2)
+        #expect(
+            inspector.canonicalStructureIssues().isEmpty,
+            "Canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
+        )
+    }
+
     @Test("Block quotes indent without vertical border strokes")
     func blockQuotesDoNotEmitVerticalBorderStrokes() throws {
         let data = try MarkdownPDFRenderer().render(markdown: """

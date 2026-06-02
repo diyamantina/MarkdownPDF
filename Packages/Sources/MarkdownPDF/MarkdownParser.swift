@@ -50,6 +50,8 @@ private struct BlockParser {
                 blocks.append(block)
             } else if let block = parseBlockQuote() {
                 blocks.append(block)
+            } else if let block = parseFootnoteDefinition() {
+                blocks.append(block)
             } else if let block = parseTable() {
                 blocks.append(block)
             } else if let block = parseUnorderedList() {
@@ -177,9 +179,16 @@ private struct BlockParser {
 
         var items: [MarkdownBlock.ListItem] = []
         while index < lines.count, let contentStart = unorderedMarker(in: lines[index]) {
-            let item = String(lines[index].dropFirst(contentStart))
+            let item = String(lines[index].dropFirst(contentStart)).trimmingCharacters(in: .whitespaces)
             index += 1
-            items.append(.init(blocks: [.paragraph(inlineParser.parse(item.trimmingCharacters(in: .whitespaces)))]))
+            if let task = taskListItem(from: item) {
+                items.append(.init(
+                    blocks: [.paragraph(inlineParser.parse(task.content))],
+                    checkbox: task.checkbox,
+                ))
+            } else {
+                items.append(.init(blocks: [.paragraph(inlineParser.parse(item))]))
+            }
         }
 
         return .unorderedList(items)
@@ -215,6 +224,24 @@ private struct BlockParser {
         }
 
         return .html(htmlLines.joined(separator: "\n"))
+    }
+
+    private mutating func parseFootnoteDefinition() -> MarkdownBlock? {
+        guard let marker = footnoteDefinitionMarker(in: lines[index]) else {
+            return nil
+        }
+
+        var definitionLines = [String(lines[index].dropFirst(marker.contentStart))]
+        index += 1
+
+        while index < lines.count, let continuation = footnoteContinuationLine(lines[index]) {
+            definitionLines.append(continuation)
+            index += 1
+        }
+
+        let body = definitionLines.joined(separator: "\n")
+        var nested = BlockParser(markdown: body)
+        return .footnoteDefinition(label: marker.label, blocks: nested.parseBlocks())
     }
 
     private mutating func parseParagraph() -> MarkdownBlock {
@@ -255,6 +282,7 @@ private struct BlockParser {
             trimmed.hasPrefix("```") ||
             trimmed.hasPrefix("~~~") ||
             stripBlockQuoteMarker(from: line) != nil ||
+            footnoteDefinitionMarker(in: line) != nil ||
             unorderedMarker(in: line) != nil ||
             orderedMarker(in: line) != nil ||
             isThematicBreak(line)
@@ -285,6 +313,25 @@ private struct BlockParser {
         return skipped + 2
     }
 
+    private func taskListItem(from item: String) -> (checkbox: MarkdownBlock.ListItem.Checkbox, content: String)? {
+        let marker: MarkdownBlock.ListItem.Checkbox
+        if item.hasPrefix("[ ]") {
+            marker = .unchecked
+        } else if item.hasPrefix("[x]") || item.hasPrefix("[X]") {
+            marker = .checked
+        } else {
+            return nil
+        }
+
+        let afterMarker = item.index(item.startIndex, offsetBy: 3)
+        guard afterMarker == item.endIndex || item[afterMarker].isWhitespace else {
+            return nil
+        }
+
+        let contentStart = item[afterMarker...].firstIndex { !$0.isWhitespace } ?? item.endIndex
+        return (marker, String(item[contentStart...]))
+    }
+
     private func orderedMarker(in line: String) -> (number: Int, contentStart: Int)? {
         let trimmed = line.trimmingLeadingSpaces()
         var digits = ""
@@ -309,6 +356,50 @@ private struct BlockParser {
 
         let skipped = line.count - trimmed.count
         return (Int(digits) ?? 1, skipped + digits.count + 2)
+    }
+
+    private func footnoteDefinitionMarker(in line: String) -> (label: String, contentStart: Int)? {
+        let leadingSpaces = line.prefix(while: { $0 == " " }).count
+        guard leadingSpaces <= 3 else {
+            return nil
+        }
+
+        let markerStart = line.index(line.startIndex, offsetBy: leadingSpaces)
+        guard line[markerStart...].hasPrefix("[^") else {
+            return nil
+        }
+
+        let labelStart = line.index(markerStart, offsetBy: 2)
+        guard let labelEnd = line[labelStart...].firstIndex(of: "]") else {
+            return nil
+        }
+
+        let label = String(line[labelStart ..< labelEnd])
+        guard !label.isEmpty else {
+            return nil
+        }
+
+        let colon = line.index(after: labelEnd)
+        guard colon < line.endIndex, line[colon] == ":" else {
+            return nil
+        }
+
+        var contentStart = line.index(after: colon)
+        while contentStart < line.endIndex, line[contentStart].isWhitespace {
+            contentStart = line.index(after: contentStart)
+        }
+
+        return (label, line.distance(from: line.startIndex, to: contentStart))
+    }
+
+    private func footnoteContinuationLine(_ line: String) -> String? {
+        if line.hasPrefix("    ") {
+            return String(line.dropFirst(4))
+        }
+        if line.hasPrefix("\t") {
+            return String(line.dropFirst())
+        }
+        return nil
     }
 
     private func isThematicBreak(_ line: String) -> Bool {

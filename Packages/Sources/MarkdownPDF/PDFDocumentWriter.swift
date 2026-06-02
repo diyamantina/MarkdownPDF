@@ -56,15 +56,15 @@ struct PDFDocumentWriter {
             return PDFPageResources(fonts: pageFonts + pageEmbeddedFonts, imageXObjects: pageXObjects)
         }
 
-        let headingDestinationNames = Set(pages.flatMap { page in
-            page.headingDestinations.map(\.name)
+        let knownDestinationNames = Set(pages.flatMap { page in
+            page.headingDestinations.map(\.name) + page.namedDestinations.map(\.name)
         })
         var pageRefs: [PDFSyntax.Reference] = []
         for page in pages {
             let contentData = Data(page.commands.utf8)
             let contentRef = builder.addPageContentStream(contentData)
             let annotationRefs = page.linkAnnotations.map {
-                builder.addLinkAnnotation($0, knownDestinations: headingDestinationNames)
+                builder.addLinkAnnotation($0, knownDestinations: knownDestinationNames)
             }
 
             let pageRef = builder.addDictionary(
@@ -81,7 +81,7 @@ struct PDFDocumentWriter {
             pageRefs.append(pageRef)
         }
 
-        let resolvedDestinations = pages.enumerated().flatMap { index, page in
+        let resolvedHeadingDestinations = pages.enumerated().flatMap { index, page in
             page.headingDestinations.map { destination in
                 PDFNamedDestinations.ResolvedDestination(
                     destination: destination,
@@ -89,7 +89,16 @@ struct PDFDocumentWriter {
                 )
             }
         }
-        let outlineRef = builder.addOutline(destinations: resolvedDestinations)
+        let resolvedNamedDestinations = pages.enumerated().flatMap { index, page in
+            page.namedDestinations.map { destination in
+                PDFNamedDestinations.ResolvedDestination(
+                    destination: destination,
+                    page: pageRefs[index],
+                )
+            }
+        }
+        let resolvedDestinations = resolvedHeadingDestinations + resolvedNamedDestinations
+        let outlineRef = builder.addOutline(destinations: resolvedHeadingDestinations)
         let names = resolvedDestinations.isEmpty
             ? nil
             : PDFNamedDestinations(destinations: resolvedDestinations).pdfDictionary

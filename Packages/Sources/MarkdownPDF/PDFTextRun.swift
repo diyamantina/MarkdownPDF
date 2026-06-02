@@ -8,6 +8,8 @@ struct PDFTextRun {
     var underline: Bool
     var strikethrough: Bool
     var linkDestination: String?
+    var baselineOffset: Double
+    var namedDestination: String?
 
     init(
         text: String,
@@ -17,6 +19,8 @@ struct PDFTextRun {
         underline: Bool = false,
         strikethrough: Bool = false,
         linkDestination: String? = nil,
+        baselineOffset: Double = 0,
+        namedDestination: String? = nil,
     ) {
         self.text = text
         self.font = font
@@ -25,6 +29,8 @@ struct PDFTextRun {
         self.underline = underline
         self.strikethrough = strikethrough
         self.linkDestination = linkDestination
+        self.baselineOffset = baselineOffset
+        self.namedDestination = namedDestination
     }
 
     func width(fontSet: PDFOptions.FontSet) -> Double {

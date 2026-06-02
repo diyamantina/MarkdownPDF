@@ -64,6 +64,166 @@ private struct TableOfContentsEntry: Equatable {
     var pageNumber: Int
 }
 
+private struct ResolvedFootnote {
+    var labelKey: String
+    var number: Int
+    var definitionDestinationName: String
+    var referenceDestinationName: String
+    var blocks: [MarkdownBlock]
+}
+
+private struct ResolvedFootnoteDocument {
+    var bodyBlocks: [MarkdownBlock]
+    var footnotes: [ResolvedFootnote]
+    var footnotesByLabelKey: [String: ResolvedFootnote]
+}
+
+private struct FootnoteResolver {
+    func resolve(_ document: MarkdownDocument) -> ResolvedFootnoteDocument {
+        let definitions = collectDefinitions(in: document.blocks)
+        let bodyBlocks = stripFootnoteDefinitions(from: document.blocks)
+        var orderedKeys: [String] = []
+        var seen = Set<String>()
+        for block in bodyBlocks {
+            collectReferences(in: block, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+        }
+
+        let footnotes = orderedKeys.enumerated().compactMap { index, key -> ResolvedFootnote? in
+            guard let blocks = definitions[key] else {
+                return nil
+            }
+            let number = index + 1
+            return ResolvedFootnote(
+                labelKey: key,
+                number: number,
+                definitionDestinationName: "fn-\(number)",
+                referenceDestinationName: "fnref-\(number)",
+                blocks: blocks,
+            )
+        }
+        let footnotesByLabelKey = Dictionary(uniqueKeysWithValues: footnotes.map { ($0.labelKey, $0) })
+        return ResolvedFootnoteDocument(
+            bodyBlocks: bodyBlocks,
+            footnotes: footnotes,
+            footnotesByLabelKey: footnotesByLabelKey,
+        )
+    }
+
+    private func collectDefinitions(in blocks: [MarkdownBlock]) -> [String: [MarkdownBlock]] {
+        var definitions: [String: [MarkdownBlock]] = [:]
+        for block in blocks {
+            collectDefinitions(in: block, into: &definitions)
+        }
+        return definitions
+    }
+
+    private func collectDefinitions(
+        in block: MarkdownBlock,
+        into definitions: inout [String: [MarkdownBlock]],
+    ) {
+        switch block {
+        case let .footnoteDefinition(label, blocks):
+            definitions[footnoteLabelKey(label)] = definitions[footnoteLabelKey(label)] ?? blocks
+        case let .blockQuote(blocks):
+            for block in blocks {
+                collectDefinitions(in: block, into: &definitions)
+            }
+        case let .unorderedList(items), let .orderedList(_, items):
+            for item in items.flatMap(\.blocks) {
+                collectDefinitions(in: item, into: &definitions)
+            }
+        case .heading, .paragraph, .codeBlock, .table, .thematicBreak, .html:
+            break
+        }
+    }
+
+    private func stripFootnoteDefinitions(from blocks: [MarkdownBlock]) -> [MarkdownBlock] {
+        blocks.compactMap(stripFootnoteDefinitions)
+    }
+
+    private func stripFootnoteDefinitions(from block: MarkdownBlock) -> MarkdownBlock? {
+        switch block {
+        case .footnoteDefinition:
+            return nil
+        case let .blockQuote(blocks):
+            let stripped = stripFootnoteDefinitions(from: blocks)
+            return stripped.isEmpty ? nil : .blockQuote(stripped)
+        case let .unorderedList(items):
+            return .unorderedList(items.map { item in
+                MarkdownBlock.ListItem(
+                    blocks: stripFootnoteDefinitions(from: item.blocks),
+                    checkbox: item.checkbox,
+                )
+            })
+        case let .orderedList(start, items):
+            return .orderedList(
+                start: start,
+                items: items.map { item in
+                    MarkdownBlock.ListItem(
+                        blocks: stripFootnoteDefinitions(from: item.blocks),
+                        checkbox: item.checkbox,
+                    )
+                },
+            )
+        case .heading, .paragraph, .codeBlock, .table, .thematicBreak, .html:
+            return block
+        }
+    }
+
+    private func collectReferences(
+        in block: MarkdownBlock,
+        definitions: [String: [MarkdownBlock]],
+        seen: inout Set<String>,
+        orderedKeys: inout [String],
+    ) {
+        switch block {
+        case let .heading(_, content), let .paragraph(content):
+            collectReferences(in: content, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+        case let .blockQuote(blocks):
+            for block in blocks {
+                collectReferences(in: block, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            }
+        case let .unorderedList(items), let .orderedList(_, items):
+            for item in items.flatMap(\.blocks) {
+                collectReferences(in: item, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            }
+        case let .table(table):
+            for item in table.headers + table.rows.flatMap(\.self) {
+                collectReferences(in: item, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            }
+        case .codeBlock, .thematicBreak, .html, .footnoteDefinition:
+            break
+        }
+    }
+
+    private func collectReferences(
+        in inlines: [MarkdownInline],
+        definitions: [String: [MarkdownBlock]],
+        seen: inout Set<String>,
+        orderedKeys: inout [String],
+    ) {
+        for inline in inlines {
+            switch inline {
+            case let .footnoteReference(label):
+                let key = footnoteLabelKey(label)
+                if definitions[key] != nil, seen.insert(key).inserted {
+                    orderedKeys.append(key)
+                }
+            case let .emphasis(children), let .strong(children), let .strikethrough(children):
+                collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            case let .link(children, _, _):
+                collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            case .text, .softBreak, .lineBreak, .code, .image:
+                break
+            }
+        }
+    }
+}
+
+private func footnoteLabelKey(_ label: String) -> String {
+    label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+}
+
 private struct TableColumnMetrics {
     var minimumWidth: Double
     var preferredWidth: Double
@@ -96,6 +256,8 @@ private struct Layout {
     var markedContentDepth = 0
     var y: Double
     var listDepth = 0
+    var footnotesByLabelKey: [String: ResolvedFootnote] = [:]
+    var registeredNamedDestinations = Set<String>()
 
     init(options: PDFOptions, assetsBaseURL: URL?) throws {
         self.options = options
@@ -123,21 +285,26 @@ private struct Layout {
         _ document: MarkdownDocument,
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
     ) throws {
+        let resolvedFootnotes = FootnoteResolver().resolve(document)
+        let bodyDocument = MarkdownDocument(blocks: resolvedFootnotes.bodyBlocks)
+        footnotesByLabelKey = resolvedFootnotes.footnotesByLabelKey
         let tableOfContentsInsertionIndex = tableOfContentsEntries.map {
-            $0.isEmpty ? nil : self.tableOfContentsInsertionIndex(for: document)
+            $0.isEmpty ? nil : self.tableOfContentsInsertionIndex(for: bodyDocument)
         } ?? nil
 
         if tableOfContentsInsertionIndex == 0, let tableOfContentsEntries {
             try renderTableOfContents(tableOfContentsEntries)
         }
 
-        for (index, block) in document.blocks.enumerated() {
-            keepHeadingWithNextBlock(block, isLast: index == document.blocks.count - 1)
+        for (index, block) in bodyDocument.blocks.enumerated() {
+            keepHeadingWithNextBlock(block, isLast: index == bodyDocument.blocks.count - 1)
             try render(block)
             if tableOfContentsInsertionIndex == index + 1, let tableOfContentsEntries {
                 try renderTableOfContents(tableOfContentsEntries)
             }
         }
+
+        try renderFootnoteSection(resolvedFootnotes.footnotes)
     }
 
     func pdfData() throws -> Data {
@@ -250,6 +417,8 @@ private struct Layout {
                 lineHeight: options.baseFontSize * 1.35,
             )
             y -= 9
+        case .footnoteDefinition:
+            break
         }
     }
 
@@ -362,6 +531,126 @@ private struct Layout {
         )
     }
 
+    private mutating func renderFootnoteSection(_ footnotes: [ResolvedFootnote]) throws {
+        guard !footnotes.isEmpty else {
+            return
+        }
+
+        let titleSize = options.baseFontSize * 0.95
+        let titleLineHeight = titleSize * 1.35
+        ensureSpace(titleLineHeight * 3)
+        if y < pageTopY - 1 {
+            y -= options.baseFontSize * 0.5
+        }
+
+        let artifact = beginArtifactIfTagged()
+        currentPage.drawLine(
+            x1: options.margins.left,
+            y1: y,
+            x2: options.margins.left + min(contentWidth, 120),
+            y2: y,
+            width: 0.5,
+            color: .gray,
+        )
+        endMarkedContentIfNeeded(artifact)
+        y -= titleLineHeight
+
+        let titleElement = beginStructureElement(.paragraph)
+        try drawRuns(
+            [PDFTextRun(text: "Footnotes", font: .helveticaBold, size: titleSize)],
+            x: options.margins.left,
+            y: y,
+        )
+        endStructureElement(titleElement)
+        y -= titleLineHeight
+
+        for footnote in footnotes {
+            try renderFootnote(footnote)
+        }
+    }
+
+    private mutating func renderFootnote(_ footnote: ResolvedFootnote) throws {
+        let size = options.baseFontSize * 0.86
+        let lineHeight = size * 1.32
+        let labelWidth = max(22, size * 2.2)
+        let bodyX = options.margins.left + labelWidth
+        let bodyWidth = max(1, contentWidth - labelWidth)
+        let blocks = footnote.blocks.isEmpty ? [.paragraph([])] : footnote.blocks
+        let firstRuns = flatten(footnoteInlines(for: blocks[0]), font: .helvetica, size: size)
+        let firstLines = try wrappedLines(firstRuns, maxWidth: bodyWidth)
+
+        ensureSpace(lineHeight)
+        addNamedDestination(footnote.definitionDestinationName, x: options.margins.left, y: y + size)
+        let element = beginStructureElement(.paragraph)
+        try drawRuns(
+            [
+                PDFTextRun(
+                    text: "\(footnote.number).",
+                    font: .helvetica,
+                    size: size,
+                    color: .link,
+                    underline: true,
+                    linkDestination: "#\(footnote.referenceDestinationName)",
+                ),
+            ],
+            x: options.margins.left,
+            y: y,
+            applyBidi: false,
+        )
+        if let firstLine = firstLines.first {
+            try drawRuns(firstLine, x: bodyX, y: y, maxWidth: bodyWidth)
+        }
+        y -= lineHeight
+
+        for line in firstLines.dropFirst() {
+            ensureSpace(lineHeight)
+            try drawRuns(line, x: bodyX, y: y, maxWidth: bodyWidth)
+            y -= lineHeight
+        }
+        endStructureElement(element)
+
+        for block in blocks.dropFirst() {
+            try renderFootnoteBlock(block, x: bodyX, maxWidth: bodyWidth, size: size, lineHeight: lineHeight)
+        }
+        y -= max(2, size * 0.35)
+    }
+
+    private mutating func renderFootnoteBlock(
+        _ block: MarkdownBlock,
+        x: Double,
+        maxWidth: Double,
+        size: Double,
+        lineHeight: Double,
+    ) throws {
+        let element = beginStructureElement(.paragraph)
+        defer { endStructureElement(element) }
+        try drawWrapped(
+            flatten(footnoteInlines(for: block), font: .helvetica, size: size),
+            x: x,
+            maxWidth: maxWidth,
+            lineHeight: lineHeight,
+        )
+    }
+
+    private func footnoteInlines(for block: MarkdownBlock) -> [MarkdownInline] {
+        switch block {
+        case let .heading(_, content), let .paragraph(content):
+            content
+        case let .codeBlock(_, code):
+            [.code(code)]
+        case let .html(html):
+            [.text(html)]
+        case let .blockQuote(blocks):
+            [.text(blocks.map(plainText).joined(separator: " "))]
+        case let .unorderedList(items), let .orderedList(_, items):
+            [.text(items.flatMap(\.blocks).map(plainText).joined(separator: " "))]
+        case let .table(table):
+            [.text((table.headers + table.rows.flatMap(\.self)).map { plainText($0) }.joined(separator: " "))]
+        case .thematicBreak, .footnoteDefinition:
+            []
+        }
+    }
+
     private mutating func renderList(
         items: [MarkdownBlock.ListItem],
         start: Int?,
@@ -390,6 +679,10 @@ private struct Layout {
                 )
                 endStructureElement(labelElement)
                 number += 1
+            } else if let checkbox = item.checkbox {
+                let labelElement = beginStructureElement(.listLabel)
+                drawTaskCheckbox(checkbox, x: options.margins.left, baselineY: y)
+                endStructureElement(labelElement)
             }
             let savedLeft = options.margins.left
             options.margins.left += 24
@@ -402,6 +695,37 @@ private struct Layout {
             endStructureElement(itemElement)
         }
         y -= listTrailingSpacing
+    }
+
+    private mutating func drawTaskCheckbox(
+        _ checkbox: MarkdownBlock.ListItem.Checkbox,
+        x: Double,
+        baselineY: Double,
+    ) {
+        let size = max(7, options.baseFontSize * 0.72)
+        let boxX = x + max(0, (16 - size) / 2)
+        let boxY = baselineY - size * 0.2
+        let marked = beginMarkedContentForCurrentElement()
+        currentPage.drawRectangle(
+            x: boxX,
+            y: boxY,
+            width: size,
+            height: size,
+            stroke: .black,
+            fill: nil,
+        )
+
+        if checkbox == .checked {
+            currentPage.drawPolyline(
+                points: [
+                    PDFPageCanvas.Point(x: boxX + size * 0.2, y: boxY + size * 0.48),
+                    PDFPageCanvas.Point(x: boxX + size * 0.43, y: boxY + size * 0.22),
+                    PDFPageCanvas.Point(x: boxX + size * 0.82, y: boxY + size * 0.78),
+                ],
+                width: 1.0,
+            )
+        }
+        endMarkedContentIfNeeded(marked)
     }
 
     private mutating func renderCodeBlock(_ code: String, info: String? = nil) throws {
@@ -1952,6 +2276,30 @@ private struct Layout {
                     strikethrough: strikethrough,
                     linkDestination: linkDestination,
                 ))
+            case let .footnoteReference(label):
+                if let footnote = footnotesByLabelKey[footnoteLabelKey(label)] {
+                    runs.append(PDFTextRun(
+                        text: "\(footnote.number)",
+                        font: font,
+                        size: size * 0.72,
+                        color: .link,
+                        underline: false,
+                        strikethrough: strikethrough,
+                        linkDestination: "#\(footnote.definitionDestinationName)",
+                        baselineOffset: size * 0.38,
+                        namedDestination: footnote.referenceDestinationName,
+                    ))
+                } else {
+                    runs.append(PDFTextRun(
+                        text: "[^\(label)]",
+                        font: font,
+                        size: size,
+                        color: color,
+                        underline: underline,
+                        strikethrough: strikethrough,
+                        linkDestination: linkDestination,
+                    ))
+                }
             }
         }
 
@@ -2241,6 +2589,9 @@ private struct Layout {
 
         var cursor = x
         for run in runs {
+            if let destination = run.namedDestination {
+                addNamedDestination(destination, x: cursor, y: y + run.baselineOffset + run.size)
+            }
             try currentPage.drawTextRun(
                 run,
                 x: cursor,
@@ -2320,6 +2671,8 @@ private struct Layout {
             && run.underline == template.underline
             && run.strikethrough == template.strikethrough
             && run.linkDestination == nil
+            && run.baselineOffset == template.baselineOffset
+            && run.namedDestination == nil
     }
 
     private func positionedBidiRuns(
@@ -2521,6 +2874,22 @@ private struct Layout {
         )
     }
 
+    private mutating func addNamedDestination(_ name: String, x: Double, y: Double) {
+        guard registeredNamedDestinations.insert(name).inserted else {
+            return
+        }
+
+        currentPage.addNamedDestination(
+            PDFHeadingDestination(
+                name: name,
+                title: name,
+                level: 6,
+                x: x,
+                y: min(options.pageSize.height, y),
+            ),
+        )
+    }
+
     private func plainText(_ inlines: [MarkdownInline]) -> String {
         inlines.map(plainText).joined()
     }
@@ -2537,6 +2906,29 @@ private struct Layout {
             plainText(children)
         case let .image(alt, source, _):
             alt.isEmpty ? source : alt
+        case let .footnoteReference(label):
+            "[^\(label)]"
+        }
+    }
+
+    private func plainText(_ block: MarkdownBlock) -> String {
+        switch block {
+        case let .heading(_, content), let .paragraph(content):
+            plainText(content)
+        case let .blockQuote(blocks):
+            blocks.map(plainText).joined(separator: " ")
+        case let .unorderedList(items), let .orderedList(_, items):
+            items.flatMap(\.blocks).map(plainText).joined(separator: " ")
+        case let .codeBlock(_, code):
+            code
+        case let .table(table):
+            (table.headers + table.rows.flatMap(\.self)).map { plainText($0) }.joined(separator: " ")
+        case .thematicBreak:
+            ""
+        case let .html(html):
+            html
+        case let .footnoteDefinition(_, blocks):
+            blocks.map(plainText).joined(separator: " ")
         }
     }
 
@@ -2811,6 +3203,8 @@ private extension PDFTextRun {
             underline: underline,
             strikethrough: strikethrough,
             linkDestination: linkDestination,
+            baselineOffset: baselineOffset,
+            namedDestination: namedDestination,
         )
     }
 }

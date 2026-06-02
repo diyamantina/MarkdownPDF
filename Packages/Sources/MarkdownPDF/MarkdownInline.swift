@@ -10,4 +10,5 @@ public enum MarkdownInline: Equatable, Sendable {
     case strikethrough([MarkdownInline])
     case link(children: [MarkdownInline], destination: String, title: String?)
     case image(alt: String, source: String, title: String?)
+    case footnoteReference(label: String)
 }

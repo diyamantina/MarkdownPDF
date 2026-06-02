@@ -1,7 +1,8 @@
 # GFM footnotes and task-list checkboxes
 
-Date: 2026-06-02. Issue: #129. Status: research only. No renderer code, no parser
-tables, no public API added by this note.
+Date: 2026-06-02. Issue: #129. Status: implementation guidance and source
+references. The #129 implementation uses document-end footnotes and static
+vector task-list checkboxes in the portable Swift renderer.
 
 Scope: this note defines how MarkdownPDF can add two GitHub Flavored Markdown
 extensions, footnotes (`[^id]`) and task-list checkboxes (`- [ ]` / `- [x]`), as
@@ -51,9 +52,9 @@ The colon is mandatory; identifiers are arbitrary labels, not required numeric.
 Footnote rendering rules to mirror (from observed GitHub output): markers are
 renumbered to a document-order sequence starting at 1, regardless of label text;
 only referenced definitions are emitted; the bottom section lists definitions in
-order of first reference; each definition ends with one back-reference arrow per
-reference site, linking to the marker. Multiple references to one label produce
-multiple back-links.
+order of first reference. MarkdownPDF v1 links each definition number back to
+the first reference site, which satisfies issue #129. Multiple back-links for
+repeated references remain a compatible extension point.
 
 ## Model
 
@@ -71,7 +72,7 @@ The repo block model is `MarkdownBlock` (`heading`, `paragraph`, `blockQuote`,
   `enum Checkbox { case checked, unchecked }`, populated only when the GFM marker
   is matched, otherwise `nil` (preserves CommonMark behavior).
 - Footnotes: add inline `case footnoteReference(label: String)` and a block
-  `case footnoteDefinition(label: String, children: [MarkdownBlock])`. This
+  `case footnoteDefinition(label: String, blocks: [MarkdownBlock])`. This
   matches swift-markdown's `FootnoteReference`/`FootnoteDefinition`, comrak's
   `FootnoteReference`/`FootnoteDefinition`, and pulldown-cmark's
   `FootnoteReference` + `Tag::FootnoteDefinition`. Keep label text as authored;
@@ -92,13 +93,11 @@ The engine already has named destinations (`PDFNamedDestinations`,
   (smaller font, raised baseline via the existing `PDFTextRun` positioning),
   wrapped in a `PDFLinkAnnotation` targeting `.destination(name: "fn-<n>")`.
   Define a named destination `fn-<n>` at the matching definition row. Also
-  register `fnref-<n>-<k>` destinations at each marker site for back-links.
+  register `fnref-<n>` at the first marker site for the definition backlink.
 - Footnote section: after the last body block, emit a thematic-break-style
-  separator then a definition list. Each row: the number, the definition's
-  rendered blocks, then one or more back-reference arrows. Each arrow is a glyph
-  (U+21A9) wrapped in a `PDFLinkAnnotation` targeting
-  `.destination(name: "fnref-<n>-<k>")`. Same destination+annotation machinery
-  as heading links; no new PDF object types.
+  separator then a definition list. Each row starts with the number linked back
+  to `.destination(name: "fnref-<n>")`, the first marker site. Same
+  destination+annotation machinery as heading links; no new PDF object types.
 - Checkbox glyph: render in the list item's marker column instead of (or
   alongside) the bullet. Two portable options: (a) draw ballot glyphs from the
   embedded font (U+2610 unchecked, U+2611/U+2612 checked) when the subset
@@ -133,7 +132,7 @@ Follow the existing witness stack (see `complex-script-fixture-witness-policy.md
 Per fixture that changes PDF bytes:
 
 - `qpdf` structural validation, no warnings.
-- Swift structural checks: every `fn-<n>` and `fnref-<n>-<k>` destination
+- Swift structural checks: every `fn-<n>` and `fnref-<n>` destination
   resolves to a real page object; every footnote/back-link annotation target name
   exists; no dangling `/Dest`.
 - Poppler `pdftotext`: footnote markers extract as their numbers; definition text
@@ -144,8 +143,8 @@ Per fixture that changes PDF bytes:
 - MuPDF structured text: marker and arrow quads do not overlap surrounding text.
 - macOS and Linux both run the same suite.
 
-Fixtures must cover: single ref, repeated refs to one label (multiple
-back-arrows), out-of-order definitions, unreferenced definition (dropped),
+Fixtures must cover: single ref, repeated refs to one label with first-reference
+backlink, out-of-order definitions, unreferenced definition (dropped),
 dangling reference (literal fallback), nested task items, mixed
 checked/unchecked, and a non-task `[ ]` that must stay literal. No font binaries
 committed; the box-as-vector fallback path must have its own fixture.
@@ -157,9 +156,9 @@ committed; the box-as-vector fallback path must have its own fixture.
    behavior otherwise.
 3. Parser: footnote reference inline + definition block, no numbering yet.
 4. Resolution pass: order, renumber, drop unreferenced, classify dangling.
-5. Renderer: superscript marker + destination/link reuse; bottom section with
-   back-arrows.
-6. Renderer: checkbox marker column with glyph and vector fallback.
+5. Renderer: superscript marker + destination/link reuse; document-end section
+   with a backlink to the first marker.
+6. Renderer: checkbox marker column with vector square plus check stroke.
 7. Witness fixtures and macOS+Linux suite per witness policy.
 
 ## Platform notes

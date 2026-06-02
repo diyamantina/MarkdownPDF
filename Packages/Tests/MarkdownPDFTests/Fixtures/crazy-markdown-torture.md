@@ -7,7 +7,7 @@ Iris Rowan, Niko Vale, Priya Sen
 This manuscript is synthetic and public. It combines dense prose, nested-looking
 lists, multiple fenced code languages, wide tables, block quotes, local images,
 remote image fallback, reference-style image syntax, supported Mermaid,
-unsupported Mermaid, footnote-like notes, raw HTML fallback, very long lines,
+unsupported Mermaid, footnotes, raw HTML fallback, very long lines,
 and non-ASCII replacement pressure.
 
 The goal is not to prove new Markdown features by declaration. The goal is to
@@ -163,15 +163,16 @@ pie title Crazy chart
 The supported pie chart must remain extractable text and must not leak raw
 Mermaid source.
 
-## 10. Raw HTML and Footnote-like Notes
+## 10. Raw HTML and Footnotes
 
 <section data-fixture="crazy">Raw HTML fallback for the crazy fixture should remain visible monospaced text.</section>
 
 The paragraph after raw HTML checks normal flow recovery. A footnote marker
-[^density] appears here as ordinary text because footnote rendering is not part
-of the current portable feature set.
+[^density] appears here as a linked superscript marker in the current portable
+feature set.
 
-[^density]: Footnote-like note remains visible text and must not be dropped.
+[^density]: Footnote note remains visible in the document-end footnote section.
+    It keeps the hostile fixture dense enough for MuPDF glyph-count guards.
 
 ## 11. Non-ASCII Replacement
 

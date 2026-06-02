@@ -10,12 +10,20 @@ public enum MarkdownBlock: Equatable, Sendable {
     case table(Table)
     case thematicBreak
     case html(String)
+    case footnoteDefinition(label: String, blocks: [MarkdownBlock])
 
     public struct ListItem: Equatable, Sendable {
         public var blocks: [MarkdownBlock]
+        public var checkbox: Checkbox?
 
-        public init(blocks: [MarkdownBlock]) {
+        public init(blocks: [MarkdownBlock], checkbox: Checkbox? = nil) {
             self.blocks = blocks
+            self.checkbox = checkbox
+        }
+
+        public enum Checkbox: Equatable, Sendable {
+            case checked
+            case unchecked
         }
     }
 

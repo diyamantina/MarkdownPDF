@@ -64,4 +64,65 @@ struct MarkdownParserTests {
             .link(children: [.text("ACME [Labs]")], destination: "https://example.com/a%29", title: nil),
         ])
     }
+
+    @Test("Parses GFM footnote references and definitions")
+    func parsesGFMFootnotes() {
+        let document = MarkdownParser().parse("""
+        Alpha[^note] and missing [^missing].
+
+        [^note]: Definition with **strong** text.
+            Continuation line.
+        """)
+
+        #expect(document.blocks.count == 2)
+        guard case let .paragraph(inlines) = document.blocks.first else {
+            Issue.record("Expected a paragraph with footnote references")
+            return
+        }
+        #expect(inlines == [
+            .text("Alpha"),
+            .footnoteReference(label: "note"),
+            .text(" and missing "),
+            .footnoteReference(label: "missing"),
+            .text("."),
+        ])
+
+        guard case let .footnoteDefinition(label, blocks) = document.blocks.last else {
+            Issue.record("Expected a footnote definition")
+            return
+        }
+        #expect(label == "note")
+        #expect(blocks == [
+            .paragraph([
+                .text("Definition with "),
+                .strong([.text("strong")]),
+                .text(" text."),
+                .softBreak,
+                .text("Continuation line."),
+            ]),
+        ])
+    }
+
+    @Test("Parses GFM task-list checkboxes")
+    func parsesGFMTaskLists() {
+        let document = MarkdownParser().parse("""
+        - [ ] Open item
+        - [x] Done item
+        - [X] Also done
+        - [ ]not a task
+        """)
+
+        guard case let .unorderedList(items) = document.blocks.first else {
+            Issue.record("Expected an unordered list")
+            return
+        }
+
+        #expect(items.map(\.checkbox) == [.unchecked, .checked, .checked, nil])
+        #expect(items.map(\.blocks) == [
+            [.paragraph([.text("Open item")])],
+            [.paragraph([.text("Done item")])],
+            [.paragraph([.text("Also done")])],
+            [.paragraph([.text("[ ]not a task")])],
+        ])
+    }
 }
