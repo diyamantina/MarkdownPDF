@@ -450,6 +450,47 @@ struct FixtureTests {
         }
     #endif
 
+    @Test("Math formula corpus typesets the supported subset and falls back to visible source")
+    func mathFormulaCorpusRendersSubsetAndFallback() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(mathTypesetting: .enabled),
+        ).render(markdown: fixture(named: "math-formulas.md"))
+        let inspector = PDFInspector(data)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-formulas")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "math-formulas-text")
+        let mupdf = try PDFValidation.mutoolStructuredText(data: data, name: "math-formulas-mupdf")
+        let extracted = normalizedExtractedText(textResult.output)
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try #require(mupdf.exitCode == 0, "mutool structured text failed:\n\(mupdf.output)")
+        let structuredText = try MuPDFStructuredText(xml: mupdf.output)
+        let visibleGlyphCount = structuredText.glyphs.count(where: { !$0.isWhitespace })
+
+        // Per-glyph quad geometry is witnessed on controlled formulas in
+        // rendersOptInTeXMathSubset. This corpus witnesses breadth: structural
+        // validity, readable extraction, the visible-source fallback, typeset
+        // rules, and nonblank output across the supported subset.
+
+        // Prose around the formulas survives extraction.
+        #expect(extracted.contains("golden ratio"))
+        // Supported constructs emit a readable linearization for extraction.
+        #expect(extracted.contains("frac("), "Unexpected extraction:\n\(textResult.output)")
+        #expect(extracted.contains("sqrt("), "Unexpected extraction:\n\(textResult.output)")
+        #expect(extracted.contains("sum_"), "Unexpected extraction:\n\(textResult.output)")
+        // Unsupported constructs render as visible source rather than being dropped.
+        #expect(
+            streamText.contains("begin{pmatrix}") || extracted.contains("begin{pmatrix}"),
+            "Unsupported math should fall back to visible source",
+        )
+        // Typeset fraction bars and radical rules emit rule rectangles.
+        #expect(streamText.components(separatedBy: " re f").count - 1 >= 5)
+        #expect(visibleGlyphCount >= 200)
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+    }
+
     private func demoCVFixture() throws -> String {
         try fixture(named: "democv.md")
     }
