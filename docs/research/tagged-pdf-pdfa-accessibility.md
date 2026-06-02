@@ -235,9 +235,10 @@ The portable renderer now has two separate opt-in paths:
 - `PDFOptions.conformance == .pdfUA1AndPDFA2A` combines both profiles and adds
   the PDF/UA XMP extension schema that PDF/A requires.
 
-The remaining archival work is broader fixture coverage beyond the focused
-profile witness, including tagged RTL/CJK documents and documents with richer
-images or annotations.
+The profile witness stack now covers Latin PDF/UA, combined PDF/UA plus PDF/A,
+tagged RTL PDF/UA logical order, and tagged CJK plus diacritic combined
+PDF/UA plus PDF/A logical order. Remaining archival hardening is broader
+fixture coverage for documents with richer images or annotations.
 
 ## Platform notes
 

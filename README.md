@@ -564,7 +564,7 @@ flowchart TD
     H4["#145<br/>Staged-research shortlist epic<br/>Active"]
     H4A["#126<br/>Native charts<br/>Done"]
     H4B["#127<br/>Pure-Swift DEFLATE<br/>Done"]
-    H4C["#128<br/>Tagged PDF and PDF/A<br/>Active"]
+    H4C["#128<br/>Tagged PDF and PDF/A<br/>Review"]
     H4D["#129<br/>Footnotes and tasks<br/>Next"]
     H4E["#130<br/>Theming model<br/>Todo"]
     H4F["#131<br/>Math typesetting<br/>Todo"]
@@ -589,7 +589,7 @@ flowchart TD
     class H4 active;
     class H4A done;
     class H4B done;
-    class H4C active;
+    class H4C review;
     class H4D next;
     class H4E,H4F,H4G todo;
     class H3 todo;

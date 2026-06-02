@@ -178,6 +178,110 @@ struct PDFTaggedContentTests {
         #expect(veraPDFUA.output.contains("\"compliant\" : true"))
     }
 
+    @Test("Tagged RTL profile preserves logical reading order")
+    func taggedRTLProfilePreservesLogicalReadingOrder() throws {
+        let hebrewWord = "\u{05D0}\u{05D1}\u{05D2}\u{05D3}"
+        let arabicWord = "\u{0633}\u{0644}\u{0627}\u{0645}"
+        let arabicIndic12 = "\u{0661}\u{0662}"
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .rtlWitness, includeGlyphOutlines: true)
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Tagged RTL Fixture")
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 320, height: 260),
+                margins: PDFOptions.Margins(top: 24, right: 24, bottom: 24, left: 24),
+                embeddedFonts: .allRoles(source),
+                title: "Tagged RTL Logical Order",
+                conformance: .pdfUA1,
+            ),
+        ).render(markdown: """
+        # \(hebrewWord) RTL
+
+        \(hebrewWord) (123) CODE \(arabicWord) \(arabicIndic12) RTLPARATOKENA.
+
+        > \(arabicWord) (123) \(hebrewWord) QUOTETOKENA.
+        """)
+        let inspector = PDFInspector(data)
+        let streamBodies = inspector.streams.map(\.body).joined(separator: "\n")
+
+        try PDFValidation.writeArtifact(data, name: "tagged-rtl-logical-order.pdf")
+        #expect(inspector.canonicalStructureIssues().isEmpty)
+        #expect(inspector.text.contains("/MarkInfo << /Marked true >>"))
+        #expect(inspector.text.contains("/StructTreeRoot"))
+        #expect(inspector.text.contains("/S /BlockQuote"))
+        #expect(streamBodies.contains("/H1 << /MCID 0 >> BDC"))
+        #expect(streamBodies.contains("/P << /MCID 1 >> BDC"))
+        #expect(streamBodies.contains("/P << /MCID 2 >> BDC"))
+
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "tagged-rtl-logical-order-qpdf")
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let veraPDF = try PDFValidation.veraPDF(data: data, name: "tagged-rtl-logical-order-verapdf", flavour: "ua1")
+        try #require(veraPDF.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDF.output)")
+        #expect(veraPDF.output.contains("\"compliant\" : true"))
+        let extractedText = try PDFValidation.pdftotextRaw(url: PDFValidation.temporaryPDF(
+            name: "tagged-rtl-logical-order-text",
+            data: data,
+        ))
+        try #require(extractedText.exitCode == 0, "pdftotext -raw failed:\n\(extractedText.output)")
+        try PDFValidation.writeTextArtifact(extractedText.output, name: "tagged-rtl-logical-order/raw-text.txt")
+        let compactText = compactLogicalExtractedText(extractedText.output)
+
+        #expect(compactText.contains("\(hebrewWord)(123)CODE\(arabicWord)\(arabicIndic12)RTLPARATOKENA."))
+        #expect(compactText.contains("\(arabicWord)(123)\(hebrewWord)QUOTETOKENA."))
+    }
+
+    @Test("Tagged CJK profile preserves logical reading order")
+    func taggedCJKProfilePreservesLogicalReadingOrder() throws {
+        let fontData = SyntheticTrueTypeFont.data(
+            cmapFormat: 12,
+            glyphProfile: .cjkDiacriticWitness,
+            includeGlyphOutlines: true,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Tagged CJK Fixture")
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 280, height: 260),
+                margins: PDFOptions.Margins(top: 24, right: 24, bottom: 24, left: 24),
+                baseFontSize: 10,
+                embeddedFonts: .allRoles(source),
+                title: "Tagged CJK Logical Order",
+                conformance: .pdfUA1AndPDFA2A,
+            ),
+        ).render(markdown: """
+        # 漢字語
+
+        漢字語 仮名。 Latin x 12.
+
+        漢\u{0301}字語 仮名 漢字語。
+        """)
+        let inspector = PDFInspector(data)
+        let streamBodies = inspector.streams.map(\.body).joined(separator: "\n")
+
+        try PDFValidation.writeArtifact(data, name: "tagged-cjk-logical-order.pdf")
+        #expect(inspector.canonicalStructureIssues().isEmpty)
+        #expect(inspector.text.contains("/MarkInfo << /Marked true >>"))
+        #expect(inspector.text.contains("/StructTreeRoot"))
+        #expect(inspector.text.contains("/OutputIntents [<< /Type /OutputIntent /S /GTS_PDFA1"))
+        #expect(streamBodies.contains("/H1 << /MCID 0 >> BDC"))
+        #expect(streamBodies.contains("/P << /MCID 1 >> BDC"))
+        #expect(streamBodies.contains("/P << /MCID 2 >> BDC"))
+
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "tagged-cjk-logical-order-qpdf")
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let veraPDFA = try PDFValidation.veraPDF(data: data, name: "tagged-cjk-logical-order-pdfa", flavour: "2a")
+        try #require(veraPDFA.exitCode == 0, "veraPDF PDF/A-2a failed:\n\(veraPDFA.output)")
+        #expect(veraPDFA.output.contains("\"compliant\" : true"))
+        let veraPDFUA = try PDFValidation.veraPDF(data: data, name: "tagged-cjk-logical-order-pdfua", flavour: "ua1")
+        try #require(veraPDFUA.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDFUA.output)")
+        #expect(veraPDFUA.output.contains("\"compliant\" : true"))
+        let extractedText = try PDFValidation.pdftotext(data: data, name: "tagged-cjk-logical-order-text")
+        try #require(extractedText.exitCode == 0, "pdftotext failed:\n\(extractedText.output)")
+        try PDFValidation.writeTextArtifact(extractedText.output, name: "tagged-cjk-logical-order/text.txt")
+        let compactText = extractedText.output.filter { !$0.isWhitespace }
+
+        #expect(compactText.contains("漢字語仮名。Latinx12."))
+        #expect(compactText.contains("漢\u{0301}字語仮名漢字語。"))
+    }
+
     @Test("PDF/UA-1 profile requires a document title")
     func pdfUA1ProfileRequiresDocumentTitle() throws {
         let renderer = MarkdownPDFRenderer(options: PDFOptions(conformance: .pdfUA1))
@@ -273,5 +377,27 @@ struct PDFTaggedContentTests {
         #expect(!inspector.text.contains("/StructTreeRoot"))
         #expect(!inspector.text.contains("/StructParents"))
         #expect(!inspector.streams.map(\.body).joined(separator: "\n").contains(" BDC"))
+    }
+
+    private func compactLogicalExtractedText(_ text: String) -> String {
+        text.unicodeScalars
+            .filter { scalar in
+                !CharacterSet.whitespacesAndNewlines.contains(scalar)
+                    && !isBidiFormattingScalar(scalar)
+            }
+            .map(String.init)
+            .joined()
+    }
+
+    private func isBidiFormattingScalar(_ scalar: UnicodeScalar) -> Bool {
+        switch scalar.value {
+        case 0x061C,
+             0x200E ... 0x200F,
+             0x202A ... 0x202E,
+             0x2066 ... 0x2069:
+            true
+        default:
+            false
+        }
     }
 }

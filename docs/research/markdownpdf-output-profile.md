@@ -265,6 +265,9 @@ PDF/A-2a path emits an sRGB output intent, `pdfaid` XMP identification, and a
 deterministic trailer `/ID`; the combined path also includes the PDF/UA XMP
 extension schema required by PDF/A.
 
+The tagged witness suite validates RTL PDF/UA and CJK plus diacritic combined
+PDF/UA plus PDF/A fixtures with veraPDF, qpdf, and Poppler text extraction.
+
 ## Tables
 
 Tables render as portable PDF page content: stroked cell rectangles, optional
