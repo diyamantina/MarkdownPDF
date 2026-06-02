@@ -1286,6 +1286,218 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("Screenshot source-code regression witness covers spacing, strokes, and images")
+    func screenshotSourceCodeRegressionWitnessCoversSpacingStrokesAndImages() throws {
+        let assetsBaseURL = try TestImageAssets.directoryWithChartPNG()
+        let longIdentifier = "ScreenshotRegressionWitnessLongIdentifier"
+            + String(repeating: "Segment", count: 12)
+        let repeatedRuns = (1 ... 5).map { index in
+            """
+            ```swift
+            struct ScreenshotRegressionSection\(index) {
+                let identifier = "\(longIdentifier)\(index)"
+                let width = max(columnWidth, measuredGlyphAdvance + \(index))
+                let ScreenshotCodeEndToken\(index) = "code-end-\(index)"
+            }
+            ```
+
+            > ScreenshotQuoteStartToken\(index) quoted source analysis starts after code
+            > and must remain clear of the previous code background.
+            > > NestedQuoteStartToken\(index) nested quote pressure also stays indented.
+            > ScreenshotQuoteEndToken\(index)
+
+            ScreenshotAfterQuoteParagraph\(index) resumes after the quote with readable spacing.
+
+            ### ScreenshotAfterQuoteHeadingToken\(index)
+
+            ScreenshotAfterHeadingParagraph\(index) follows the heading without crowding.
+            """
+        }.joined(separator: "\n\n")
+        let markdown = """
+        # Screenshot Source Code Regression Witness
+
+        This witness reproduces the screenshot-reported source-code flow with
+        dense code, block quotes, headings, local figures, remote image fallback,
+        and hostile reference-style image syntax.
+
+        ```metal
+        struct DirectTransition {
+            float4 payload;
+            float3 measuredNormal;
+            let DirectCodeEndToken = "direct-code-end";
+        };
+        ```
+
+        > DirectQuoteStartToken source comments must start below the code block.
+        > DirectNestedQuoteToken nested source notes keep indentation only.
+        > DirectQuoteEndToken
+
+        ## DirectAfterQuoteHeadingToken
+
+        DirectAfterHeadingParagraph begins after the quote-to-heading transition.
+
+        \(repeatedRuns)
+
+        ## Local and Remote Image Pressure
+
+        The same local chart is placed twice. The PDF should reuse one image
+        resource and draw it twice in normal document flow.
+
+        ![Screenshot local chart first](local-chart.png)
+
+        AfterFirstLocalImageParagraph proves the first image consumed vertical space.
+
+        ![Screenshot local chart second](local-chart.png)
+
+        AfterSecondLocalImageParagraph proves repeated image placement consumes space.
+
+        Remote image fetching is outside the portable profile and must remain
+        visible fallback text.
+
+        ![Remote regression figure](https://example.com/source-regression.png)
+
+        AfterRemoteImageParagraph follows the remote fallback text.
+
+        Reference-style image syntax is hostile input for the current parser and
+        must stay visible as text instead of disappearing or becoming an image.
+
+        ![Reference style regression chart][screenshot-chart]
+
+        [screenshot-chart]: local-chart.png "Reference style regression fallback text"
+
+        AfterUnsupportedImageSyntaxParagraph ends the manuscript pressure case.
+        """
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 360, height: 460),
+                margins: PDFOptions.Margins(top: 36, right: 34, bottom: 36, left: 34),
+                baseFontSize: 10,
+                title: "Screenshot Source Code Regression Witness",
+            ),
+        ).render(markdown: markdown, assetsBaseURL: assetsBaseURL)
+        let url = try PDFValidation.temporaryPDF(name: "screenshot-source-code-regressions", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+
+        #expect(pageCount >= 5)
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+        #expect(
+            inspector.canonicalStructureIssues().isEmpty,
+            "Screenshot source-code witness PDF structure issues:\n\(inspector.canonicalStructureIssues().joined(separator: "\n"))",
+        )
+        #expect(imageXObjectCount(in: inspector.text) == 1)
+        #expect(imageDrawOperatorCount(in: streamText) == 2)
+
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        try PDFValidation.writeTextArtifact(Self.screenshotSourceCodeRegressionManifest, name: "screenshot-source-code-regressions/README.txt")
+        try PDFValidation.writeArtifact(data, name: "screenshot-source-code-regressions.pdf")
+
+        let verticalRuleLines = inspector.streams.flatMap { stream in
+            verticalRuleOperatorLines(in: stream.body)
+        }
+        #expect(
+            verticalRuleLines.isEmpty,
+            "Screenshot source-code witness emitted unexpected vertical rule operators:\n\(verticalRuleLines.joined(separator: "\n"))",
+        )
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "screenshot-source-code-regressions/text.txt")
+        let normalizedText = normalizedExtractedText(textResult.output)
+        #expect(normalizedText.contains("DirectCodeEndToken"))
+        #expect(normalizedText.contains("DirectQuoteStartToken"))
+        #expect(normalizedText.contains("DirectAfterQuoteHeadingToken"))
+        #expect(normalizedText.contains("ScreenshotCodeEndToken5"))
+        #expect(normalizedText.contains("ScreenshotQuoteStartToken5"))
+        #expect(normalizedText.contains("ScreenshotAfterQuoteHeadingToken5"))
+        #expect(normalizedText.contains("[Remote image: Remote regression figure]"))
+        #expect(normalizedText.contains("Reference style regression chart"))
+        #expect(normalizedText.contains("Reference style regression fallback text"))
+        #expect(normalizedText.contains("AfterUnsupportedImageSyntaxParagraph"))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "screenshot-source-code-regressions/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+
+        #expect(popplerLayout.pages.count == pageCount)
+        #expect(popplerLayout.words.count > 420)
+        #expect(
+            popplerIssues.isEmpty,
+            "Screenshot source-code Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let directCodeEnd = try word("DirectCodeEndToken", in: popplerLayout)
+        let directQuoteStart = try word("DirectQuoteStartToken", in: popplerLayout)
+        let directQuoteEnd = try word("DirectQuoteEndToken", in: popplerLayout)
+        let directHeading = try word("DirectAfterQuoteHeadingToken", in: popplerLayout)
+        let firstCodeEnd = try word("ScreenshotCodeEndToken1", in: popplerLayout)
+        let firstQuoteStart = try word("ScreenshotQuoteStartToken1", in: popplerLayout)
+        let firstQuoteEnd = try word("ScreenshotQuoteEndToken1", in: popplerLayout)
+        let firstAfterParagraph = try word("ScreenshotAfterQuoteParagraph1", in: popplerLayout)
+        let firstHeading = try word("ScreenshotAfterQuoteHeadingToken1", in: popplerLayout)
+        let lastCodeEnd = try word("ScreenshotCodeEndToken5", in: popplerLayout)
+        let lastQuoteStart = try word("ScreenshotQuoteStartToken5", in: popplerLayout)
+        let afterRemoteImage = try word("AfterRemoteImageParagraph", in: popplerLayout)
+        let afterUnsupportedImage = try word("AfterUnsupportedImageSyntaxParagraph", in: popplerLayout)
+
+        expectVerticalGap(after: directCodeEnd, before: directQuoteStart, minimum: 10, context: "direct code block to quote")
+        expectVerticalGap(after: directQuoteEnd, before: directHeading, minimum: 8, context: "direct quote to heading")
+        expectVerticalGap(after: firstCodeEnd, before: firstQuoteStart, minimum: 10, context: "repeated code block to quote")
+        expectVerticalGap(after: firstQuoteEnd, before: firstAfterParagraph, minimum: 4, context: "repeated quote to paragraph")
+        expectVerticalGap(after: firstAfterParagraph, before: firstHeading, minimum: 8, context: "repeated paragraph to heading")
+        expectVerticalGap(after: lastCodeEnd, before: lastQuoteStart, minimum: 10, context: "last code block to quote")
+        expectVerticalGap(after: afterRemoteImage, before: afterUnsupportedImage, minimum: 10, context: "remote fallback to unsupported image text")
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "screenshot-source-code-regressions/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+
+        #expect(mupdfLayout.pages.count == pageCount)
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 2600)
+        #expect(
+            mupdfIssues.isEmpty,
+            "Screenshot source-code MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "screenshot-source-code-regressions/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "screenshot-source-code-regressions/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "screenshot-source-code-regressions-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "screenshot-source-code-regressions-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "Screenshot source-code raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("Visual layout validator rejects overlapping words")
     func visualLayoutValidatorRejectsOverlappingWords() throws {
         let layout = try PopplerTextLayout(tsv: """
@@ -1740,6 +1952,14 @@ struct PDFVisualLayoutValidationTests {
         }
     }
 
+    private func imageXObjectCount(in pdfText: String) -> Int {
+        pdfText.components(separatedBy: "/Subtype /Image").count - 1
+    }
+
+    private func imageDrawOperatorCount(in streamText: String) -> Int {
+        streamText.components(separatedBy: " Do").count - 1
+    }
+
     private func verticalRuleOperatorLines(in stream: String) -> [String] {
         let lines = stream
             .split(separator: "\n", omittingEmptySubsequences: true)
@@ -1940,6 +2160,18 @@ struct PDFVisualLayoutValidationTests {
     source-code-spacing-pages/
     Poppler and MuPDF page rasters for the source-code witness.
 
+    screenshot-source-code-regressions.pdf
+    Focused screenshot-regression witness for source-code, quotes, headings, local images, remote fallback, and unsupported image syntax.
+
+    screenshot-source-code-regressions/README.txt
+    Manifest for screenshot source-code witness tokens, expected image reuse, fallback text, and expected stroke behavior.
+
+    screenshot-source-code-regressions/
+    Text, geometry, structured text, and render logs for the screenshot source-code witness.
+
+    screenshot-source-code-regressions-pages/
+    Poppler and MuPDF page rasters for the screenshot source-code witness.
+
     syntax-coloring-manuscript.pdf
     Focused manuscript proving opt-in syntax coloring without extraction,
     geometry, or raster regressions.
@@ -2031,6 +2263,43 @@ struct PDFVisualLayoutValidationTests {
     - source-code-spacing/mupdf-render.log
     - source-code-spacing-pages/poppler/
     - source-code-spacing-pages/mupdf/
+    """
+
+    private static let screenshotSourceCodeRegressionManifest = """
+    Screenshot source-code regression witness
+
+    Expected image XObjects: 1.
+    Expected image draw operators: 2.
+    Expected remote image fallback text: [Remote image: Remote regression figure].
+    Expected unsupported reference-style image behavior: visible text, no image XObject.
+    Expected portable block quote strokes: 0.
+
+    Required extracted tokens:
+    - DirectCodeEndToken
+    - DirectQuoteStartToken
+    - DirectQuoteEndToken
+    - DirectAfterQuoteHeadingToken
+    - ScreenshotCodeEndToken1
+    - ScreenshotQuoteStartToken1
+    - ScreenshotQuoteEndToken1
+    - ScreenshotAfterQuoteParagraph1
+    - ScreenshotAfterQuoteHeadingToken1
+    - ScreenshotCodeEndToken5
+    - ScreenshotQuoteStartToken5
+    - AfterRemoteImageParagraph
+    - Reference style regression chart
+    - Reference style regression fallback text
+    - AfterUnsupportedImageSyntaxParagraph
+
+    Required artifacts:
+    - screenshot-source-code-regressions.pdf
+    - screenshot-source-code-regressions/text.txt
+    - screenshot-source-code-regressions/poppler.tsv
+    - screenshot-source-code-regressions/mupdf-stext.xml
+    - screenshot-source-code-regressions/poppler-render.log
+    - screenshot-source-code-regressions/mupdf-render.log
+    - screenshot-source-code-regressions-pages/poppler/
+    - screenshot-source-code-regressions-pages/mupdf/
     """
 
     private func tableRectangleWidths(in inspector: PDFInspector) -> [Double] {
