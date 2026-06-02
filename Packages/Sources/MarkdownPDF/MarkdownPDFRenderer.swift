@@ -130,6 +130,7 @@ private struct Layout {
             pages: pages,
             images: images,
             title: options.title,
+            streamCompression: options.streamCompression,
         ).data()
     }
 

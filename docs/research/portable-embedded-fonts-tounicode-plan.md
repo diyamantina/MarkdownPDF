@@ -197,8 +197,9 @@ Required behavior:
 - Store the embedded TrueType subset or full font bytes.
 - Set `/Length1` to the uncompressed font program byte count.
 - Preserve deterministic stream bytes for tests.
-- Compression can remain off until the project has a pure Swift compression
-  policy.
+- Compression follows `PDFOptions.streamCompression`: default off, opt-in
+  `/Filter /FlateDecode` only when the Pure Swift encoded stream is smaller
+  than the raw font program.
 
 ### ToUnicode CMap stream
 

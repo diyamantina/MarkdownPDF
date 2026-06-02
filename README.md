@@ -34,6 +34,8 @@ The generic renderer currently covers:
   Type 0 / CIDFontType2 fonts, ToUnicode maps, and subsetted FontFile2 streams.
 - Opt-in portable syntax coloring for supported fenced code-block language
   hints, using direct DeviceRGB text operators.
+- Opt-in Pure Swift `/FlateDecode` compression for page content streams and
+  embedded FontFile2 streams when the encoded bytes are smaller than raw bytes.
 
 The compatibility target is CommonMark plus GitHub Flavored Markdown tables and
 images. The generated PDF profile is intentionally small, typed, and documented
@@ -506,7 +508,7 @@ flowchart TD
     H2Q["#143<br/>More syntax languages<br/>Done"]
     H4["#145<br/>Staged-research shortlist epic<br/>Active"]
     H4A["#126<br/>Native charts<br/>Done"]
-    H4B["#127<br/>Pure-Swift DEFLATE<br/>Next"]
+    H4B["#127<br/>Pure-Swift DEFLATE<br/>Active"]
     H4C["#128<br/>Tagged PDF and PDF/A<br/>Todo"]
     H4D["#129<br/>Footnotes and tasks<br/>Todo"]
     H4E["#130<br/>Theming model<br/>Todo"]

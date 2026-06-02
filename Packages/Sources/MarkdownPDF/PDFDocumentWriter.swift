@@ -6,9 +6,10 @@ struct PDFDocumentWriter {
     var pages: [PDFPageCanvas]
     var images: [PDFImage]
     var title: String?
+    var streamCompression: PDFOptions.StreamCompression = .disabled
 
     func data() throws -> Data {
-        var builder = Builder()
+        var builder = Builder(streamCompression: streamCompression)
         let catalogRef = builder.reserve()
         let pagesRef = builder.reserve()
 
@@ -58,7 +59,7 @@ struct PDFDocumentWriter {
         var pageRefs: [PDFSyntax.Reference] = []
         for page in pages {
             let contentData = Data(page.commands.utf8)
-            let contentRef = builder.addStream(dictionary: PDFSyntax.Dictionary(), data: contentData)
+            let contentRef = builder.addPageContentStream(contentData)
             let annotationRefs = page.linkAnnotations.map {
                 builder.addLinkAnnotation($0, knownDestinations: headingDestinationNames)
             }
@@ -130,7 +131,12 @@ struct PDFDocumentWriter {
     }
 
     private struct Builder {
+        var streamCompression: PDFOptions.StreamCompression
         private var registry = PDFObjectRegistry()
+
+        init(streamCompression: PDFOptions.StreamCompression) {
+            self.streamCompression = streamCompression
+        }
 
         mutating func reserve() -> PDFSyntax.Reference {
             registry.reserve()
@@ -165,7 +171,10 @@ struct PDFDocumentWriter {
                 data: resource.fontProgram,
                 metadata: resource.metadata,
             ).subset(glyphs: usage.glyphs)
-            let fontFileRef = addData(PDFFontFile2Stream(fontProgram: subset.fontProgram).pdfStream.serialized)
+            let fontFileRef = addData(PDFFontFile2Stream(
+                fontProgram: subset.fontProgram,
+                streamCompression: streamCompression,
+            ).pdfStream.serialized)
             let descriptorRef = addDictionary(embeddedFontDescriptor(resource, fontFile: fontFileRef).pdfDictionary)
             let cidToGIDMap = addCIDToGIDMap(subset.cidToGIDMap)
             let descendantRef = addDictionary(
@@ -206,6 +215,14 @@ struct PDFDocumentWriter {
 
         mutating func addStream(dictionary: PDFSyntax.Dictionary, data: Data) -> PDFSyntax.Reference {
             addData(PDFSyntax.Stream(dictionary: dictionary, data: data).serialized)
+        }
+
+        mutating func addPageContentStream(_ data: Data) -> PDFSyntax.Reference {
+            addData(PDFStreamEncoder.stream(
+                dictionary: PDFSyntax.Dictionary(),
+                data: data,
+                compression: streamCompression,
+            ).serialized)
         }
 
         mutating func addImage(_ image: PDFImageXObject) -> PDFSyntax.Reference {

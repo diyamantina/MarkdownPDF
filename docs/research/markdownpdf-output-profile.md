@@ -183,8 +183,14 @@ Each page declares only resources used by that page.
 
 ## Content streams
 
-Every page has one uncompressed content stream. The stream dictionary contains
-an exact `/Length`; tests compare declared and actual byte counts.
+Every page has one content stream. By default the stream is uncompressed and the
+dictionary contains an exact `/Length`; tests compare declared and actual byte
+counts.
+
+When `PDFOptions.streamCompression` is enabled, page content streams are encoded
+with a Pure Swift zlib-wrapped DEFLATE profile and `/Filter /FlateDecode` only
+when the encoded stream is smaller than the raw stream. The emitted `/Length` is
+the encoded byte count. The default output remains uncompressed.
 
 Content streams use typed PDF operators for text, paths, rectangles, lines,
 images, colors, graphics state save/restore, and XObject drawing.

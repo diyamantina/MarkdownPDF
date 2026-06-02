@@ -6,16 +6,15 @@ Issue: #127
 
 ## Scope
 
-This note researches how MarkdownPDF can implement a pure-Swift DEFLATE
+This note researches and records how MarkdownPDF implements a Pure Swift DEFLATE
 compressor so that PDF content streams and embedded `FontFile2` TrueType programs
-can be written with `/Filter /FlateDecode`. It is a research and staged-plan
-document for future implementation issues, not current product behavior. The
-current writer emits uncompressed streams; this plan adds an opt-in compression
-backend without changing the existing output by default.
+can be written with `/Filter /FlateDecode`. The first shipped profile adds an
+opt-in compression backend without changing the existing output by default.
 
 The decoder (inflate) is out of scope for the product: the renderer only writes
-PDFs, it does not read them. A decoder is needed only as a test oracle, and that
-oracle may be a third-party library in the test target alone.
+PDFs, it does not read them. The current implementation keeps a small internal
+Pure Swift inflate helper for round-trip tests; it is not public API and is not
+used by rendering.
 
 ## Product boundary
 
@@ -36,6 +35,21 @@ oracle may be a third-party library in the test target alone.
   filter expects a zlib wrapper (RFC 1950), so the encoder emits the 2-byte zlib
   header plus an Adler-32 trailer around the raw DEFLATE payload. gzip (RFC 1952)
   is not needed for PDF and is documented only for completeness.
+
+## Implementation status
+
+Issue #127 ships the first portable profile:
+
+- `PDFOptions.streamCompression` is disabled by default and opt-in per render.
+- Page content streams and embedded `FontFile2` streams are compressed only when
+  the zlib-wrapped output is smaller than the raw stream.
+- The encoder emits stored blocks and fixed-Huffman blocks with a deterministic
+  greedy LZ77 match finder. Dynamic Huffman blocks remain future work.
+- `/Length` is the encoded byte count. `FontFile2` keeps `/Length1` as the
+  uncompressed font-program byte count.
+- Focused witnesses cover round-trip inflate, exact stream lengths,
+  `qpdf --check`, `pdftotext` parity with the uncompressed baseline, size
+  reduction for representative repeated streams, and deterministic output.
 
 ## Standards and sources
 
@@ -227,13 +241,13 @@ assumed.
 
 ## Ordered work
 
-1. zlib wrapper + Adler-32 + stored blocks. Emit RFC 1950 header/trailer around
+1. Done: zlib wrapper + Adler-32 + stored blocks. Emit RFC 1950 header/trailer around
    stored DEFLATE blocks. Wire `/FlateDecode`, `/Length`, and `/Length1`. Prove
    round-trip via oracle and `qpdf --check`. Smallest correct milestone.
-2. Fixed Huffman + LZ77 hash chains. Add the hash-chain match finder, greedy
-   matching, and RFC 1951 static-table encoding. Add lazy matching. First
-   milestone that actually shrinks streams.
-3. Dynamic Huffman. Add length-limited canonical Huffman construction, the
+2. Done: fixed Huffman + LZ77 hash chains. Add the hash-chain match finder,
+   greedy matching, and RFC 1951 static-table encoding. First milestone that
+   actually shrinks streams.
+3. Next: dynamic Huffman. Add length-limited canonical Huffman construction, the
    code-length alphabet encoding, and fixed-vs-dynamic-vs-stored block selection.
 4. Block splitting and optional optimal parsing tier. Deterministic split policy
    first; minimum-cost-path parsing only as an opt-in quality tier later.

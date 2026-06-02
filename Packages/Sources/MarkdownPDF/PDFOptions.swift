@@ -9,6 +9,7 @@ public struct PDFOptions: Equatable, Sendable {
     public var title: String?
     public var tableOfContents: TableOfContents
     public var codeSyntaxHighlighting: CodeSyntaxHighlighting
+    public var streamCompression: StreamCompression
 
     public init(
         pageSize: PageSize = .a4,
@@ -19,6 +20,7 @@ public struct PDFOptions: Equatable, Sendable {
         title: String? = nil,
         tableOfContents: TableOfContents = .disabled,
         codeSyntaxHighlighting: CodeSyntaxHighlighting = .disabled,
+        streamCompression: StreamCompression = .disabled,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -28,6 +30,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.title = title
         self.tableOfContents = tableOfContents
         self.codeSyntaxHighlighting = codeSyntaxHighlighting
+        self.streamCompression = streamCompression
     }
 
     public struct PageSize: Equatable, Sendable {
@@ -202,5 +205,23 @@ public struct PDFOptions: Equatable, Sendable {
 
         public static let disabled = CodeSyntaxHighlighting(isEnabled: false)
         public static let enabled = CodeSyntaxHighlighting(isEnabled: true)
+    }
+
+    /// Controls opt-in FlateDecode compression for PDF streams written by the
+    /// portable renderer.
+    ///
+    /// The default value is ``disabled``. When enabled, page content streams and
+    /// embedded FontFile2 streams are encoded with a Pure Swift zlib-wrapped
+    /// DEFLATE profile only when the encoded bytes are smaller than the raw
+    /// stream. Image streams keep their source filter and are not recompressed.
+    public struct StreamCompression: Equatable, Sendable {
+        public var isEnabled: Bool
+
+        public init(isEnabled: Bool) {
+            self.isEnabled = isEnabled
+        }
+
+        public static let disabled = StreamCompression(isEnabled: false)
+        public static let enabled = StreamCompression(isEnabled: true)
     }
 }
