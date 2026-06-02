@@ -501,12 +501,13 @@ flowchart TD
     H4H["#137<br/>Vendor canonical references<br/>Done"]
     H5["#194<br/>Fix embedded /W width scaling<br/>Review"]
     H6["#195<br/>Full witness battery on font fixtures<br/>Review"]
+    H7["#197<br/>Tolerate tiny math glyphs on MuPDF 1.25<br/>Next"]
 
     H0 --> H1
     H1 --> H2
     H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M --> H2N --> H2O --> H2R --> H2P --> H2Q
     H2Q --> H4 --> H4A --> H4B --> H4C --> H4D --> H4E --> H4F --> H4G --> H4H
-    H4G --> H5 --> H6
+    H4G --> H5 --> H6 --> H7
     H4 --> H3
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
@@ -530,6 +531,7 @@ flowchart TD
     class H3 done;
     class H5 review;
     class H6 review;
+    class H7 next;
 ```
 
 ## Math typesetting roadmap
