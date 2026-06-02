@@ -47,6 +47,21 @@ struct TrueTypeFontParserTests {
         #expect(metadata.hmtx.advanceWidths[24] == 900)
     }
 
+    @Test("Parses renderable synthetic CJK witness font")
+    func parsesRenderableSyntheticCJKWitnessFont() throws {
+        let metadata = try TrueTypeFontParser().parse(
+            SyntheticTrueTypeFont.data(cmapFormat: 12, glyphProfile: .cjkWitness, includeGlyphOutlines: true),
+        )
+        let tableTags = metadata.tables.map(\.tag).sorted()
+
+        #expect(tableTags.contains("glyf"))
+        #expect(tableTags.contains("loca"))
+        #expect(metadata.cmap.selectedUnicodeFormat == 12)
+        #expect(metadata.maxp.numGlyphs == 5)
+        #expect(metadata.hhea.numberOfHMetrics == 5)
+        #expect(metadata.hmtx.advanceWidths == [500, 1000, 1000, 1000, 500])
+    }
+
     @Test("Rejects malformed table checksums")
     func rejectsMalformedTableChecksums() {
         expectTrueTypeError {
@@ -314,6 +329,7 @@ enum SyntheticTrueTypeFont {
     enum GlyphProfile {
         case basic
         case compositeWitness
+        case cjkWitness
         case largeBMPWitness
         case latinWitness
         case latinLigature
@@ -1001,6 +1017,13 @@ enum SyntheticTrueTypeFont {
                     GlyphRecord(scalar: "B", advanceWidth: 620, xMin: 70, xMax: 540),
                     GlyphRecord(scalar: "C", advanceWidth: 740, xMin: 40, xMax: 720, components: [1, 2]),
                 ]
+            case .cjkWitness:
+                [
+                    GlyphRecord(scalar: "漢", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "字", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "語", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "。", advanceWidth: 500, xMin: 120, xMax: 420),
+                ]
             case .largeBMPWitness:
                 (0 ..< 8200).map { index in
                     GlyphRecord(
@@ -1059,7 +1082,7 @@ enum SyntheticTrueTypeFont {
             switch profile {
             case .basic:
                 2
-            case .compositeWitness, .largeBMPWitness, .latinWitness, .latinLigature:
+            case .compositeWitness, .cjkWitness, .largeBMPWitness, .latinWitness, .latinLigature:
                 numGlyphs
             }
         }

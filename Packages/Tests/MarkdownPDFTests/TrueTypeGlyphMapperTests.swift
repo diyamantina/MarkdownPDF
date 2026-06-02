@@ -36,6 +36,21 @@ struct TrueTypeGlyphMapperTests {
         #expect(abs(mapping.totalWidth - 12) < 0.0001)
     }
 
+    @Test("Maps CJK format 12 scalars with fullwidth advances")
+    func mapsCJKFormat12ScalarsWithFullwidthAdvances() throws {
+        let fontData = SyntheticTrueTypeFont.data(cmapFormat: 12, glyphProfile: .cjkWitness)
+        let metadata = try TrueTypeFontParser().parse(fontData)
+
+        let mapping = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "漢字語。", fontSize: 10)
+
+        #expect(metadata.cmap.selectedUnicodeFormat == 12)
+        #expect(mapping.glyphs.map(\.scalar) == ["漢", "字", "語", "。"])
+        #expect(mapping.glyphs.map(\.glyphID) == [1, 2, 3, 4])
+        #expect(mapping.glyphs.map(\.advanceWidth) == [1000, 1000, 1000, 500])
+        #expect(mapping.glyphs.map(\.width) == [10, 10, 10, 5])
+        #expect(abs(mapping.totalWidth - 35) < 0.0001)
+    }
+
     @Test("Maps format 4 glyph id arrays")
     func mapsFormat4GlyphIDArrays() throws {
         let fontData = SyntheticTrueTypeFont.data(cmapFormat4UsesGlyphArray: true)

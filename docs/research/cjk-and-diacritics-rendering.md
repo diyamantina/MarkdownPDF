@@ -121,9 +121,13 @@ only when the path is absent, naming the missing path in the skip reason.
 - The detector now protects CJK opening and closing punctuation boundaries and
   unit-tests breaks between ideographs, kana, hangul syllables, and CJK
   punctuation runs.
-- This is the UAX #14 ID-class layout prerequisite. It does not yet implement
-  East Asian Width metrics, manuscript-scale CJK embedded-font fixtures, or
-  cross-script combining-mark witnesses.
+- The synthetic TrueType test fixture now has a CJK format 12 profile. Parser,
+  mapper, and renderer tests prove 1000-unit `hmtx` advances for ideographs,
+  CID width emission, ToUnicode extraction, and narrow-page wrapping without
+  committing a real font file.
+- Remaining work: manuscript-scale CJK embedded-font fixtures, cross-script
+  combining-mark witnesses, and any East Asian Width fallback policy for text
+  rendered without an embedded font.
 
 ## Platform notes
 

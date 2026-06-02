@@ -387,6 +387,40 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.streams.contains { $0.body.contains("/F4 11.400 Tf") })
     }
 
+    @Test("Embedded font renderer uses CJK format 12 advances for wrapping")
+    func embeddedFontRendererUsesCJKFormat12AdvancesForWrapping() throws {
+        let fontData = SyntheticTrueTypeFont.data(
+            cmapFormat: 12,
+            glyphProfile: .cjkWitness,
+            includeGlyphOutlines: true,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Public CJK")
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 90, height: 160),
+                margins: PDFOptions.Margins(top: 20, right: 20, bottom: 20, left: 20),
+                baseFontSize: 10,
+                embeddedFonts: PDFOptions.EmbeddedFonts(regular: source),
+                title: "CJK Format 12 Widths",
+            ),
+        ).render(markdown: "漢字語漢字語")
+        let inspector = PDFInspector(data)
+        let lineYCoordinates = textLineYCoordinates(in: inspector.text)
+
+        #expect(inspector.text.contains("/Subtype /CIDFontType2"))
+        #expect(inspector.text.contains("/W [1 [1000] 2 [1000] 3 [1000]]"))
+        #expect(inspector.text.contains("<0001> <6F22>"))
+        #expect(inspector.text.contains("<0002> <5B57>"))
+        #expect(inspector.text.contains("<0003> <8A9E>"))
+        #expect(lineYCoordinates.count == 2)
+
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "cjk-format12-widths")
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "cjk-format12-widths-text")
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        #expect(textResult.output.filter { !$0.isWhitespace }.contains("漢字語漢字語"))
+    }
+
     @Test("Embedded font renderer emits shaped ligature ToUnicode witnesses")
     func embeddedFontRendererEmitsShapedLigatureToUnicodeWitnesses() throws {
         let fontData = SyntheticTrueTypeFont.data(
