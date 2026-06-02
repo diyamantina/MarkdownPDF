@@ -43,7 +43,83 @@ struct MarkdownMathLayout {
                 size: size,
                 displayStyle: displayStyle,
             )
+        case let .matrix(rows, open, close, leftAlign):
+            try layoutMatrix(
+                rows: rows,
+                open: open,
+                close: close,
+                leftAlign: leftAlign,
+                size: size,
+            )
         }
+    }
+
+    private func layoutMatrix(
+        rows: [[MarkdownMathNode]],
+        open: String,
+        close: String,
+        leftAlign: Bool,
+        size: Double,
+    ) throws -> MarkdownMathLayoutBox {
+        let cellBoxes = try rows.map { try $0.map { try layout($0, size: size, displayStyle: false) } }
+        guard let columnCount = cellBoxes.map(\.count).max(), columnCount > 0 else {
+            return MarkdownMathLayoutBox(width: 0, height: 0, depth: 0, elements: [])
+        }
+
+        var columnWidths = [Double](repeating: 0, count: columnCount)
+        for row in cellBoxes {
+            for (column, box) in row.enumerated() {
+                columnWidths[column] = max(columnWidths[column], box.width)
+            }
+        }
+        let columnGap = size * 0.6
+        let rowGap = size * 0.3
+        let rowHeights = cellBoxes.map { $0.map(\.height).max() ?? metrics.textHeight(size: size) }
+        let rowDepths = cellBoxes.map { $0.map(\.depth).max() ?? metrics.textDepth(size: size) }
+        let stackHeight = zip(rowHeights, rowDepths).reduce(0) { $0 + $1.0 + $1.1 }
+            + rowGap * Double(max(0, cellBoxes.count - 1))
+        let axisY = metrics.axisHeight(size: size)
+        let topY = axisY + stackHeight / 2
+        let gridWidth = columnWidths.reduce(0, +) + columnGap * Double(max(0, columnCount - 1))
+        let delimiterSize = min(max(stackHeight, size), size * 3)
+        let delimiterY = axisY - delimiterSize * 0.3
+
+        var elements: [MarkdownMathLayoutElement] = []
+        var xOrigin = 0.0
+        if !open.isEmpty {
+            let openBox = try layoutText(open, size: delimiterSize)
+            elements += openBox.elements.map { $0.offsetBy(x: 0, y: delimiterY) }
+            xOrigin = openBox.width + columnGap * 0.5
+        }
+
+        var cursorY = topY
+        for (rowIndex, row) in cellBoxes.enumerated() {
+            let rowBaseline = cursorY - rowHeights[rowIndex]
+            var columnX = xOrigin
+            for column in 0 ..< columnCount {
+                if column < row.count {
+                    let box = row[column]
+                    let cellX = columnX + (leftAlign ? 0 : (columnWidths[column] - box.width) / 2)
+                    elements += box.elements.map { $0.offsetBy(x: cellX, y: rowBaseline) }
+                }
+                columnX += columnWidths[column] + columnGap
+            }
+            cursorY = rowBaseline - rowDepths[rowIndex] - rowGap
+        }
+
+        var totalWidth = xOrigin + gridWidth
+        if !close.isEmpty {
+            let closeBox = try layoutText(close, size: delimiterSize)
+            elements += closeBox.elements.map { $0.offsetBy(x: totalWidth + columnGap * 0.5, y: delimiterY) }
+            totalWidth += columnGap * 0.5 + closeBox.width
+        }
+
+        return MarkdownMathLayoutBox(
+            width: totalWidth,
+            height: topY,
+            depth: max(0, stackHeight / 2 - axisY),
+            elements: elements,
+        )
     }
 
     private func layoutAccent(

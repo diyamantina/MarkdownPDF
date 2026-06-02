@@ -161,7 +161,9 @@ struct MarkdownMathParser {
             case "operatorname":
                 let name = try MarkdownMathLinearizer().linearize(parseRequiredGroup(for: command))
                 return .symbol(display: name, linearized: name, isBigOperator: false)
-            case "right", "begin", "end", "newcommand":
+            case "begin":
+                return try parseMatrixEnvironment()
+            case "right", "end", "newcommand":
                 throw ParseError.unsupportedControlWord(command)
             default:
                 if let accent = Self.accents[command] {
@@ -195,6 +197,88 @@ struct MarkdownMathParser {
             skipWhitespace()
             let closing = try parseDelimiter(for: "right")
             return compactSequence([opening, body, closing])
+        }
+
+        private mutating func parseMatrixEnvironment() throws -> MarkdownMathNode {
+            let name = try parseEnvironmentName()
+            guard let env = Self.matrixEnvironments[name] else {
+                throw ParseError.unsupportedControlWord("begin{\(name)}")
+            }
+
+            var rows: [[MarkdownMathNode]] = []
+            var row: [MarkdownMathNode] = []
+            while true {
+                try row.append(parseMatrixCell())
+                guard index < source.endIndex else {
+                    throw ParseError.unmatchedGroup
+                }
+                if source[index] == "&" {
+                    index = source.index(after: index)
+                    continue
+                }
+                if isRowSeparator() {
+                    index = source.index(index, offsetBy: 2)
+                    rows.append(row)
+                    row = []
+                    continue
+                }
+                if controlWord(at: index)?.command == "end" {
+                    try consumeControlWord("end")
+                    _ = try parseEnvironmentName()
+                    rows.append(row)
+                    break
+                }
+                throw ParseError.unmatchedGroup
+            }
+
+            if let last = rows.last, last.count == 1, last[0].isEmptyMathSequence {
+                rows.removeLast()
+            }
+            return .matrix(rows: rows, open: env.open, close: env.close, leftAlign: env.leftAlign)
+        }
+
+        private mutating func parseEnvironmentName() throws -> String {
+            skipWhitespace()
+            guard index < source.endIndex, source[index] == "{" else {
+                throw ParseError.missingRequiredGroup("begin")
+            }
+            index = source.index(after: index)
+            let start = index
+            while index < source.endIndex, source[index] != "}" {
+                index = source.index(after: index)
+            }
+            guard index < source.endIndex else {
+                throw ParseError.unmatchedGroup
+            }
+            let name = String(source[start ..< index])
+            index = source.index(after: index)
+            return name.trimmingCharacters(in: .whitespaces)
+        }
+
+        private mutating func parseMatrixCell() throws -> MarkdownMathNode {
+            var nodes: [MarkdownMathNode] = []
+            while index < source.endIndex {
+                let character = source[index]
+                if character == "&" || isRowSeparator() {
+                    break
+                }
+                if character == "\\", controlWord(at: index)?.command == "end" {
+                    break
+                }
+                if character == "}" {
+                    throw ParseError.unexpectedGroupClose
+                }
+                try nodes.append(parseAtomWithScripts())
+            }
+            return compactSequence(nodes)
+        }
+
+        private func isRowSeparator() -> Bool {
+            guard index < source.endIndex, source[index] == "\\" else {
+                return false
+            }
+            let next = source.index(after: index)
+            return next < source.endIndex && source[next] == "\\"
         }
 
         private mutating func skipWhitespace() {
@@ -319,6 +403,16 @@ struct MarkdownMathParser {
             }
             return .sequence(nonEmpty)
         }
+
+        private static let matrixEnvironments: [String: (open: String, close: String, leftAlign: Bool)] = [
+            "matrix": ("", "", false),
+            "pmatrix": ("(", ")", false),
+            "bmatrix": ("[", "]", false),
+            "Bmatrix": ("{", "}", false),
+            "vmatrix": ("|", "|", false),
+            "Vmatrix": ("||", "||", false),
+            "cases": ("{", "", true),
+        ]
 
         private static let accents: [String: (symbol: String, linearized: String, isOverline: Bool)] = [
             "hat": ("^", "hat", false),

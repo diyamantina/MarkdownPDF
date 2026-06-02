@@ -101,13 +101,17 @@ $$\overline{AB}$$
 
 $$\tilde{z} + \dot{x}$$
 
-## Advanced constructs rendered as visible source fallback
-
-Matrices, environments, and color are unsupported and render as visible source
-rather than being dropped.
+## Matrices and cases
 
 $$\begin{pmatrix} a & b \\ c & d \end{pmatrix}$$
 
+$$\begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$$
+
 $$\begin{cases} x & x \geq 0 \\ -x & x < 0 \end{cases}$$
+
+## Advanced constructs rendered as visible source fallback
+
+Color and other unsupported commands render as visible source rather than being
+dropped.
 
 $$\textcolor{red}{c}\boxed{x}$$

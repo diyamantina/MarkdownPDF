@@ -8,4 +8,5 @@ indirect enum MarkdownMathNode: Equatable {
     case radical(radicand: MarkdownMathNode)
     case scripts(base: MarkdownMathNode, subscript: MarkdownMathNode?, superscript: MarkdownMathNode?)
     case accent(symbol: String, linearized: String, isOverline: Bool, base: MarkdownMathNode)
+    case matrix(rows: [[MarkdownMathNode]], open: String, close: String, leftAlign: Bool)
 }

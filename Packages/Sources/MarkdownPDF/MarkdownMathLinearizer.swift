@@ -28,6 +28,14 @@ struct MarkdownMathLinearizer {
             return result
         case let .accent(_, linearized, _, base):
             return "\(linearized)(\(linearize(base)))"
+        case let .matrix(rows, open, close, _):
+            let body = rows
+                .map { row in row.map { linearize($0) }.joined(separator: ", ") }
+                .joined(separator: "; ")
+            if open.isEmpty, close.isEmpty {
+                return "matrix(\(body))"
+            }
+            return "\(open)\(body)\(close)"
         }
     }
 

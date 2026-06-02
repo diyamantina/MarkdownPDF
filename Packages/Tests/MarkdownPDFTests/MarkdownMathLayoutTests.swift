@@ -53,6 +53,32 @@ struct MarkdownMathLayoutTests {
         #expect(overline.height > baseBox.height)
     }
 
+    @Test("Matrix lays out a row-major grid with delimiters")
+    func matrixLaysOutGridWithDelimiters() throws {
+        let layout = makeLayout()
+        let box = try layout.layout(
+            .matrix(
+                rows: [[.text("a"), .text("b")], [.text("c"), .text("d")]],
+                open: "(",
+                close: ")",
+                leftAlign: false,
+            ),
+            size: 10,
+            displayStyle: true,
+        )
+
+        let a = try #require(box.textElement(containing: "a"))
+        let b = try #require(box.textElement(containing: "b"))
+        let c = try #require(box.textElement(containing: "c"))
+
+        #expect(a.y > c.y) // first row sits above the second row
+        #expect(b.x > a.x) // second column sits right of the first column
+        #expect(box.textElement(containing: "(") != nil) // open delimiter present
+        #expect(box.textElement(containing: ")") != nil) // close delimiter present
+        #expect(box.width > 0)
+        #expect(box.height > 0)
+    }
+
     @Test("Default metrics preserve script radical and limit geometry")
     func defaultMetricsPreserveScriptRadicalAndLimitGeometry() throws {
         let layout = makeLayout()

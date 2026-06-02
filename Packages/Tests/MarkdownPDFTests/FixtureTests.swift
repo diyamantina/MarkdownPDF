@@ -482,7 +482,7 @@ struct FixtureTests {
         #expect(extracted.contains("sum_"), "Unexpected extraction:\n\(textResult.output)")
         // Unsupported constructs render as visible source rather than being dropped.
         #expect(
-            streamText.contains("begin{pmatrix}") || extracted.contains("begin{pmatrix}"),
+            streamText.contains("textcolor") || extracted.contains("textcolor"),
             "Unsupported math should fall back to visible source",
         )
         // Typeset fraction bars and radical rules emit rule rectangles.

@@ -66,4 +66,16 @@ struct MarkdownMathParserTests {
         #expect(try parser.parse(#"\operatorname{argmax}_x f"#).linearizedText == "argmax_{x} f")
         #expect(try parser.parse(#"\operatorname{Var}(X)"#).linearizedText == "Var(X)")
     }
+
+    @Test("Parses matrix and cases environments")
+    func parsesMatrixEnvironments() throws {
+        let parser = MarkdownMathParser()
+
+        #expect(try parser.parse(#"\begin{pmatrix} a & b \\ c & d \end{pmatrix}"#).linearizedText == "(a, b; c, d)")
+        #expect(try parser.parse(#"\begin{matrix} 1 & 0 \\ 0 & 1 \end{matrix}"#).linearizedText == "matrix(1, 0; 0, 1)")
+        #expect(try parser.parse(#"\begin{cases} x & x \geq 0 \\ -x & x < 0 \end{cases}"#).linearizedText == "{x, x >= 0; -x, x < 0")
+        #expect(throws: (any Error).self) {
+            try parser.parse(#"\begin{unknownenv} a \end{unknownenv}"#)
+        }
+    }
 }
