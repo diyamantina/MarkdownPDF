@@ -220,6 +220,51 @@ struct MarkdownPDFRendererTests {
         #expect(!stream.contains(sourceCodeOperatorOperator))
     }
 
+    @Test("Additional syntax coloring hints render colored tokens")
+    func additionalSyntaxColoringHintsRenderColoredTokens() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled),
+        ).render(markdown: """
+        ```bash
+        if [ "$name" = "Ada" ]; then # shell
+        fi
+        ```
+
+        ```yaml
+        enabled: true # yaml
+        ```
+
+        ```xml
+        <note id="a"><!-- xml --></note>
+        ```
+
+        ```pascal
+        begin (* pascal *) value := 1; end
+        ```
+
+        ```lisp
+        (defun value () ; lisp
+          42)
+        ```
+
+        ```sql
+        SELECT name FROM records -- sql
+        ```
+        """)
+        let textResult = try PDFValidation.pdftotext(data: data, name: "additional-code-coloring")
+        let stream = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
+
+        try #require(textResult.exitCode == 0, "pdftotext failed for additional code coloring:\n\(textResult.output)")
+        #expect(textResult.output.contains("shell"))
+        #expect(textResult.output.contains("pascal"))
+        #expect(textResult.output.contains("SELECT"))
+        #expect(stream.contains(sourceCodeKeywordOperator))
+        #expect(stream.contains(sourceCodeCommentOperator))
+        #expect(stream.contains(sourceCodeStringOperator))
+        #expect(stream.contains(sourceCodeNumberOperator))
+        #expect(stream.contains(sourceCodeOperatorOperator))
+    }
+
     @Test("Mermaid keeps diagram path when syntax coloring is enabled")
     func mermaidKeepsDiagramPathWhenSyntaxColoringIsEnabled() throws {
         let data = try MarkdownPDFRenderer(

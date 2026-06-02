@@ -2,7 +2,7 @@ import Foundation
 
 struct SourceCodeSyntaxHighlighter {
     private let language: SourceCodeLanguage
-    private var isInsideBlockComment = false
+    private var activeBlockCommentEnd: String?
 
     init(language: SourceCodeLanguage) {
         self.language = language
@@ -13,30 +13,25 @@ struct SourceCodeSyntaxHighlighter {
         var index = line.startIndex
 
         while index < line.endIndex {
-            if isInsideBlockComment {
-                let tokenEnd = line.range(of: "*/", range: index ..< line.endIndex)?.upperBound ?? line.endIndex
+            if let activeBlockCommentEnd {
+                let tokenEnd = line.range(of: activeBlockCommentEnd, range: index ..< line.endIndex)?.upperBound ?? line.endIndex
                 tokens.append(SourceCodeToken(text: String(line[index ..< tokenEnd]), kind: .comment))
-                isInsideBlockComment = tokenEnd == line.endIndex
+                self.activeBlockCommentEnd = tokenEnd == line.endIndex ? activeBlockCommentEnd : nil
                 index = tokenEnd
                 continue
             }
 
-            if starts(with: "//", in: line, at: index), language.supportsSlashLineComments {
-                tokens.append(SourceCodeToken(text: String(line[index...]), kind: .comment))
-                break
-            }
-
-            if line[index] == "#", language.supportsHashLineComments {
-                tokens.append(SourceCodeToken(text: String(line[index...]), kind: .comment))
-                break
-            }
-
-            if starts(with: "/*", in: line, at: index), language.supportsBlockComments {
-                let tokenEnd = line.range(of: "*/", range: index ..< line.endIndex)?.upperBound ?? line.endIndex
+            if let delimiter = blockCommentDelimiter(in: line, at: index) {
+                let tokenEnd = line.range(of: delimiter.end, range: index ..< line.endIndex)?.upperBound ?? line.endIndex
                 tokens.append(SourceCodeToken(text: String(line[index ..< tokenEnd]), kind: .comment))
-                isInsideBlockComment = tokenEnd == line.endIndex
+                activeBlockCommentEnd = tokenEnd == line.endIndex ? delimiter.end : nil
                 index = tokenEnd
                 continue
+            }
+
+            if hasLineCommentPrefix(in: line, at: index) {
+                tokens.append(SourceCodeToken(text: String(line[index...]), kind: .comment))
+                break
             }
 
             let character = line[index]
@@ -51,7 +46,7 @@ struct SourceCodeSyntaxHighlighter {
             } else if isIdentifierStart(character) {
                 let tokenEnd = identifierEnd(in: line, from: index)
                 let text = String(line[index ..< tokenEnd])
-                let kind: SourceCodeTokenKind = language.keywords.contains(text) ? .keyword : .identifier
+                let kind: SourceCodeTokenKind = language.isKeyword(text) ? .keyword : .identifier
                 tokens.append(SourceCodeToken(text: text, kind: kind))
                 index = tokenEnd
             } else if language.operatorCharacters.contains(character) {
@@ -71,6 +66,21 @@ struct SourceCodeSyntaxHighlighter {
 
     private func starts(with prefix: String, in line: String, at index: String.Index) -> Bool {
         line[index...].hasPrefix(prefix)
+    }
+
+    private func blockCommentDelimiter(
+        in line: String,
+        at index: String.Index,
+    ) -> SourceCodeBlockCommentDelimiter? {
+        language.blockCommentDelimiters.first { delimiter in
+            starts(with: delimiter.start, in: line, at: index)
+        }
+    }
+
+    private func hasLineCommentPrefix(in line: String, at index: String.Index) -> Bool {
+        language.lineCommentPrefixes.contains { prefix in
+            starts(with: prefix, in: line, at: index)
+        }
     }
 
     private func stringLiteralEnd(

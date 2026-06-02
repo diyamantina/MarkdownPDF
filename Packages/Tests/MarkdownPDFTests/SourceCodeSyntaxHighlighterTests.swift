@@ -39,8 +39,116 @@ struct SourceCodeSyntaxHighlighterTests {
         #expect(SourceCodeLanguage(hint: "metal") == .cFamily)
         #expect(SourceCodeLanguage(hint: "python") == .python)
         #expect(SourceCodeLanguage(hint: "json") == .json)
+        #expect(SourceCodeLanguage(hint: "bash") == .bash)
+        #expect(SourceCodeLanguage(hint: "sh") == .bash)
+        #expect(SourceCodeLanguage(hint: "yaml") == .yaml)
+        #expect(SourceCodeLanguage(hint: "yml") == .yaml)
+        #expect(SourceCodeLanguage(hint: "ruby") == .ruby)
+        #expect(SourceCodeLanguage(hint: "perl") == .perl)
+        #expect(SourceCodeLanguage(hint: "r") == .r)
+        #expect(SourceCodeLanguage(hint: "toml") == .toml)
+        #expect(SourceCodeLanguage(hint: "ini") == .ini)
+        #expect(SourceCodeLanguage(hint: "makefile") == .makefile)
+        #expect(SourceCodeLanguage(hint: "dockerfile") == .dockerfile)
+        #expect(SourceCodeLanguage(hint: "pascal") == .pascal)
+        #expect(SourceCodeLanguage(hint: "delphi") == .pascal)
+        #expect(SourceCodeLanguage(hint: "lisp") == .lisp)
+        #expect(SourceCodeLanguage(hint: "scheme") == .lisp)
+        #expect(SourceCodeLanguage(hint: "sql") == .sql)
+        #expect(SourceCodeLanguage(hint: "lua") == .lua)
+        #expect(SourceCodeLanguage(hint: "haskell") == .haskell)
+        #expect(SourceCodeLanguage(hint: "ada") == .ada)
+        #expect(SourceCodeLanguage(hint: "erlang") == .erlang)
+        #expect(SourceCodeLanguage(hint: "latex") == .latex)
+        #expect(SourceCodeLanguage(hint: "vb") == .visualBasic)
+        #expect(SourceCodeLanguage(hint: "xml") == .xml)
+        #expect(SourceCodeLanguage(hint: "html") == .xml)
         #expect(SourceCodeLanguage(hint: "plain") == nil)
         #expect(SourceCodeLanguage(hint: nil) == nil)
+    }
+
+    @Test("Scans hash-comment language fixtures")
+    func scansHashCommentLanguageFixtures() {
+        let fixtures: [(language: SourceCodeLanguage, line: String, keyword: String, comment: String)] = [
+            (.bash, #"if [ "$name" = "Ada" ]; then # comment"#, "if", "# comment"),
+            (.yaml, "enabled: true # comment", "true", "# comment"),
+            (.ruby, "def call # comment", "def", "# comment"),
+            (.perl, "my $value = 1 # comment", "my", "# comment"),
+            (.r, "if (TRUE) # comment", "if", "# comment"),
+            (.toml, "enabled = true # comment", "true", "# comment"),
+            (.ini, "enabled = yes # comment", "yes", "# comment"),
+            (.makefile, "include file.mk # comment", "include", "# comment"),
+            (.dockerfile, "FROM swift:latest # comment", "FROM", "# comment"),
+        ]
+
+        for fixture in fixtures {
+            var highlighter = SourceCodeSyntaxHighlighter(language: fixture.language)
+            let tokens = highlighter.tokens(for: fixture.line)
+
+            #expect(tokens.contains(SourceCodeToken(text: fixture.keyword, kind: .keyword)))
+            #expect(tokens.contains(SourceCodeToken(text: fixture.comment, kind: .comment)))
+        }
+    }
+
+    @Test("Scans data-driven line comment fixtures")
+    func scansDataDrivenLineCommentFixtures() {
+        let fixtures: [(language: SourceCodeLanguage, line: String, keyword: String, comment: String)] = [
+            (.lisp, "(defun value () ; comment", "defun", "; comment"),
+            (.sql, "SELECT value -- comment", "SELECT", "-- comment"),
+            (.lua, "local value = 1 -- comment", "local", "-- comment"),
+            (.haskell, "module Main where -- comment", "module", "-- comment"),
+            (.ada, "procedure Main is -- comment", "procedure", "-- comment"),
+            (.erlang, "case Value of % comment", "case", "% comment"),
+            (.latex, #"\\section{Title} % comment"#, "section", "% comment"),
+            (.visualBasic, "Dim value As String ' comment", "Dim", "' comment"),
+        ]
+
+        for fixture in fixtures {
+            var highlighter = SourceCodeSyntaxHighlighter(language: fixture.language)
+            let tokens = highlighter.tokens(for: fixture.line)
+
+            #expect(tokens.contains(SourceCodeToken(text: fixture.keyword, kind: .keyword)))
+            #expect(tokens.contains(SourceCodeToken(text: fixture.comment, kind: .comment)))
+        }
+    }
+
+    @Test("Scans Pascal and Lisp block comments across lines")
+    func scansPascalAndLispBlockCommentsAcrossLines() {
+        var pascalHighlighter = SourceCodeSyntaxHighlighter(language: .pascal)
+        let pascalFirstLine = pascalHighlighter.tokens(for: "begin (* block")
+        let pascalSecondLine = pascalHighlighter.tokens(for: "continued *) end")
+        let pascalBraceLine = pascalHighlighter.tokens(for: "{ brace } var value := 1;")
+
+        #expect(pascalFirstLine.contains(SourceCodeToken(text: "begin", kind: .keyword)))
+        #expect(pascalFirstLine.contains(SourceCodeToken(text: "(* block", kind: .comment)))
+        #expect(pascalSecondLine.first == SourceCodeToken(text: "continued *)", kind: .comment))
+        #expect(pascalSecondLine.contains(SourceCodeToken(text: "end", kind: .keyword)))
+        #expect(pascalBraceLine.first == SourceCodeToken(text: "{ brace }", kind: .comment))
+        #expect(pascalBraceLine.contains(SourceCodeToken(text: "var", kind: .keyword)))
+
+        var lispHighlighter = SourceCodeSyntaxHighlighter(language: .lisp)
+        let lispFirstLine = lispHighlighter.tokens(for: "#| block")
+        let lispSecondLine = lispHighlighter.tokens(for: "continued |# (defun value ())")
+
+        #expect(lispFirstLine == [SourceCodeToken(text: "#| block", kind: .comment)])
+        #expect(lispSecondLine.first == SourceCodeToken(text: "continued |#", kind: .comment))
+        #expect(lispSecondLine.contains(SourceCodeToken(text: "defun", kind: .keyword)))
+    }
+
+    @Test("Scans XML tags, strings, and block comments")
+    func scansXMLTagsStringsAndBlockComments() {
+        var highlighter = SourceCodeSyntaxHighlighter(language: .xml)
+        let tagTokens = highlighter.tokens(for: #"<note id="a">&amp;</note>"#)
+        let firstCommentLine = highlighter.tokens(for: "<!-- starts")
+        let secondCommentLine = highlighter.tokens(for: "continues --> <tag/>")
+
+        #expect(tagTokens.contains(SourceCodeToken(text: "<", kind: .operatorToken)))
+        #expect(tagTokens.contains(SourceCodeToken(text: "note", kind: .identifier)))
+        #expect(tagTokens.contains(SourceCodeToken(text: "id", kind: .identifier)))
+        #expect(tagTokens.contains(SourceCodeToken(text: #""a""#, kind: .string)))
+        #expect(firstCommentLine == [SourceCodeToken(text: "<!-- starts", kind: .comment)])
+        #expect(secondCommentLine.first == SourceCodeToken(text: "continues -->", kind: .comment))
+        #expect(secondCommentLine.contains(SourceCodeToken(text: "tag", kind: .identifier)))
     }
 
     @Test("Keeps numeric operators separate from number tokens")

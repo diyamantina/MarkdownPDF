@@ -11,6 +11,11 @@ Implementation in #120: add opt-in portable syntax coloring for supported
 fenced-code language hints. The default remains uncolored. Unsupported or
 missing language hints render plain code with no warning in the PDF.
 
+Implementation in #143: expand the portable language table with data-driven
+comment delimiters and aliases for common fenced-code hints. The implementation
+still tokenizes a compact presentation subset rather than claiming full parsers
+for those languages.
+
 ## Product Boundary
 
 Production MarkdownPDF must remain Pure Swift, generate PDF bytes directly, and
@@ -102,7 +107,30 @@ Rules:
   explicit mapping from original source text to display text.
 - Tokenization failure renders plain code, not partially corrupt color output.
 - The tokenizer is deliberately narrow. It supports Swift, C-family and Metal
-  hints, Python, and JSON. Broad language claims are not made.
+  hints, Python, JSON, shell-like hash-comment languages, Pascal, Lisp-family
+  line and block comments, SQL/Lua/Haskell/Ada `--` comments, Erlang/LaTeX `%`
+  comments, Visual Basic `'` comments, and XML/HTML comments. Broad language
+  parsing claims are not made.
+
+## #143 Language Coverage Policy
+
+The #143 follow-up keeps language behavior in compact tables:
+
+- language aliases map the first fenced-code info-string word to a
+  `SourceCodeLanguage`;
+- keyword matching is case-insensitive only for languages that need it, such as
+  Dockerfile, Pascal, SQL, Ada, Erlang, and Visual Basic;
+- line comments are modeled as prefixes, including `#`, `;`, `--`, `%`, and
+  `'`;
+- block comments are modeled as start/end delimiter pairs, including `/* */`,
+  Pascal `(* *)` and `{ }`, Lisp `#| |#`, Lua `--[[ ]]`, Haskell `{- -}`, and
+  XML `<!-- -->`;
+- unsupported hints still render as plain code.
+
+The accepted coverage target is readability for static PDF source blocks. It is
+not a promise of AST-level parsing, semantic highlighting, here-document
+handling, XML entity validation, nested block comments, or shell/YAML quoting
+parity with an interactive editor.
 
 ## Color Policy
 

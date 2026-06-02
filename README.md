@@ -410,7 +410,7 @@ swiftlint --config .swiftlint.yml
 - The full WWDC fixture is committed for special stress coverage. Run it with
   `MARKDOWNPDF_LARGE_FIXTURE_TESTS=1 swift test --filter FixtureTests/wwdcLargeFixtureRendersSelectedOversizedAssetsWhenEnabled`
   from `Packages/`.
-- Issue [#99](https://github.com/mihaelamj/MarkdownPDF/issues/99) tracks
+- Issue [#99](https://github.com/mihaelamj/MarkdownPDF/issues/99) completed
   source-code formatting research and implementation, including the reported
   quote-stroke, crammed-layout, glyph-overlap, and image-presence regressions.
   Issue [#120](https://github.com/mihaelamj/MarkdownPDF/issues/120) landed the
@@ -429,8 +429,10 @@ swiftlint --config .swiftlint.yml
   [#142](https://github.com/mihaelamj/MarkdownPDF/issues/142) landed the
   line-break correctness follow-up for Thai, Khmer, Japanese non-starters, and
   Hangul. Issue
-  [#143](https://github.com/mihaelamj/MarkdownPDF/issues/143) is the next
-  queued follow-up.
+  [#143](https://github.com/mihaelamj/MarkdownPDF/issues/143) expanded
+  syntax-coloring coverage with data-driven comment delimiters for shell,
+  YAML, XML/HTML, Pascal, Lisp-family, SQL, Lua, Haskell, Ada, Erlang, LaTeX,
+  and Visual Basic hints.
 - Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) tracks
   named PDF page sizes, including A1, A3, A4, and A5.
 - Apple system font names remain available through
@@ -459,7 +461,7 @@ swiftlint --config .swiftlint.yml
 flowchart TD
     H0["#95<br/>Hard Markdown fixture corpus<br/>Done"]
     H1["#97/#98<br/>A4 and external fixtures<br/>Done"]
-    H2["#99<br/>Source-code formatting epic<br/>Active"]
+    H2["#99<br/>Source-code formatting epic<br/>Done"]
     H2A["#101<br/>Literature research<br/>Done"]
     H2B["#102<br/>Compare with renderer<br/>Done"]
     H2C["#103<br/>Portable code model<br/>Done"]
@@ -477,7 +479,7 @@ flowchart TD
     H2O["#141<br/>Prove #135 witness<br/>Done"]
     H2R["#146<br/>Preserve staged research<br/>Done"]
     H2P["#142<br/>Line-break correctness<br/>Done"]
-    H2Q["#143<br/>More syntax languages<br/>Next"]
+    H2Q["#143<br/>More syntax languages<br/>Done"]
     H3["#100<br/>Named page sizes<br/>Todo"]
 
     H0 --> H1
@@ -490,11 +492,10 @@ flowchart TD
     classDef review fill:#f3e5f5,stroke:#7b1fa2,color:#111;
     classDef next fill:#fff8e1,stroke:#f9a825,color:#111;
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
-    class H0,H1 done;
-    class H2 active;
+    class H0,H1,H2 done;
     class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J,H2K,H2L,H2M,H2N,H2O done;
     class H2P,H2R done;
-    class H2Q next;
+    class H2Q done;
     class H3 todo;
 ```
 
