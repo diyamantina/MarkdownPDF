@@ -120,15 +120,35 @@ struct MarkdownPDFRendererTests {
         let data = try MarkdownPDFRenderer().render(markdown: """
         Intro paragraph.
 
-        > Quoted text stays readable through indentation.
+        ```swift
+        struct Surface {
+            let roughness: Double
+            let transmission: Double
+        }
+        ```
+
+        > QuoteStartToken quoted text stays readable through indentation.
+        > > NestedQuoteToken nested quoted text keeps another indentation level.
+        > QuoteEndToken quoted text ends before the next heading.
+
+        ## AfterQuoteHeading
 
         Follow-up paragraph.
         """)
         let streamBodies = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
+        let strokeLines = streamBodies
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        #expect(streamBodies.contains("(Quoted "))
-        #expect(!streamBodies.contains(" l S"))
-        #expect(!streamBodies.contains("2 w"))
+                return trimmed.hasSuffix(" S") || trimmed.contains(" RG ")
+            }
+
+        #expect(streamBodies.contains("(QuoteStartToken"))
+        #expect(streamBodies.contains("(NestedQuoteToken"))
+        #expect(streamBodies.contains("(AfterQuoteHeading"))
+        #expect(strokeLines.isEmpty, "Unexpected stroke operators:\n\(strokeLines.joined(separator: "\n"))")
     }
 
     @Test("Writes minimal canonical PDF for one text page")
