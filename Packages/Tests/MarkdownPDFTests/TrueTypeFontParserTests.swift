@@ -302,6 +302,28 @@ struct TrueTypeFontParserTests {
         #expect(metadata.cmap.encodingRecords.first?.format == 12)
     }
 
+    @Test("Rejects unsupported font container formats with a typed actionable error")
+    func rejectsUnsupportedFontContainerFormats() {
+        let cases: [(signature: [UInt8], format: String)] = [
+            ([0x4F, 0x54, 0x54, 0x4F], "OpenType CFF"), // OTTO
+            ([0x77, 0x4F, 0x46, 0x46], "WOFF"), // wOFF
+            ([0x77, 0x4F, 0x46, 0x32], "WOFF2"), // wOF2
+            ([0x74, 0x74, 0x63, 0x66], "TrueType/OpenType Collection"), // ttcf
+        ]
+        for testCase in cases {
+            expectTrueTypeError {
+                _ = try TrueTypeFontParser().parse(Data(testCase.signature))
+            } verify: { error in
+                guard case let .unsupportedFontFormat(format, guidance) = error else {
+                    Issue.record("Expected unsupportedFontFormat for \(testCase.format)")
+                    return
+                }
+                #expect(format == testCase.format)
+                #expect(!guidance.isEmpty)
+            }
+        }
+    }
+
     @Test("Rejects name tables whose storage overlaps records")
     func rejectsNameTablesWhoseStorageOverlapsRecords() {
         expectTrueTypeError {

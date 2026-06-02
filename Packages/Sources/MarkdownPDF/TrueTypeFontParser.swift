@@ -134,6 +134,7 @@ struct TrueTypeFontParser {
 
         let reader = TrueTypeByteReader(table: "sfnt", bytes: bytes)
         let scalerType = try reader.uint32(at: 0)
+        try Self.rejectUnsupportedContainer(scalerType: scalerType)
         guard Self.supportedScalerTypes.contains(scalerType) else {
             throw TrueTypeFontError.unsupportedScalerType(scalerType)
         }
@@ -144,6 +145,7 @@ struct TrueTypeFontParser {
 
         let records = try tableRecords(reader: reader, count: numTables)
         let recordsByTag = Dictionary(uniqueKeysWithValues: records.map { ($0.tag, $0) })
+        try Self.rejectUnsupportedOutline(tags: Set(recordsByTag.keys))
         try Self.requiredTables.forEach { tag in
             if recordsByTag[tag] == nil {
                 throw TrueTypeFontError.missingRequiredTable(tag)
@@ -604,6 +606,58 @@ struct TrueTypeFontParser {
         0x0001_0000,
         0x7472_7565,
     ]
+
+    /// Reject container formats that wrap or replace a plain TrueType sfnt with a
+    /// typed, actionable error rather than a generic unsupported-scaler failure.
+    private static func rejectUnsupportedContainer(scalerType: UInt32) throws {
+        switch scalerType {
+        case 0x4F54_544F: // 'OTTO'
+            throw TrueTypeFontError.unsupportedFontFormat(
+                format: "OpenType CFF",
+                guidance: "OpenType CFF embedding (FontFile3 / CIDFontType0) is staged but not implemented. Supply a TrueType (glyf) font.",
+            )
+        case 0x774F_4646: // 'wOFF'
+            throw TrueTypeFontError.unsupportedFontFormat(
+                format: "WOFF",
+                guidance: "Decompress the WOFF web font to a plain SFNT font before embedding; WOFF support is not implemented.",
+            )
+        case 0x774F_4632: // 'wOF2'
+            throw TrueTypeFontError.unsupportedFontFormat(
+                format: "WOFF2",
+                guidance: "Decompress the WOFF2 web font to a plain SFNT font before embedding; WOFF2 (Brotli) support is not implemented.",
+            )
+        case 0x7474_6366: // 'ttcf'
+            throw TrueTypeFontError.unsupportedFontFormat(
+                format: "TrueType/OpenType Collection",
+                guidance: "Extract a single face from the .ttc collection and embed that face; whole-collection embedding is not supported.",
+            )
+        default:
+            break
+        }
+    }
+
+    /// Reject outline formats detected from the table directory (rather than the
+    /// file extension) that the embedder cannot yet serialize.
+    private static func rejectUnsupportedOutline(tags: Set<String>) throws {
+        if tags.contains("CFF2") {
+            throw TrueTypeFontError.unsupportedFontFormat(
+                format: "CFF2",
+                guidance: "Instance the CFF2 font to a static outline before embedding; CFF2 is not supported.",
+            )
+        }
+        if !tags.contains("glyf"), tags.contains("CFF ") {
+            throw TrueTypeFontError.unsupportedFontFormat(
+                format: "OpenType CFF",
+                guidance: "OpenType CFF embedding (FontFile3 / CIDFontType0) is staged but not implemented. Supply a TrueType (glyf) font.",
+            )
+        }
+        if tags.contains("fvar") {
+            throw TrueTypeFontError.unsupportedFontFormat(
+                format: "variable font",
+                guidance: "Instance the variable font to a named instance before embedding; variable-font instancing is not implemented.",
+            )
+        }
+    }
 
     private static let supportedCMapFormats: Set<UInt16> = [4, 12]
 

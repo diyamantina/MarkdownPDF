@@ -108,6 +108,16 @@ public struct PDFOptions: Equatable, Sendable {
             self.subtype = subtype
         }
 
+        /// Apple system font *names* (SF Pro Text, SF Mono) written into the PDF
+        /// font dictionaries.
+        ///
+        /// This is a names-only, best-effort, macOS-oriented convenience: it
+        /// embeds no font data and commits no font binaries. The names resolve
+        /// only where a reader can substitute the matching Apple fonts, so output
+        /// is not portable to Linux readers and is not font embedding. Apple
+        /// system fonts are license-restricted and intentionally never embedded.
+        /// For portable, self-contained output use ``pdfBase`` or supply caller
+        /// font data through ``PDFOptions/EmbeddedFonts``.
         public static let appleSystem = FontSet(
             regular: "SFProText-Regular",
             bold: "SFProText-Bold",

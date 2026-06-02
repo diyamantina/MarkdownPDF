@@ -13,6 +13,7 @@ enum TrueTypeFontError: Error, Equatable, LocalizedError {
     case restrictedEmbedding(fsType: UInt16)
     case bitmapOnlyEmbedding(fsType: UInt16)
     case subsettingRequired(fsType: UInt16)
+    case unsupportedFontFormat(format: String, guidance: String)
 
     var errorDescription: String? {
         switch self {
@@ -40,6 +41,8 @@ enum TrueTypeFontError: Error, Equatable, LocalizedError {
             "The OS/2 fsType value 0x\(Self.hex(fsType)) allows only bitmap embedding."
         case let .subsettingRequired(fsType):
             "The OS/2 fsType value 0x\(Self.hex(fsType)) forbids subsetting."
+        case let .unsupportedFontFormat(format, _):
+            "The \(format) font format is not supported for embedding yet."
         }
     }
 
@@ -67,6 +70,8 @@ enum TrueTypeFontError: Error, Equatable, LocalizedError {
             "Choose a font that permits outline embedding."
         case .subsettingRequired:
             "Choose a font that permits subsetting or use an embedding policy that does not require subsets."
+        case let .unsupportedFontFormat(_, guidance):
+            guidance
         }
     }
 
