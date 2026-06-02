@@ -263,6 +263,94 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("Crazy Markdown fixture passes visual witness stack")
+    func crazyMarkdownFixturePassesVisualWitnessStack() throws {
+        let data = try crazyMarkdownFixturePDF()
+        let url = try PDFValidation.temporaryPDF(name: "crazy-markdown-torture", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+
+        #expect(pageCount >= 6)
+        try PDFValidation.writeArtifact(data, name: "crazy-markdown-torture.pdf")
+
+        let verticalRuleLines = inspector.streams.flatMap { stream in
+            verticalRuleOperatorLines(in: stream.body)
+        }
+        #expect(
+            verticalRuleLines.isEmpty,
+            "Crazy Markdown fixture emitted unexpected vertical rule operators:\n\(verticalRuleLines.joined(separator: "\n"))",
+        )
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "crazy-markdown-torture/text.txt")
+        let normalizedText = normalizedExtractedText(textResult.output)
+        #expect(normalizedText.contains("Crazy Markdown Torture Manuscript"))
+        #expect(normalizedText.contains("DeepListLevelThreeMarker"))
+        #expect(normalizedText.contains("QuoteBulletTwoMarker"))
+        #expect(normalizedText.contains("Crazy Torture Exit Marker"))
+        #expect(normalizedText.contains("Caf?"))
+        #expect(normalizedText.contains("cafe?"))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "crazy-markdown-torture/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+
+        #expect(popplerLayout.pages.count == pageCount)
+        #expect(popplerLayout.words.count > 1000)
+        #expect(
+            popplerIssues.isEmpty,
+            "Crazy Markdown fixture Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "crazy-markdown-torture/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+
+        #expect(mupdfLayout.pages.count == pageCount)
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 6500)
+        #expect(
+            mupdfIssues.isEmpty,
+            "Crazy Markdown fixture MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "crazy-markdown-torture/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "crazy-markdown-torture/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "crazy-markdown-torture-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "crazy-markdown-torture-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "Crazy Markdown fixture raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("A4 manuscript fixture passes visual witness stack")
     func a4ManuscriptFixturePassesVisualWitnessStack() throws {
         let data = try a4ManuscriptFixturePDF()
@@ -1405,6 +1493,24 @@ struct PDFVisualLayoutValidationTests {
         return data
     }
 
+    private func crazyMarkdownFixturePDF() throws -> Data {
+        let assetsBaseURL = try TestImageAssets.directoryWithChartPNG()
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 260, height: 320),
+                margins: PDFOptions.Margins(top: 24, right: 22, bottom: 24, left: 22),
+                baseFontSize: 10,
+                title: "Crazy Markdown Torture Manuscript",
+                tableOfContents: .enabled,
+            ),
+        ).render(
+            markdown: fixture(named: "crazy-markdown-torture.md"),
+            assetsBaseURL: assetsBaseURL,
+        )
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        return data
+    }
+
     private func a4ManuscriptFixturePDF() throws -> Data {
         let assetsBaseURL = try TestImageAssets.directoryWithChartPNG()
         let data = try MarkdownPDFRenderer(
@@ -1543,16 +1649,48 @@ struct PDFVisualLayoutValidationTests {
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-        return lines.filter { line in
+        var matches: [String] = []
+        var pendingMove: (x: Double, y: Double)?
+        var pendingLine: (x1: Double, y1: Double, x2: Double, y2: Double)?
+
+        for line in lines {
             if isSkinnyVerticalRectangleOperator(line) {
-                return true
+                matches.append(line)
+                continue
             }
 
-            return line == "S"
-                || line == "s"
-                || line.hasSuffix(" S")
-                || line.hasSuffix(" s")
+            if isInlineSkinnyVerticalPathStroke(line) {
+                matches.append(line)
+                continue
+            }
+
+            if let move = moveOperatorPoint(line) {
+                pendingMove = move
+                pendingLine = nil
+                continue
+            }
+
+            if let linePoint = lineOperatorPoint(line),
+               let move = pendingMove
+            {
+                pendingLine = (move.x, move.y, linePoint.x, linePoint.y)
+                continue
+            }
+
+            if isStrokeOperator(line) {
+                if let pendingLine, isSkinnyVerticalPath(pendingLine) {
+                    matches.append(line)
+                }
+                pendingMove = nil
+                pendingLine = nil
+                continue
+            }
+
+            pendingMove = nil
+            pendingLine = nil
         }
+
+        return matches
     }
 
     private func isSkinnyVerticalRectangleOperator(_ line: String) -> Bool {
@@ -1566,6 +1704,60 @@ struct PDFVisualLayoutValidationTests {
         }
 
         return abs(width) <= 3 && abs(height) >= 16
+    }
+
+    private func isInlineSkinnyVerticalPathStroke(_ line: String) -> Bool {
+        let parts = line.split(separator: " ").map(String.init)
+        guard let moveIndex = parts.firstIndex(of: "m"),
+              let lineIndex = parts.firstIndex(of: "l"),
+              parts.suffix(2).contains(where: { $0 == "S" || $0 == "s" }),
+              moveIndex >= 2,
+              lineIndex >= moveIndex + 3,
+              let x1 = Double(parts[moveIndex - 2]),
+              let y1 = Double(parts[moveIndex - 1]),
+              let x2 = Double(parts[lineIndex - 2]),
+              let y2 = Double(parts[lineIndex - 1])
+        else {
+            return false
+        }
+
+        return isSkinnyVerticalPath((x1, y1, x2, y2))
+    }
+
+    private func moveOperatorPoint(_ line: String) -> (x: Double, y: Double)? {
+        let parts = line.split(separator: " ")
+        guard parts.count == 3,
+              parts[2] == "m",
+              let x = Double(parts[0]),
+              let y = Double(parts[1])
+        else {
+            return nil
+        }
+
+        return (x, y)
+    }
+
+    private func lineOperatorPoint(_ line: String) -> (x: Double, y: Double)? {
+        let parts = line.split(separator: " ")
+        guard parts.count == 3,
+              parts[2] == "l",
+              let x = Double(parts[0]),
+              let y = Double(parts[1])
+        else {
+            return nil
+        }
+
+        return (x, y)
+    }
+
+    private func isStrokeOperator(_ line: String) -> Bool {
+        line == "S" || line == "s"
+    }
+
+    private func isSkinnyVerticalPath(_ path: (x1: Double, y1: Double, x2: Double, y2: Double)) -> Bool {
+        let width = abs(path.x2 - path.x1)
+        let height = abs(path.y2 - path.y1)
+        return width <= 3 && height >= 16
     }
 
     private static let artifactManifest = """
@@ -1615,6 +1807,15 @@ struct PDFVisualLayoutValidationTests {
 
     hard-markdown-corpus-pages/
     Poppler and MuPDF page rasters for the hard Markdown fixture.
+
+    crazy-markdown-torture.pdf
+    Crazy public Markdown fixture with dense lists, several code languages, tables, local and remote images, reference-style image syntax, raw HTML, footnote-like notes, non-ASCII replacement, and Mermaid.
+
+    crazy-markdown-torture/
+    Text, geometry, structured text, and render logs for the crazy Markdown fixture.
+
+    crazy-markdown-torture-pages/
+    Poppler and MuPDF page rasters for the crazy Markdown fixture.
 
     a4-manuscript.pdf
     A4 manuscript-style fixture with sustained prose, tables, figures, code, and Mermaid blocks.

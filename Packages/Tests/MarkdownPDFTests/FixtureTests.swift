@@ -168,6 +168,38 @@ struct FixtureTests {
         #expect(!extractedText.contains("Source[Hard input]"))
     }
 
+    @Test("Crazy Markdown fixture covers adversarial manuscript features")
+    func crazyMarkdownFixtureCoversAdversarialManuscriptFeatures() throws {
+        let data = try renderArticleFixture(named: "crazy-markdown-torture.md")
+        let inspector = PDFInspector(data)
+        let textResult = try PDFValidation.pdftotext(data: data, name: "crazy-markdown-torture-features")
+        try #require(textResult.exitCode == 0, "pdftotext failed for crazy Markdown fixture:\n\(textResult.output)")
+        let extractedText = textResult.output
+        let normalizedText = normalizedExtractedText(extractedText)
+
+        #expect(inspector.pageCount >= 6)
+        #expect(inspector.linkAnnotationCount >= 3)
+        #expect(inspector.text.contains("/Names << /Dests"))
+        #expect(inspector.text.contains("/Subtype /Image"))
+        #expect(imageXObjectCount(in: inspector.text) == 1)
+        #expect(imageDrawOperatorCount(in: inspector.text) == 2)
+        #expect(extractedText.contains("Table of Contents"))
+        #expect(normalizedText.contains("Crazy Markdown Torture Manuscript"))
+        #expect(normalizedText.contains("DeepListLevelThreeMarker"))
+        #expect(normalizedText.contains("QuoteBulletTwoMarker"))
+        #expect(normalizedText.contains("Raw HTML fallback for the crazy fixture"))
+        #expect(extractedText.contains("[Remote image: Crazy remote chart]"))
+        #expect(normalizedText.contains("Reference-style chart placeholder"))
+        #expect(extractedText.contains("Unsupported Mermaid diagram"))
+        #expect(normalizedText.contains("Unsupported crazy chart"))
+        #expect(normalizedText.contains("Caf?"))
+        #expect(normalizedText.contains("na?ve"))
+        #expect(normalizedText.contains("??"))
+        #expect(normalizedText.contains("cafe?"))
+        #expect(normalizedText.contains("Crazy Torture Exit Marker"))
+        #expect(!extractedText.contains("CI[Crazy input]"))
+    }
+
     @Test("A4 manuscript fixture covers manuscript-scale portable Markdown")
     func a4ManuscriptFixtureCoversManuscriptScalePortableMarkdown() throws {
         let data = try renderArticleFixture(named: "a4-manuscript.md")
@@ -306,10 +338,10 @@ struct FixtureTests {
             name: "image-reference-audit.txt",
         )
 
-        #expect(entries.count == 399)
-        #expect(summary[.rendered] == 40)
+        #expect(entries.count == 402)
+        #expect(summary[.rendered] == 42)
         #expect(summary[.renderedInLargeStress] == 4)
-        #expect(summary[.fallbackOnly] == 4)
+        #expect(summary[.fallbackOnly] == 5)
         #expect(summary[.intentionallyOmitted] == 351)
         #expect(summary[.missing, default: 0] == 0)
         #expect(summary[.unsupported, default: 0] == 0)
@@ -545,7 +577,7 @@ struct FixtureTests {
     }
 
     private func articleFixtureOptions(for fixtureName: String) -> PDFOptions {
-        if ["article-grade-stress.md", "hard-markdown-corpus.md"].contains(fixtureName) {
+        if ["article-grade-stress.md", "hard-markdown-corpus.md", "crazy-markdown-torture.md"].contains(fixtureName) {
             return PDFOptions(
                 pageSize: PDFOptions.PageSize(width: 260, height: 320),
                 margins: PDFOptions.Margins(top: 24, right: 22, bottom: 24, left: 22),
@@ -579,7 +611,7 @@ struct FixtureTests {
     }
 
     private func articleFixtureAssetsBaseURL(for fixtureName: String) throws -> URL? {
-        if ["article-grade-stress.md", "hard-markdown-corpus.md", "a4-manuscript.md"].contains(fixtureName) {
+        if ["article-grade-stress.md", "hard-markdown-corpus.md", "crazy-markdown-torture.md", "a4-manuscript.md"].contains(fixtureName) {
             return try TestImageAssets.directoryWithChartPNG()
         }
 
@@ -598,6 +630,7 @@ struct FixtureTests {
         [
             "article-grade-stress.md",
             "hard-markdown-corpus.md",
+            "crazy-markdown-torture.md",
             "a4-manuscript.md",
             "scientific-article.md",
             "technical-report.md",
@@ -610,6 +643,8 @@ struct FixtureTests {
             "Portable Article Stress Corpus"
         case "hard-markdown-corpus.md":
             "Portable Hard Markdown Corpus"
+        case "crazy-markdown-torture.md":
+            "Crazy Markdown Torture Manuscript"
         case "a4-manuscript.md":
             "Portable A4 Manuscript Fixture"
         case "scientific-article.md":
@@ -623,7 +658,7 @@ struct FixtureTests {
 
     private func expectedMinimumPageCount(for fixtureName: String) -> Int {
         switch fixtureName {
-        case "article-grade-stress.md", "hard-markdown-corpus.md":
+        case "article-grade-stress.md", "hard-markdown-corpus.md", "crazy-markdown-torture.md":
             6
         case "a4-manuscript.md":
             5
