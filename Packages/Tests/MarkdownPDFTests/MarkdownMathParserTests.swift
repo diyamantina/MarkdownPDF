@@ -31,4 +31,21 @@ struct MarkdownMathParserTests {
             try MarkdownMathParser().parse(#"\left(x\right"#)
         }
     }
+
+    @Test("Parses and linearizes the expanded symbol set")
+    func parsesExpandedSymbolSet() throws {
+        let parser = MarkdownMathParser()
+
+        #expect(try parser.parse(#"\forall x \in S"#).linearizedText == "forall x in S")
+        #expect(try parser.parse(#"a \approx b"#).linearizedText == "a ~= b")
+        #expect(try parser.parse(#"x \leftarrow y \Rightarrow z"#).linearizedText == "x <- y => z")
+        #expect(try parser.parse(#"\sin x + \cos y"#).linearizedText == "sin x + cos y")
+        #expect(try parser.parse(#"A \cup B \cap C"#).linearizedText == "A cup B cap C")
+        #expect(try parser.parse(#"\rho \tau \chi"#).linearizedText == "rho tau chi")
+    }
+
+    @Test("Treats limit-style operators as big operators with scripts")
+    func treatsLimitOperatorsAsBigOperators() throws {
+        #expect(try MarkdownMathParser().parse(#"\lim_{x \to 0} f"#).linearizedText == "lim_{x -> 0} f")
+    }
 }

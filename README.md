@@ -539,11 +539,11 @@ merge.
 flowchart TD
     M0["#158<br/>Opt-in math subset entry point<br/>Done"]
     M1["#159<br/>OpenType MATH font tables<br/>Done"]
-    M2["Scope 1<br/>Parse inline/display, visible-source fallback<br/>Active"]
+    M2["Scope 1<br/>Parse inline/display, visible-source fallback<br/>Done"]
     M3["Scope 3+4<br/>Box-and-glue layout on font-backed metrics<br/>Active"]
-    M4["Scope 2<br/>Symbol coverage: scripts, fractions, radicals, big ops, delimiters, Greek<br/>Active"]
-    M5["Scope 5<br/>Readable pdftotext linearization<br/>Todo"]
-    M6["Acceptance<br/>qpdf, pdftotext, MuPDF quads, raster witnesses<br/>Todo"]
+    M4["Scope 2<br/>Symbol coverage: scripts, fractions, radicals, big ops, delimiters, Greek, relations, arrows, functions<br/>Active"]
+    M5["Scope 5<br/>Readable pdftotext linearization<br/>Done"]
+    M6["Acceptance<br/>qpdf, pdftotext, MuPDF quads, raster witnesses<br/>Active"]
 
     M0 --> M1 --> M2 --> M3 --> M4 --> M5 --> M6
 
@@ -552,9 +552,8 @@ flowchart TD
     classDef review fill:#f3e5f5,stroke:#7b1fa2,color:#111;
     classDef next fill:#fff8e1,stroke:#f9a825,color:#111;
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
-    class M0,M1 done;
-    class M2,M3,M4 active;
-    class M5,M6 todo;
+    class M0,M1,M2,M5 done;
+    class M3,M4,M6 active;
 ```
 
 ## macOS article-grade renderer roadmap
