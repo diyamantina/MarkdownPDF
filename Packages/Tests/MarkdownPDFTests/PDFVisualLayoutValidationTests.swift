@@ -656,6 +656,89 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("CJK and diacritics manuscript passes visual witness stack")
+    func cjkAndDiacriticsManuscriptPassesVisualWitnessStack() throws {
+        let data = try cjkDiacriticsManuscriptPDF()
+        let url = try PDFValidation.temporaryPDF(name: "cjk-diacritics-manuscript", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+
+        #expect(pageCount >= 2)
+        #expect(inspector.text.contains("/Subtype /CIDFontType2"))
+        #expect(inspector.text.contains("/ToUnicode"))
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        try PDFValidation.writeArtifact(data, name: "cjk-diacritics-manuscript.pdf")
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "cjk-diacritics-manuscript/text.txt")
+        let normalizedText = normalizedExtractedText(textResult.output)
+        let compactText = textResult.output.filter { !$0.isWhitespace }
+        #expect(normalizedText.contains("Latin text"))
+        #expect(normalizedText.contains("1."))
+        #expect(compactText.contains("漢字語漢字語"))
+        #expect(compactText.contains("漢\u{0301}字語"))
+        #expect(try compactText.unicodeScalars.contains(#require(UnicodeScalar(0x0301))))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "cjk-diacritics-manuscript/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+
+        #expect(popplerLayout.pages.count == pageCount)
+        #expect(popplerLayout.words.count > 80)
+        #expect(
+            popplerIssues.isEmpty,
+            "CJK and diacritics Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "cjk-diacritics-manuscript/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+
+        #expect(mupdfLayout.pages.count == pageCount)
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 500)
+        #expect(
+            mupdfIssues.isEmpty,
+            "CJK and diacritics MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "cjk-diacritics-manuscript/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "cjk-diacritics-manuscript/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "cjk-diacritics-manuscript-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "cjk-diacritics-manuscript-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "CJK and diacritics raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("Embedded font public API profile passes visual witness stack")
     func embeddedFontPublicAPIProfilePassesVisualWitnessStack() throws {
         let data = try embeddedFontPublicAPIPDF()
@@ -1712,6 +1795,25 @@ struct PDFVisualLayoutValidationTests {
         ).render(markdown: markdown)
     }
 
+    private func cjkDiacriticsManuscriptPDF() throws -> Data {
+        let fontData = SyntheticTrueTypeFont.data(
+            cmapFormat: 12,
+            glyphProfile: .cjkDiacriticWitness,
+            includeGlyphOutlines: true,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "MarkdownPDF CJK Diacritic Fixture")
+
+        return try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 260, height: 320),
+                margins: PDFOptions.Margins(top: 24, right: 22, bottom: 24, left: 22),
+                baseFontSize: 10,
+                embeddedFonts: .allRoles(source),
+                title: "CJK Diacritics Manuscript Witness",
+            ),
+        ).render(markdown: fixture(named: "cjk-diacritics-manuscript.md"))
+    }
+
     private func fixture(named name: String) throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let fixtureURL = testFile
@@ -1995,6 +2097,15 @@ struct PDFVisualLayoutValidationTests {
 
     embedded-cid-text-pages/
     Poppler and MuPDF page rasters for the embedded CID text fixture.
+
+    cjk-diacritics-manuscript.pdf
+    PDF proving manuscript-scale CJK line breaking, embedded CID text, and combining diacritic extraction.
+
+    cjk-diacritics-manuscript/
+    Text, geometry, structured text, and render logs for the CJK and diacritics manuscript fixture.
+
+    cjk-diacritics-manuscript-pages/
+    Poppler and MuPDF page rasters for the CJK and diacritics manuscript fixture.
 
     embedded-font-public-api.pdf
     PDF proving the public PDFOptions embedded-font role mapping through MarkdownPDFRenderer.

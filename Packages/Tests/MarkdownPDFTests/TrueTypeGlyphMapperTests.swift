@@ -51,6 +51,22 @@ struct TrueTypeGlyphMapperTests {
         #expect(abs(mapping.totalWidth - 35) < 0.0001)
     }
 
+    @Test("Rejects missing CJK glyphs with a typed error")
+    func rejectsMissingCJKGlyphsWithTypedError() throws {
+        let fontData = SyntheticTrueTypeFont.data(cmapFormat: 12, glyphProfile: .cjkWitness)
+        let metadata = try TrueTypeFontParser().parse(fontData)
+
+        expectGlyphMappingError {
+            _ = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "漢未", fontSize: 10)
+        } verify: { error in
+            guard case let .missingGlyph(scalar) = error else {
+                Issue.record("Expected missing glyph")
+                return
+            }
+            #expect(scalar == "未")
+        }
+    }
+
     @Test("Maps format 4 glyph id arrays")
     func mapsFormat4GlyphIDArrays() throws {
         let fontData = SyntheticTrueTypeFont.data(cmapFormat4UsesGlyphArray: true)

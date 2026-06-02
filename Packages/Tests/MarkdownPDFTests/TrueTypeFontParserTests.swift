@@ -62,6 +62,23 @@ struct TrueTypeFontParserTests {
         #expect(metadata.hmtx.advanceWidths == [500, 1000, 1000, 1000, 500])
     }
 
+    @Test("Parses renderable synthetic CJK diacritic witness font")
+    func parsesRenderableSyntheticCJKDiacriticWitnessFont() throws {
+        let metadata = try TrueTypeFontParser().parse(
+            SyntheticTrueTypeFont.data(
+                cmapFormat: 12,
+                glyphProfile: .cjkDiacriticWitness,
+                includeGlyphOutlines: true,
+            ),
+        )
+
+        #expect(metadata.cmap.selectedUnicodeFormat == 12)
+        #expect(metadata.maxp.numGlyphs == 19)
+        #expect(metadata.hhea.numberOfHMetrics == 19)
+        #expect(Array(metadata.hmtx.advanceWidths[1 ... 9]) == [1000, 1000, 1000, 1000, 1000, 500, 280, 500, 0])
+        #expect(Array(metadata.hmtx.advanceWidths[10 ... 18]) == [520, 500, 450, 250, 520, 500, 500, 500, 250])
+    }
+
     @Test("Rejects malformed table checksums")
     func rejectsMalformedTableChecksums() {
         expectTrueTypeError {
@@ -329,6 +346,7 @@ enum SyntheticTrueTypeFont {
     enum GlyphProfile {
         case basic
         case compositeWitness
+        case cjkDiacriticWitness
         case cjkWitness
         case largeBMPWitness
         case latinWitness
@@ -1017,6 +1035,27 @@ enum SyntheticTrueTypeFont {
                     GlyphRecord(scalar: "B", advanceWidth: 620, xMin: 70, xMax: 540),
                     GlyphRecord(scalar: "C", advanceWidth: 740, xMin: 40, xMax: 720, components: [1, 2]),
                 ]
+            case .cjkDiacriticWitness:
+                [
+                    GlyphRecord(scalar: "漢", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "字", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "語", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "仮", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "名", advanceWidth: 1000, xMin: 60, xMax: 940),
+                    GlyphRecord(scalar: "。", advanceWidth: 500, xMin: 120, xMax: 420),
+                    GlyphRecord(scalar: " ", advanceWidth: 280, xMin: nil, xMax: nil),
+                    GlyphRecord(scalar: "e", advanceWidth: 500, xMin: 50, xMax: 430),
+                    GlyphRecord(scalar: "\u{0301}", advanceWidth: 0, xMin: 120, xMax: 260),
+                    GlyphRecord(scalar: "L", advanceWidth: 520, xMin: 50, xMax: 450),
+                    GlyphRecord(scalar: "a", advanceWidth: 500, xMin: 50, xMax: 430),
+                    GlyphRecord(scalar: "t", advanceWidth: 450, xMin: 50, xMax: 390),
+                    GlyphRecord(scalar: "i", advanceWidth: 250, xMin: 90, xMax: 170),
+                    GlyphRecord(scalar: "n", advanceWidth: 520, xMin: 50, xMax: 470),
+                    GlyphRecord(scalar: "x", advanceWidth: 500, xMin: 50, xMax: 440),
+                    GlyphRecord(scalar: "1", advanceWidth: 500, xMin: 90, xMax: 420),
+                    GlyphRecord(scalar: "2", advanceWidth: 500, xMin: 60, xMax: 430),
+                    GlyphRecord(scalar: ".", advanceWidth: 250, xMin: 100, xMax: 150),
+                ]
             case .cjkWitness:
                 [
                     GlyphRecord(scalar: "漢", advanceWidth: 1000, xMin: 60, xMax: 940),
@@ -1082,7 +1121,7 @@ enum SyntheticTrueTypeFont {
             switch profile {
             case .basic:
                 2
-            case .compositeWitness, .cjkWitness, .largeBMPWitness, .latinWitness, .latinLigature:
+            case .compositeWitness, .cjkDiacriticWitness, .cjkWitness, .largeBMPWitness, .latinWitness, .latinLigature:
                 numGlyphs
             }
         }

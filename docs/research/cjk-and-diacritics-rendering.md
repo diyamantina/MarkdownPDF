@@ -125,9 +125,14 @@ only when the path is absent, naming the missing path in the skip reason.
   mapper, and renderer tests prove 1000-unit `hmtx` advances for ideographs,
   CID width emission, ToUnicode extraction, and narrow-page wrapping without
   committing a real font file.
-- Remaining work: manuscript-scale CJK embedded-font fixtures, cross-script
-  combining-mark witnesses, and any East Asian Width fallback policy for text
-  rendered without an embedded font.
+- A committed `cjk-diacritics-manuscript.md` fixture now runs through the visual
+  witness stack with an embedded synthetic font. It covers CJK line breaking,
+  Latin text, ordered lists, Latin `e` plus U+0301, CJK plus U+0301, qpdf,
+  Poppler extraction and geometry, MuPDF character quads, and Poppler/MuPDF
+  raster comparison.
+- Missing CJK glyphs are covered by a typed negative test. Remaining work is
+  limited to any East Asian Width fallback policy for text rendered without an
+  embedded font.
 
 ## Platform notes
 
