@@ -690,7 +690,7 @@ struct PDFVisualLayoutValidationTests {
         let popplerIssues = popplerLayout.visualLayoutIssues()
 
         #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 80)
+        #expect(Set(popplerLayout.words.map(\.page)).count == pageCount)
         #expect(
             popplerIssues.isEmpty,
             "CJK and diacritics Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",

@@ -95,11 +95,11 @@ Reuse the complex-script witness stack:
 
 ## Font fixture policy
 
-The public repo stores no font binaries. Use generated Swift TrueType fixtures
-for deterministic parser / subset / writer tests, and a CI-installed or
-environment-provided open font that covers CJK and combining marks through an
-`MARKDOWNPDF_OPEN_FONT_PATH`-style variable. Tests that need such a font may skip
-only when the path is absent, naming the missing path in the skip reason.
+The public repo stores no font binaries. Current tests use generated Swift
+TrueType fixtures for deterministic parser, subset, writer, and visual witness
+coverage. If future work needs a real open font corpus, it should add an
+explicit opt-in environment variable and skip only when the path is absent,
+naming the missing path in the skip reason.
 
 ## Ordered work
 
