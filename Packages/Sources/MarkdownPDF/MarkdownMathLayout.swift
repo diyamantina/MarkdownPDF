@@ -51,6 +51,8 @@ struct MarkdownMathLayout {
                 leftAlign: leftAlign,
                 size: size,
             )
+        case let .scaledDelimiter(symbol, scale):
+            try layoutText(symbol, size: size * scale)
         }
     }
 

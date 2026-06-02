@@ -78,4 +78,13 @@ struct MarkdownMathParserTests {
             try parser.parse(#"\begin{unknownenv} a \end{unknownenv}"#)
         }
     }
+
+    @Test("Parses scaling delimiters")
+    func parsesScalingDelimiters() throws {
+        let parser = MarkdownMathParser()
+
+        #expect(try parser.parse(#"\big( x \big)"#).linearizedText == "( x )")
+        #expect(try parser.parse(#"\Big[ y \Big]"#).linearizedText == "[ y ]")
+        #expect(try parser.parse(#"\bigg\{ z \bigg\}"#).linearizedText == "{ z }")
+    }
 }

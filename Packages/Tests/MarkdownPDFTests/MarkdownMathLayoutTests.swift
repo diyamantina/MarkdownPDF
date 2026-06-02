@@ -79,6 +79,16 @@ struct MarkdownMathLayoutTests {
         #expect(box.height > 0)
     }
 
+    @Test("Scaling delimiters grow taller than a base delimiter")
+    func scalingDelimitersGrowTaller() throws {
+        let layout = makeLayout()
+        let plain = try layout.layout(.text("("), size: 10, displayStyle: false)
+        let big = try layout.layout(.scaledDelimiter(symbol: "(", scale: 1.8), size: 10, displayStyle: false)
+
+        #expect(big.height > plain.height)
+        #expect(big.textElement(containing: "(") != nil)
+    }
+
     @Test("Default metrics preserve script radical and limit geometry")
     func defaultMetricsPreserveScriptRadicalAndLimitGeometry() throws {
         let layout = makeLayout()

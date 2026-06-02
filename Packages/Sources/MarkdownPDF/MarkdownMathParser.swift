@@ -163,6 +163,8 @@ struct MarkdownMathParser {
                 return .symbol(display: name, linearized: name, isBigOperator: false)
             case "begin":
                 return try parseMatrixEnvironment()
+            case "big", "Big", "bigg", "Bigg":
+                return try parseScaledDelimiter(scale: Self.delimiterScales[command] ?? 1)
             case "right", "end", "newcommand":
                 throw ParseError.unsupportedControlWord(command)
             default:
@@ -197,6 +199,15 @@ struct MarkdownMathParser {
             skipWhitespace()
             let closing = try parseDelimiter(for: "right")
             return compactSequence([opening, body, closing])
+        }
+
+        private mutating func parseScaledDelimiter(scale: Double) throws -> MarkdownMathNode {
+            skipWhitespace()
+            let delimiter = try parseDelimiter(for: "big")
+            if case let .text(symbol) = delimiter {
+                return .scaledDelimiter(symbol: symbol, scale: scale)
+            }
+            return delimiter
         }
 
         private mutating func parseMatrixEnvironment() throws -> MarkdownMathNode {
@@ -403,6 +414,13 @@ struct MarkdownMathParser {
             }
             return .sequence(nonEmpty)
         }
+
+        private static let delimiterScales: [String: Double] = [
+            "big": 1.2,
+            "Big": 1.8,
+            "bigg": 2.4,
+            "Bigg": 3.0,
+        ]
 
         private static let matrixEnvironments: [String: (open: String, close: String, leftAlign: Bool)] = [
             "matrix": ("", "", false),

@@ -2515,7 +2515,7 @@ private struct Layout {
                 strikethrough: strikethrough,
                 linkDestination: linkDestination,
             )]
-        case .fraction, .radical, .accent, .matrix:
+        case .fraction, .radical, .accent, .matrix, .scaledDelimiter:
             return [inlineMathTextRun(
                 MarkdownMathLinearizer().linearize(node),
                 size: size,

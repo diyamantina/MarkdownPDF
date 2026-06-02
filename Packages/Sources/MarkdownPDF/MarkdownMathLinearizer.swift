@@ -36,6 +36,8 @@ struct MarkdownMathLinearizer {
                 return "matrix(\(body))"
             }
             return "\(open)\(body)\(close)"
+        case let .scaledDelimiter(symbol, _):
+            return symbol
         }
     }
 
