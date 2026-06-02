@@ -13,7 +13,7 @@ The engine targets macOS and Linux. Two obligations follow:
 1. Guard every platform-divergent line, preferring `#if canImport(<Framework>)` over `#if os(...)` so future platforms inherit the right branch.
 2. Check Linux availability before adding a dependency. Many Apple frameworks, and the packages that wrap them, do not build on Linux.
 
-When the same functionality needs a different implementation per platform, abstract it behind a protocol seam; do not branch at call sites. Define a foundation-only protocol (see [shared-protocols.md](shared-protocols.md)), implement it once per platform (a macOS target using the Apple package, a Linux target using a Linux-available package), and let the composition root wire the correct one (see [dependency-injection.md](dependency-injection.md)). The core depends only on the protocol.
+When the same functionality needs a different implementation per platform, abstract it behind a protocol seam; do not branch at call sites. Define a foundation-only protocol (see [shared-protocols.md](doc:SharedProtocols)), implement it once per platform (a macOS target using the Apple package, a Linux target using a Linux-available package), and let the composition root wire the correct one (see [dependency-injection.md](doc:DependencyInjection)). The core depends only on the protocol.
 
 ```swift
 public protocol ClockService: Sendable { var now: Date { get } }

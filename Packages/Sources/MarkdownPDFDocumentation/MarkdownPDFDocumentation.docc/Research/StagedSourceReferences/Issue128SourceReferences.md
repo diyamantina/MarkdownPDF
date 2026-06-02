@@ -1,3 +1,7 @@
+# Issue 128 source references
+
+Staged source and reference materials gathered for issue #128, vendored study-only under `researchcode/`.
+
 ## Source-code references (vendored in `researchcode/`)
 
 Richest model is Apache FOP (Java, Apache-2.0) - emits PDF objects directly, so it maps almost 1:1 to a pure-Swift writer. skia (C++, BSD-3) is the second, closest-architecture reference.

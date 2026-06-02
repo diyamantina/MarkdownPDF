@@ -52,7 +52,7 @@ The generic renderer currently covers:
 
 The compatibility target is CommonMark plus GitHub Flavored Markdown tables and
 images. The generated PDF profile is intentionally small, typed, and documented
-under `docs/research/`.
+under `Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/`.
 
 ## Package Products
 
@@ -225,7 +225,7 @@ cd Packages
 swift run resumepdf input.json output.pdf
 ```
 
-See [docs/RESUME_TEMPLATE.md](docs/RESUME_TEMPLATE.md) for the resume JSON
+See [Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/ResumeTemplate.md](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/ResumeTemplate.md) for the resume JSON
 shape and journal inputs behind it.
 
 ## Roadmap Legend
@@ -291,7 +291,7 @@ flowchart TD
 
 These epics are fully landed and their child issues all closed, so their phase
 diagrams have been retired to keep the roadmap focused on active work. The work
-itself is described in the sections below and under `docs/research/`.
+itself is described in the sections below and under `Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/`.
 
 - [#27](https://github.com/mihaelamj/MarkdownPDF/issues/27): canonical PDF document structure.
 - [#48](https://github.com/mihaelamj/MarkdownPDF/issues/48): portable article-grade fidelity hardening.
@@ -340,10 +340,10 @@ DejaVu Sans, macOS CI uses Liberation Sans, and both pass the chosen font path
 through `MARKDOWNPDF_OPEN_FONT_PATH`; the public repository does not commit font
 binaries.
 
-See [docs/research/pdf-validation-tooling.md](docs/research/pdf-validation-tooling.md)
-and [docs/research/pdf-visual-layout-validation.md](docs/research/pdf-visual-layout-validation.md)
+See [Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFValidationTooling.md](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFValidationTooling.md)
+and [Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFVisualLayoutValidation.md](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFVisualLayoutValidation.md)
 for the validation rationale. See
-[docs/rules/pdf-witness-gate.md](docs/rules/pdf-witness-gate.md) for the policy
+[Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/PDFWitnessGate.md](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/PDFWitnessGate.md) for the policy
 future PDF features must satisfy.
 
 ## Build and Test
@@ -367,34 +367,27 @@ swiftlint --config .swiftlint.yml
 
 ## Documentation
 
-- [CONTRIBUTING.md](CONTRIBUTING.md): contributor setup, conventions, branches,
-  commits, and pull requests.
+All project documentation lives in a Swift-DocC catalog at
+`Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/`, the single source of truth for architecture, conventions, the research
+record, and the coding rules. Build it locally:
+
+```sh
+cd Packages
+swift package --allow-writing-to-directory ./docs-archive \
+  generate-documentation --target MarkdownPDFDocumentation
+```
+
+Entry points into the catalog:
+
+- [Design](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Design.md): implementation architecture and constraints.
+- [Conventions](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Conventions.md): project conventions.
+- [Resume template](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/ResumeTemplate.md): resume JSON and template behavior.
+- [Research overview](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/ResearchOverview.md): map of the research record behind each feature.
+- [Coding rules](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/RulesOverview.md): the conventions contributors and tooling follow.
+- [CONTRIBUTING.md](CONTRIBUTING.md): contributor setup, branches, commits, and pull requests.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): community standards and enforcement.
-- [docs/DESIGN.md](docs/DESIGN.md): implementation architecture.
-- [docs/CONVENTIONS.md](docs/CONVENTIONS.md): project conventions.
-- [docs/RESUME_TEMPLATE.md](docs/RESUME_TEMPLATE.md): resume JSON and template
-  behavior.
-- [docs/research/README.md](docs/research/README.md): research map.
-- [docs/research/canonical-pdf-document-structure.md](docs/research/canonical-pdf-document-structure.md):
-  canonical PDF structure notes.
-- [docs/research/markdownpdf-output-profile.md](docs/research/markdownpdf-output-profile.md):
-  target output profile.
-- [docs/research/portable-embedded-fonts-tounicode-plan.md](docs/research/portable-embedded-fonts-tounicode-plan.md):
-  portable embedded-font and ToUnicode implementation plan.
-- [docs/research/complex-script-shaping-bidi-roadmap.md](docs/research/complex-script-shaping-bidi-roadmap.md):
-  follow-up roadmap for Unicode line breaking, bidi ordering, shaping, and
-  ToUnicode cluster witnesses.
-- [docs/research/source-code-typesetting-literature.md](docs/research/source-code-typesetting-literature.md):
-  source-code formatting literature and witness notes.
-- [docs/research/source-code-renderer-analysis.md](docs/research/source-code-renderer-analysis.md):
-  source-code formatting comparison against current renderer and witness paths.
-- [docs/research/source-code-formatting-model.md](docs/research/source-code-formatting-model.md):
-  portable source-code formatting model for renderer implementation.
-- [docs/research/portable-syntax-coloring.md](docs/research/portable-syntax-coloring.md):
-  portable syntax-coloring recommendation, implementation policy, and witness
-  requirements.
-- [docs/research/apple-and-custom-fonts.md](docs/research/apple-and-custom-fonts.md):
-  Apple system font naming limits and custom-font format policy.
+
+The catalog landing page groups every article under Topics.
 
 ## Platform Boundaries
 
@@ -452,7 +445,7 @@ swiftlint --config .swiftlint.yml
   files.
 - Research source snapshots, when present, are evidence only. They are not
   package dependencies. See
-  [docs/research/source-snapshot-policy.md](docs/research/source-snapshot-policy.md).
+  [Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/SourceSnapshotPolicy.md](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/SourceSnapshotPolicy.md).
 
 ## Design Constraints
 

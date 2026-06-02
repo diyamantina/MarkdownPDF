@@ -24,61 +24,71 @@ import PackageDescription
     let macTestDependencies: [Target.Dependency] = []
 #endif
 
+let coreProducts: [Product] = [
+    .library(
+        name: "MarkdownPDF",
+        targets: ["MarkdownPDF"],
+    ),
+    .library(
+        name: "MarkdownPDFLinux",
+        targets: ["MarkdownPDFLinux"],
+    ),
+    .library(
+        name: "MarkdownPDFResume",
+        targets: ["MarkdownPDFResume"],
+    ),
+    .executable(
+        name: "markdownpdf",
+        targets: ["MarkdownPDFCLI"],
+    ),
+    .executable(
+        name: "resumepdf",
+        targets: ["ResumePDFCLI"],
+    ),
+]
+
+let coreTargets: [Target] = [
+    .target(
+        name: "MarkdownPDF",
+    ),
+    .target(
+        name: "MarkdownPDFDocumentation",
+    ),
+    .target(
+        name: "MarkdownPDFLinux",
+        dependencies: ["MarkdownPDF"],
+    ),
+    .executableTarget(
+        name: "MarkdownPDFCLI",
+        dependencies: ["MarkdownPDF"],
+    ),
+    .target(
+        name: "MarkdownPDFResume",
+    ),
+    .executableTarget(
+        name: "ResumePDFCLI",
+        dependencies: ["MarkdownPDF", "MarkdownPDFResume"],
+    ),
+    .testTarget(
+        name: "MarkdownPDFTests",
+        dependencies: ["MarkdownPDF", "MarkdownPDFLinux"] + macTestDependencies,
+        exclude: ["Fixtures"],
+    ),
+    .testTarget(
+        name: "MarkdownPDFResumeTests",
+        dependencies: ["MarkdownPDF", "MarkdownPDFResume"],
+        exclude: ["Fixtures"],
+    ),
+]
+
 let package = Package(
     name: "MarkdownPDF",
     platforms: [
         .macOS(.v13),
     ],
-    products: [
-        .library(
-            name: "MarkdownPDF",
-            targets: ["MarkdownPDF"],
-        ),
-        .library(
-            name: "MarkdownPDFLinux",
-            targets: ["MarkdownPDFLinux"],
-        ),
-        .library(
-            name: "MarkdownPDFResume",
-            targets: ["MarkdownPDFResume"],
-        ),
-        .executable(
-            name: "markdownpdf",
-            targets: ["MarkdownPDFCLI"],
-        ),
-        .executable(
-            name: "resumepdf",
-            targets: ["ResumePDFCLI"],
-        ),
-    ] + macProducts,
-    targets: [
-        .target(
-            name: "MarkdownPDF",
-        ),
-        .target(
-            name: "MarkdownPDFLinux",
-            dependencies: ["MarkdownPDF"],
-        ),
-        .executableTarget(
-            name: "MarkdownPDFCLI",
-            dependencies: ["MarkdownPDF"],
-        ),
-        .target(
-            name: "MarkdownPDFResume",
-        ),
-        .executableTarget(
-            name: "ResumePDFCLI",
-            dependencies: ["MarkdownPDF", "MarkdownPDFResume"],
-        ),
-        .testTarget(
-            name: "MarkdownPDFTests",
-            dependencies: ["MarkdownPDF", "MarkdownPDFLinux"] + macTestDependencies,
-            exclude: ["Fixtures"],
-        ),
-        .testTarget(
-            name: "MarkdownPDFResumeTests",
-            dependencies: ["MarkdownPDF", "MarkdownPDFResume"],
-            exclude: ["Fixtures"],
-        ),
-    ] + macTargets,
+    products: coreProducts + macProducts,
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3"),
+    ],
+    targets: coreTargets + macTargets,
 )

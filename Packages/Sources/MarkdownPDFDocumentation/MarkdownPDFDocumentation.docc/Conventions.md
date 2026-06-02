@@ -6,7 +6,7 @@ surrounding files and match what is already there: consistency with existing cod
 outranks personal preference.
 
 This page is the overview. The full per-area rules live in
-[`docs/rules/`](rules/) (index at [`docs/rules/README.md`](rules/README.md)).
+[`docs/rules/`](rules/) (index at [`docs/rules/README.md`](doc:RulesOverview)).
 
 ## Language
 

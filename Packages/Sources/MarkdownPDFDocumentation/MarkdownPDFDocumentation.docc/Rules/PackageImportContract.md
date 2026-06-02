@@ -2,7 +2,7 @@
 
 The rule for what each SPM target may `import`. MarkdownPDF is a monorepo from day one with many targets in one package, and the engine (`MarkdownPDF`) and CLI (`markdownpdf`) are already two targets, so this contract applies now and governs every target added to the manifest.
 
-This is the operational companion to [dependency-injection.md](dependency-injection.md) and [shared-protocols.md](shared-protocols.md). Read those first for the underlying principles (no singletons, constructor injection, protocol seams).
+This is the operational companion to [dependency-injection.md](doc:DependencyInjection) and [shared-protocols.md](doc:SharedProtocols). Read those first for the underlying principles (no singletons, constructor injection, protocol seams).
 
 ## The goal
 
@@ -112,7 +112,7 @@ This does not ban closures as method parameters or property values; `onProgress:
 
 ## Related rules
 
-- [dependency-injection.md](dependency-injection.md): underlying DI principles
-- [shared-protocols.md](shared-protocols.md): where the protocol seams live
-- [package-architecture.md](package-architecture.md): package layers and granularity
-- [package-structure.md](package-structure.md): repository and manifest layout
+- [dependency-injection.md](doc:DependencyInjection): underlying DI principles
+- [shared-protocols.md](doc:SharedProtocols): where the protocol seams live
+- [package-architecture.md](doc:PackageArchitecture): package layers and granularity
+- [package-structure.md](doc:PackageStructure): repository and manifest layout

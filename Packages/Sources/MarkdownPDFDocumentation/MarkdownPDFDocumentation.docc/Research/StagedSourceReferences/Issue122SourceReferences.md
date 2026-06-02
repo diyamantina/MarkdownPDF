@@ -1,3 +1,7 @@
+# Issue 122 source references
+
+Staged source and reference materials gathered for issue #122, vendored study-only under `researchcode/`.
+
 ## Reference implementations (vendored in `researchcode/`)
 
 Study-only (reimplement in the pure-Swift embedded-font + shaped-cluster path; no HarfBuzz/ICU dependency).

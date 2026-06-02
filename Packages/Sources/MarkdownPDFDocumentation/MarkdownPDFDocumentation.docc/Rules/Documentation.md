@@ -31,7 +31,7 @@ Never let documentation accumulate in a freeform `Docs/` directory.
 Model the catalog landing page (`{Name}.md`) on Apple's sample-article format (e.g. the Wishlist or Landmarks sample).
 
 **MUST have:**
-- First line: `# ``{TargetName}``` (the `<doc:>`-resolving backtick form).
+- First line: `# `{TargetName}`` (the `doc:`-resolving backtick form).
 - `@Metadata { @DisplayName("...") }` block.
 - One-sentence abstract right under the title.
 - `## Overview` with 2 to 3 paragraphs of context.
@@ -77,17 +77,17 @@ Content with real code listings, tables, lists.
 ...
 ```
 
-- MUST start with `# Title` (not `# ``Symbol```).
+- MUST start with `# Title` (not `# `Symbol``).
 - MUST have an abstract after the title (DocC displays it under the title in the viewer).
 - MUST use PascalCase file names (`PackageLayers.md`, not `package-layers.md`).
-- MUST match the filename to the `<doc:X>` reference name exactly; DocC is case-sensitive.
+- MUST match the filename to the `doc:X` reference name exactly; DocC is case-sensitive.
 
 ### Rule 6: Cross-linking
 
-- MUST use `<doc:ArticleName>` for catalog-internal links. No angle brackets around spaces ever (causes DocC warnings).
+- MUST use `doc:ArticleName` for catalog-internal links. No angle brackets around spaces ever (causes DocC warnings).
 - MUST use plain markdown paths (`Packages/Sources/Foo/README.md`) for files outside the catalog.
-- MUST NOT use `<doc:>` for non-existent articles; DocC emits a warning per broken reference.
-- MUST NOT put `<doc:ExampleName>` inside example code blocks; DocC sometimes tries to resolve them even inside fences. Use `{example-placeholder}` or HTML entities for placeholders.
+- MUST NOT use `doc:` for non-existent articles; DocC emits a warning per broken reference.
+- MUST NOT put `{doc:ExampleName}` inside example code blocks; DocC sometimes tries to resolve them even inside fences. Use `{example-placeholder}` or HTML entities for placeholders.
 
 ### Rule 7: Diagrams pipeline: mermaid source, PNG output
 
@@ -163,16 +163,16 @@ open -a Xcode .build/plugins/Swift-DocC/outputs/{Name}Documentation.doccarchive
 
 The only tolerated warnings are SPM-level "dependency is not used" notices with this exact shape:
 
-- `warning: 'PackageName': dependency '<dep>' is not used by any target`
-- `warning: dependency '<dep>' is not used by any target`
+- `warning: 'PackageName': dependency '{dep}' is not used by any target`
+- `warning: dependency '{dep}' is not used by any target`
 
 All DocC-emitted warnings (anything from `docc`, anything referencing an article, symbol, resource, or link) MUST be fixed before commit. If a warning appears that does not match the tolerated shape above, treat it as a blocker.
 
 Common fixable warnings:
 
-- `` 'SomeName' doesn't exist at '/...' ``: `<doc:SomeName>` points at an article that does not exist. Fix the name or create the article.
+- ` 'SomeName' doesn't exist at '/...' `: a `doc:` link with a missing article name points at an article that does not exist. Fix the name or create the article.
 - `Resource 'foo.png' couldn't be found`: image referenced but not in `Resources/`. Move or rename.
-- `' ' doesn't exist`: DocC parsed a malformed `<...>` pattern as a symbol reference. Usually caused by `<Placeholder>` in an example block; switch to `{placeholder}` or HTML-escape the angle brackets.
+- `' ' doesn't exist`: DocC parsed a malformed `{...}` pattern as a symbol reference. Usually caused by `{Placeholder}` in an example block; switch to `{placeholder}` or HTML-escape the angle brackets.
 
 ### Rule 11: No private or user-specific references in the catalog
 
@@ -203,7 +203,7 @@ Technical documentation. Neutral, factual voice.
 
 ### Rule 13: Renames, moves, and deletions
 
-When an article is renamed, moved, or deleted, inbound `<doc:>` references break silently at build time (Rule 10 catches them, but only if CI runs DocC). The PR that renames is responsible for fixing every inbound reference in the same commit.
+When an article is renamed, moved, or deleted, inbound `doc:` references break silently at build time (Rule 10 catches them, but only if CI runs DocC). The PR that renames is responsible for fixing every inbound reference in the same commit.
 
 **MUST:**
 - Grep the catalog for the old basename before renaming: `grep -rn 'doc:OldName' {Name}Documentation.docc/`.
@@ -214,7 +214,7 @@ When an article is renamed, moved, or deleted, inbound `<doc:>` references break
 - Leave a placeholder article with a "moved to X" pointer. Readers see an empty page; cross-refs still break.
 - Rely on a follow-up PR to "clean up" broken links. Rule 10 means the build stays green only when the rename is complete.
 
-For renamed public Swift symbols, the catalog article describing that symbol MUST be renamed in the same PR and its filename updated to match the new symbol name (DocC's `<doc:SymbolName>` is case-sensitive and exact).
+For renamed public Swift symbols, the catalog article describing that symbol MUST be renamed in the same PR and its filename updated to match the new symbol name (DocC's `doc:SymbolName` is case-sensitive and exact).
 
 ### Rule 14: Symbol-level `///` comments update with public API changes
 
@@ -224,7 +224,7 @@ Rule 8 covers catalog articles; this rule covers the `///` doc comments attached
 - Add a `///` doc paragraph when introducing any new `public` type, protocol, enum, actor, method, property, or init. The paragraph explains *why* the declaration exists and any non-obvious behaviour (error branches, actor isolation, side effects, invariants), not a restatement of the signature.
 - Revise the `///` in the same commit that changes the semantics of a documented public declaration. Signature-only refactors (renames, parameter reorder) count.
 - Delete `///` text that no longer reflects behaviour. Stale docs are worse than missing docs because readers trust them.
-- Before deleting a `public` symbol, grep the catalog and the source tree for `` ``SymbolName`` `` references and remove or update each one in the same PR.
+- Before deleting a `public` symbol, grep the catalog and the source tree for ` `SymbolName` ` references and remove or update each one in the same PR.
 
 **MAY skip documenting:**
 - `var body` on SwiftUI `View` conformances (Apple's own frameworks do not doc it).
@@ -235,7 +235,7 @@ Rule 8 covers catalog articles; this rule covers the `///` doc comments attached
 **Reviewer check:**
 - Any new `public` decl without a `///` paragraph blocks approval (unless it fits a MAY-skip category above; the PR description calls out the skip).
 - Any semantic change to a documented public method without a corresponding `///` edit blocks approval.
-- Any deletion of a `public` symbol without a matching sweep of `` ``SymbolName`` `` references in the catalog blocks approval.
+- Any deletion of a `public` symbol without a matching sweep of ` `SymbolName` ` references in the catalog blocks approval.
 
 **Weighting (how much doc is enough):**
 - Types & entry points: one-paragraph abstract + non-obvious-behaviour notes. Always.
@@ -251,7 +251,7 @@ A weighted audit (undocumented public decls times cross-package usage) should be
 Before shipping a docs change:
 
 - [ ] `swift package generate-documentation --target {Name}Documentation` produces zero warnings (excluding generic "dependency is not used").
-- [ ] Every article referenced in a `<doc:X>` link exists as a file with that exact basename.
+- [ ] Every article referenced in a `doc:X` link exists as a file with that exact basename.
 - [ ] Every image referenced as `![alt](name)` exists under `Resources/`.
 - [ ] Landing page `## Topics` section lists every article, each in exactly one group.
 - [ ] No article references a deleted `Docs/` folder or other legacy paths.

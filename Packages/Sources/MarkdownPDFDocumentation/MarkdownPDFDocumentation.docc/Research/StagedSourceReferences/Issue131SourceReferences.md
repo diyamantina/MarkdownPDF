@@ -1,3 +1,7 @@
+# Issue 131 source references
+
+Staged source and reference materials gathered for issue #131, vendored study-only under `researchcode/`.
+
 ## Reference implementations (vendored in `researchcode/`)
 
 Two complete, complementary math engines are vendored. SILE (Lua, MIT) is authoritative for the TeXbook Appendix-G atom-spacing logic and ships a pure-Lua OpenType MATH table reader; Typst (Rust, Apache-2.0) is authoritative for MATH-constant-driven box positioning. Both map onto a pure-Swift box-and-glue layout reading an embedded OpenType MATH font.

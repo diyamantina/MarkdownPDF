@@ -1,3 +1,7 @@
+# Issue 127 source references
+
+Staged source and reference materials gathered for issue #127, vendored study-only under `researchcode/`.
+
 ## Source-code references (vendored in `researchcode/`)
 
 VERDICT: no vendored project implements DEFLATE from scratch; every one WRAPS zlib (or Rust `miniz_oxide`). Their in-tree value is the PDF stream WIRING, not the codec. The codec itself must come from the canonical sources being vendored in #137 (libdeflate, zlib).

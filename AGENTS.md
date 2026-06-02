@@ -10,7 +10,7 @@ The CLI is `markdownpdf`. The code must build on macOS and Linux.
 
 ## Rule Loading
 
-At the start of a session, read [docs/rules/README.md](docs/rules/README.md) and
+At the start of a session, read [Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/RulesOverview.md](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/RulesOverview.md) and
 the rules it marks as always relevant. Name the rule files that apply to the
 task at hand.
 

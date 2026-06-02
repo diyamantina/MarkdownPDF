@@ -41,7 +41,7 @@ outranks speed.
 
 4. **Testable by design.** Inject every collaborator through the initialiser; test
    behaviour, not implementation; wrap concrete framework types behind a protocol
-   so a fake can substitute. See [dependency-injection.md](dependency-injection.md).
+   so a fake can substitute. See [dependency-injection.md](doc:DependencyInjection).
 
 5. **Profile, then optimise.** Value semantics by default; the right data structure
    first; optimise only with a profile in hand.
@@ -65,4 +65,4 @@ Before a change is done:
 
 Mechanical gates (no force-unwrap, no em dashes, no tool attribution, formatting,
 build, tests) are enforced by tooling and CI, not by this file. See
-[verification.md](verification.md), `.swiftlint.yml`, and `.swiftformat`.
+[verification.md](doc:Verification), `.swiftlint.yml`, and `.swiftformat`.

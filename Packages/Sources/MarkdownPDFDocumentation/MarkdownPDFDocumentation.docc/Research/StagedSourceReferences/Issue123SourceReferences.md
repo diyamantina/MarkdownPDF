@@ -1,3 +1,7 @@
+# Issue 123 source references
+
+Staged source and reference materials gathered for issue #123, vendored study-only under `researchcode/`.
+
 ## Reference implementations (vendored in `researchcode/`)
 
 All four engines split bidi the same way our pipeline should: resolve UAX #9 levels over logical text, split into same-level/same-script runs, shape each run, then apply rule L2 to reorder into visual order while keeping the logical buffer for extraction (ToUnicode). None reimplements UAX #9 (Pango -> fribidi, SILE -> ICU, Typst -> `unicode-bidi`), which validates our pure-Swift #84 as the one novel piece.

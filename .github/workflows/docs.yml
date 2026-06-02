@@ -1,0 +1,22 @@
+name: DocC
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docc:
+    name: DocC build
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Build documentation
+        run: |
+          cd Packages
+          swift package --allow-writing-to-directory ./docs-archive \
+            generate-documentation --target MarkdownPDFDocumentation

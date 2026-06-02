@@ -22,7 +22,7 @@ PDF 1.4 files with deterministic object order, xref offsets, trailer data, page
 resources, text, images, links, and a small CommonMark/GFM surface. The current
 working surface, package products, validation strategy, and roadmap are listed
 in [`README.md`](README.md), and the architecture is in
-[`docs/DESIGN.md`](docs/DESIGN.md).
+[`Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Design.md`](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Design.md).
 
 ## Getting started
 
@@ -57,7 +57,7 @@ The CI workflows run the style gate, macOS Swift gate, and Linux Swift gate.
 ## Constraints
 
 MarkdownPDF follows the conventions documented in
-[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md). The short version:
+[`Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Conventions.md`](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Conventions.md). The short version:
 
 - Pure Swift source, tests, and tooling.
 - Direct PDF byte generation. Rendering does not shell out to another renderer.

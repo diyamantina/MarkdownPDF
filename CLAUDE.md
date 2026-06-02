@@ -12,8 +12,8 @@ Linux.
 ## Read First
 
 - [AGENTS.md](AGENTS.md) - language policy, product rules, workflow, commands.
-- [docs/DESIGN.md](docs/DESIGN.md) - architecture and constraints.
-- [docs/rules/](docs/rules/) - coding conventions.
+- [Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Design.md](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Design.md) - architecture and constraints.
+- [Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/](Packages/Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/) - coding conventions.
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contributor workflow.
 
 ## Non-Negotiables

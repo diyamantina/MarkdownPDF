@@ -2,7 +2,7 @@
 
 Single-page rule for picking the namespace-anchor type in MarkdownPDF code: when the anchor is `Foo`, should it be `enum Foo`, `struct Foo`, or `class Foo`?
 
-Companion to [code-style.md](code-style.md), which covers the broader namespacing discipline (folder mirroring, file-naming convention, anchor file placement, one-type-per-file). This file answers the narrower type-choice question.
+Companion to [code-style.md](doc:CodeStyle), which covers the broader namespacing discipline (folder mirroring, file-naming convention, anchor file placement, one-type-per-file). This file answers the narrower type-choice question.
 
 ## TL;DR
 
@@ -140,7 +140,7 @@ Inner type should be `public enum Constants` since it carries no state.
 
 When a namespace holds N sibling implementations of one concept (e.g. several format parsers, several content fetchers, multiple model types), either singular (`Parser.CSV`, `Fetcher.Remote`, `Model.Tile`) or plural (`Parsers.CSV`, `Fetchers.Remote`, `Models.Tile`) is correct. Pick one per project and stay with it. Apple's Combine uses plural (`Publishers.Map`, `Subscribers.Sink`); some projects pick singular to match folder-name conventions. The rule is intra-project consistency, not the choice itself.
 
-The one exception is `Protocol` (singular). Swift treats `T.Protocol` as a reserved metatype member on every type expression, so a namespace literally cannot be named `Protocol`. MUST be `Protocols` plural OR a semantic rename (`Wire`, `Spec`) regardless of the project's singular-vs-plural default. See `Reserved names` in [code-style.md](code-style.md).
+The one exception is `Protocol` (singular). Swift treats `T.Protocol` as a reserved metatype member on every type expression, so a namespace literally cannot be named `Protocol`. MUST be `Protocols` plural OR a semantic rename (`Wire`, `Spec`) regardless of the project's singular-vs-plural default. See `Reserved names` in [code-style.md](doc:CodeStyle).
 
 ## When nesting
 
@@ -179,7 +179,7 @@ When the namespace is `Shared.Constants.FileName`, the file should be `Shared.Co
 2. Re-namespacing the type (moving `FileName` under a different parent) becomes a single `git mv`.
 3. Folder structure mirrors the namespace tree without a separate map file.
 
-See [code-style.md](code-style.md) for the full file-naming rule.
+See [code-style.md](doc:CodeStyle) for the full file-naming rule.
 
 ## Anchor file convention
 
@@ -241,4 +241,4 @@ Build and tests verify the safe cases: anything that was constructing the empty 
 
 ## Cross-references
 
-- [code-style.md](code-style.md) covers the broader namespacing discipline (folder mirroring, file-naming convention, anchor file placement, one-type-per-file, reserved names, namespace-vs-module collisions). Read this file first for the anchor-type choice, then code-style.md for the operational details.
+- [code-style.md](doc:CodeStyle) covers the broader namespacing discipline (folder mirroring, file-naming convention, anchor file placement, one-type-per-file, reserved names, namespace-vs-module collisions). Read this file first for the anchor-type choice, then code-style.md for the operational details.

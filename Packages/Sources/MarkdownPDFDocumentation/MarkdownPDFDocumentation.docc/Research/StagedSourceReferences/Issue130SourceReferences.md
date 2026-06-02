@@ -1,3 +1,7 @@
+# Issue 130 source references
+
+Staged source and reference materials gathered for issue #130, vendored study-only under `researchcode/`.
+
 ## Reference implementations (vendored in `researchcode/`)
 
 Study-only; map to a pure-Swift `Theme` value type (per-element `ElementRole` styles + base16-style palette + DeviceRGB, resolved at build time, default theme == current output).

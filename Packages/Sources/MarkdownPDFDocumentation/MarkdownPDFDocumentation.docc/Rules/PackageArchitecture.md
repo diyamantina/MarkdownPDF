@@ -163,7 +163,7 @@ Packages/Sources/
 
 ## Related rules
 
-- [package-structure.md](package-structure.md): repository layout and the `Package.swift` manifest shape
-- [package-import-contract.md](package-import-contract.md): what each target may import
-- [shared-protocols.md](shared-protocols.md): the cross-target protocol-seam package
-- [dependency-injection.md](dependency-injection.md): the DI principles these layers serve
+- [package-structure.md](doc:PackageStructure): repository layout and the `Package.swift` manifest shape
+- [package-import-contract.md](doc:PackageImportContract): what each target may import
+- [shared-protocols.md](doc:SharedProtocols): the cross-target protocol-seam package
+- [dependency-injection.md](doc:DependencyInjection): the DI principles these layers serve

@@ -270,6 +270,6 @@ Before changing repo structure:
 
 ## Related rules
 
-- [package-architecture.md](package-architecture.md): single-responsibility packages, layers, and the when-to-create decision tree
-- [package-import-contract.md](package-import-contract.md): what each target may import
-- [shared-protocols.md](shared-protocols.md): the cross-target protocol-seam package
+- [package-architecture.md](doc:PackageArchitecture): single-responsibility packages, layers, and the when-to-create decision tree
+- [package-import-contract.md](doc:PackageImportContract): what each target may import
+- [shared-protocols.md](doc:SharedProtocols): the cross-target protocol-seam package

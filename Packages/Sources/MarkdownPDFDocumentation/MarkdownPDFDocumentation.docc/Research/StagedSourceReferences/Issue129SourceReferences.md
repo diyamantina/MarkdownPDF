@@ -1,3 +1,7 @@
+# Issue 129 source references
+
+Staged source and reference materials gathered for issue #129, vendored study-only under `researchcode/`.
+
 ## Reference implementations (vendored in `researchcode/`)
 
 Three engines implement real page-bottom footnote layout; the algorithm to port is SILE's "insertions" model. (Scribus has no footnote layout: `pageitem_textframe.cpp` is absent of it.) Task-list checkboxes are a trivial list-marker swap; reuse the existing list-marker drawing.

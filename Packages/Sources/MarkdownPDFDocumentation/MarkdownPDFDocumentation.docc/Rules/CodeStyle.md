@@ -4,7 +4,7 @@ The operational namespacing discipline for MarkdownPDF: folder mirroring, file n
 
 Swift does not have true namespaces, so we simulate them with root types and extensions.
 
-For the narrower question "should the anchor be `enum`, `struct`, or `class`?", see [namespacing.md](namespacing.md) (the type-choice canonical rule). This file covers the broader operational discipline.
+For the narrower question "should the anchor be `enum`, `struct`, or `class`?", see [namespacing.md](doc:Namespacing) (the type-choice canonical rule). This file covers the broader operational discipline.
 
 ## Namespacing discipline (mandatory)
 
@@ -306,7 +306,7 @@ For cross-cutting namespaces (e.g. a `Tile` namespace that touches multiple SPM 
 
 #### One non-private type per file (mandatory)
 
-Each file contains **exactly one** `public`, `package`, or `internal` (default-visibility) top-level type. Private/fileprivate helper types MAY co-locate with the main type when they exist solely to support it. This is enforced by `scripts/check-namespacing.sh` locally (pre-push) and in CI; see [verification.md](verification.md).
+Each file contains **exactly one** `public`, `package`, or `internal` (default-visibility) top-level type. Private/fileprivate helper types MAY co-locate with the main type when they exist solely to support it. This is enforced by `scripts/check-namespacing.sh` locally (pre-push) and in CI; see [verification.md](doc:Verification).
 
 Strict reading:
 

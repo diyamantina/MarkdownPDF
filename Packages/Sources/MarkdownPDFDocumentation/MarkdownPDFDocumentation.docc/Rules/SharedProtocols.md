@@ -2,7 +2,7 @@
 
 The pattern for a single foundation-only target that holds every cross-target protocol seam. MarkdownPDF is a monorepo from day one with many targets in one package, so the seam target applies as soon as one producer target needs to talk to another without importing its concretes. Add it when the first cross-target seam appears.
 
-Companion to [dependency-injection.md](dependency-injection.md) and [package-import-contract.md](package-import-contract.md). The target described here is conventionally named `SharedProtocols`.
+Companion to [dependency-injection.md](doc:DependencyInjection) and [package-import-contract.md](doc:PackageImportContract). The target described here is conventionally named `SharedProtocols`.
 
 ## Target regime
 
@@ -172,7 +172,7 @@ If you migrate existing scattered protocols into `SharedProtocols`, do it as one
 
 ## Related rules
 
-- [dependency-injection.md](dependency-injection.md): DI principles the seams serve
-- [package-import-contract.md](package-import-contract.md): what each target may import
-- [package-architecture.md](package-architecture.md): package layers and granularity
-- [package-structure.md](package-structure.md): repository and manifest layout
+- [dependency-injection.md](doc:DependencyInjection): DI principles the seams serve
+- [package-import-contract.md](doc:PackageImportContract): what each target may import
+- [package-architecture.md](doc:PackageArchitecture): package layers and granularity
+- [package-structure.md](doc:PackageStructure): repository and manifest layout

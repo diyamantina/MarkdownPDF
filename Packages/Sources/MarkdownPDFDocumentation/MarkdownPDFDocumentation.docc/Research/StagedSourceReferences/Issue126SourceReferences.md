@@ -1,3 +1,7 @@
+# Issue 126 source references
+
+Staged source and reference materials gathered for issue #126, vendored study-only under `researchcode/`.
+
 ## Source-code references (vendored in `researchcode/`)
 
 Concrete implementations to study (study-only, reimplement in pure Swift; emit raw PDF operators in DeviceRGB, no CoreGraphics).
