@@ -151,6 +151,22 @@ struct MarkdownPDFRendererTests {
         #expect(strokeLines.isEmpty, "Unexpected stroke operators:\n\(strokeLines.joined(separator: "\n"))")
     }
 
+    @Test("Code blocks expand tabs into spaces")
+    func codeBlocksExpandTabsIntoSpaces() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: """
+        ```swift
+        \tlet value = 1
+        ```
+        """)
+        let streamBodies = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
+        let singleSpaceTokenCount = streamBodies.components(separatedBy: "( ) Tj").count - 1
+
+        #expect(!streamBodies.contains("\t"))
+        #expect(!streamBodies.contains("(?"))
+        #expect(singleSpaceTokenCount >= 4)
+        #expect(streamBodies.contains("(let "))
+    }
+
     @Test("Writes minimal canonical PDF for one text page")
     func writesMinimalCanonicalPDFForOneTextPage() throws {
         let data = try MarkdownPDFRenderer().render(markdown: "Hello from MarkdownPDF.")

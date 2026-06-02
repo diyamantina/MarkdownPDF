@@ -341,13 +341,14 @@ private struct Layout {
     private mutating func renderCodeBlock(_ code: String) throws {
         let size = options.baseFontSize * 0.9
         let lineHeight = size * 1.4
-        let verticalPadding = 12.0
+        let padding = codeBlockPadding
+        let codeAreaWidth = max(1, contentWidth - padding * 2)
         let lines = try code
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { line in
                 try wrappedLines(
-                    [PDFTextRun(text: String(line), font: .courier, size: size)],
-                    maxWidth: contentWidth,
+                    [PDFTextRun(text: expandCodeTabs(String(line)), font: .courier, size: size)],
+                    maxWidth: codeAreaWidth,
                 )
             }
             .flatMap(\.self)
@@ -355,22 +356,24 @@ private struct Layout {
         var lineOffset = 0
 
         while lineOffset < drawableLines.count {
-            ensureSpace(lineHeight + verticalPadding)
+            ensureSpace(lineHeight + padding * 2)
             let lineCount = min(
                 drawableLines.count - lineOffset,
-                codeBlockLineCapacity(lineHeight: lineHeight, verticalPadding: verticalPadding),
+                codeBlockLineCapacity(lineHeight: lineHeight, padding: padding),
             )
             try renderCodeBlockFragment(
                 Array(drawableLines[lineOffset ..< lineOffset + lineCount]),
                 size: size,
                 lineHeight: lineHeight,
-                verticalPadding: verticalPadding,
+                padding: padding,
             )
             lineOffset += lineCount
             if lineOffset < drawableLines.count {
                 startNewPage()
             }
         }
+
+        y -= codeBlockFollowingGap
     }
 
     private func isMermaidCodeBlock(_ info: String?) -> Bool {
@@ -1187,30 +1190,50 @@ private struct Layout {
         _ lines: [[PDFTextRun]],
         size: Double,
         lineHeight: Double,
-        verticalPadding: Double,
+        padding: Double,
     ) throws {
-        let height = Double(lines.count) * lineHeight + verticalPadding
+        let topY = y
+        let height = Double(lines.count) * lineHeight + padding * 2
         currentPage.drawRectangle(
-            x: options.margins.left - 4,
-            y: y - height + 4,
-            width: contentWidth + 8,
+            x: options.margins.left,
+            y: topY - height,
+            width: contentWidth,
             height: height,
             stroke: nil,
             fill: PDFColor(red: 0.95, green: 0.95, blue: 0.95),
         )
 
+        var lineY = topY - padding - size
         for line in lines {
-            try drawRuns(line, x: options.margins.left, y: y - size)
-            y -= lineHeight
+            try drawRuns(line, x: options.margins.left + padding, y: lineY)
+            lineY -= lineHeight
         }
-        y -= verticalPadding
+        y = topY - height
     }
 
     private func codeBlockLineCapacity(
         lineHeight: Double,
-        verticalPadding: Double,
+        padding: Double,
     ) -> Int {
-        max(1, Int(floor((availablePageHeight - verticalPadding) / lineHeight)))
+        max(1, Int(floor((availablePageHeight - padding * 2) / lineHeight)))
+    }
+
+    private func expandCodeTabs(_ line: String) -> String {
+        var expanded = ""
+        var column = 0
+
+        for character in line {
+            if character == "\t" {
+                let spaces = codeBlockTabWidth - column % codeBlockTabWidth
+                expanded += String(repeating: " ", count: spaces)
+                column += spaces
+            } else {
+                expanded.append(character)
+                column += 1
+            }
+        }
+
+        return expanded
     }
 
     private mutating func renderTableRowFragment(
@@ -1491,6 +1514,18 @@ private struct Layout {
 
     private var paragraphSpacing: Double {
         listDepth > 0 ? 2 : 6
+    }
+
+    private var codeBlockPadding: Double {
+        6
+    }
+
+    private var codeBlockFollowingGap: Double {
+        max(8, options.baseFontSize * 0.75)
+    }
+
+    private var codeBlockTabWidth: Int {
+        4
     }
 
     private var listTrailingSpacing: Double {

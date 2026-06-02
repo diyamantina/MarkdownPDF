@@ -887,6 +887,7 @@ struct PDFVisualLayoutValidationTests {
             float emissive;
             float3 transmission;
             float indexOfRefraction;
+            float CodeBlockEndToken;
         };
         ```
 
@@ -898,6 +899,7 @@ struct PDFVisualLayoutValidationTests {
         struct SurfaceRefraction {
             half3 transmission;
             half indexOfRefraction;
+            half SecondCodeBlockEndToken;
         };
         ```
 
@@ -928,15 +930,26 @@ struct PDFVisualLayoutValidationTests {
             "Quote spacing Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
         )
 
+        let codeEnd = try word("CodeBlockEndToken;", in: popplerLayout)
+        let quoteStart = try word("QuoteStartToken", in: popplerLayout)
         let quoteEnd = try word("QuoteEndToken", in: popplerLayout)
         let afterParagraph = try word("AfterQuoteParagraph", in: popplerLayout)
+        let secondCodeEnd = try word("SecondCodeBlockEndToken;", in: popplerLayout)
+        let secondQuoteStart = try word("SecondQuoteStartToken", in: popplerLayout)
         let secondQuoteEnd = try word("SecondQuoteEndToken", in: popplerLayout)
         let afterHeading = try word("AfterQuoteHeading", in: popplerLayout)
 
+        #expect(quoteStart.page == codeEnd.page)
         #expect(afterParagraph.page == quoteEnd.page)
-        #expect(afterHeading.page == secondQuoteEnd.page)
+        #expect(secondQuoteStart.page == secondCodeEnd.page)
+        #expect(quoteStart.top > codeEnd.bottom + 10)
         #expect(afterParagraph.top > quoteEnd.bottom + 4)
-        #expect(afterHeading.top > secondQuoteEnd.bottom + 8)
+        #expect(secondQuoteStart.top > secondCodeEnd.bottom + 10)
+        if afterHeading.page == secondQuoteEnd.page {
+            #expect(afterHeading.top > secondQuoteEnd.bottom + 8)
+        } else {
+            #expect(afterHeading.page > secondQuoteEnd.page)
+        }
 
         let structuredText = try PDFValidation.mutoolStructuredText(data: data, name: "quote-spacing-mupdf")
         try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")

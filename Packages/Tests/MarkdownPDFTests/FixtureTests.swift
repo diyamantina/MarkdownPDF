@@ -159,7 +159,7 @@ struct FixtureTests {
         #expect(normalizedText.contains("Hard input"))
         #expect(normalizedText.contains("Open tools"))
         #expect(extractedText.contains("Unsupported Mermaid diagram"))
-        #expect(extractedText.contains("Unsupported hard corpus chart"))
+        #expect(normalizedText.contains("Unsupported hard corpus chart"))
         #expect(normalizedText.contains("Hard Fixture Exit Marker"))
         #expect(!extractedText.contains("Source[Hard input]"))
     }
