@@ -28,8 +28,10 @@ Swift source and tests.
    evidence.
 10. Use `source-code-typesetting-literature.md` before changing fenced-code or
     inline-code rendering.
-11. Use the source studies when planning new writer features.
-12. Use macOS-specific research only for macOS targets. It is not a Linux or iOS
+11. Use `source-code-renderer-analysis.md` to connect source-code research to
+    current parser, layout, PDF writer, and witness paths.
+12. Use the source studies when planning new writer features.
+13. Use macOS-specific research only for macOS targets. It is not a Linux or iOS
    implementation plan.
 
 ## Boundaries
@@ -54,6 +56,7 @@ Swift source and tests.
 | `complex-script-shaping-bidi-roadmap.md` | Follow-up epic roadmap for Unicode line breaking, bidi ordering, shaped text clusters, pure Swift shaping increments, and ToUnicode cluster witnesses. |
 | `complex-script-fixture-witness-policy.md` | Fixture and witness policy for future complex-script, bidi, ligature, combining-mark, no-space line-break, failure, and platform-boundary claims. |
 | `source-code-typesetting-literature.md` | Literature and standards research for source-code block formatting, wrapping, extraction, and witness policy. |
+| `source-code-renderer-analysis.md` | Comparison between source-code research and the current MarkdownPDF parser, renderer, PDF writer, and witness stack. |
 | `existing-pdf-writer-alignment.md` | Alignment notes between existing writer behavior and research findings. |
 | `pdf-validation-tooling.md` | Open source validation tools and the current CI validation strategy. |
 | `pdf-visual-layout-validation.md` | Visual layout validation strategy using text and render extraction tools. |
