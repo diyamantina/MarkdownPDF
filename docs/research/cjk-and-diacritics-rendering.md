@@ -112,6 +112,19 @@ only when the path is absent, naming the missing path in the skip reason.
 6. Add manuscript-scale CJK + diacritics fixtures and full witness coverage.
 7. Add negative tests for missing glyphs and unsupported scalars.
 
+## Implementation notes
+
+- #122 implements the first CJK line-breaking increment in
+  `LineBreakOpportunityDetector`: Han, kana, hangul, CJK Extension A,
+  compatibility ideographs, and supplementary CJK ranges are treated as
+  no-space script scalars.
+- The detector now protects CJK opening and closing punctuation boundaries and
+  unit-tests breaks between ideographs, kana, hangul syllables, and CJK
+  punctuation runs.
+- This is the UAX #14 ID-class layout prerequisite. It does not yet implement
+  East Asian Width metrics, manuscript-scale CJK embedded-font fixtures, or
+  cross-script combining-mark witnesses.
+
 ## Platform notes
 
 - Portable macOS / Linux: every behavior above belongs in the shared renderer.
