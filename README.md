@@ -430,12 +430,17 @@ flowchart TD
     H2E["#104<br/>Formatting baseline<br/>Done"]
     H2F["#105<br/>Visual witnesses<br/>Done"]
     H2G["#113<br/>Image inclusion audit<br/>Done"]
-    H2H["#106<br/>Syntax coloring study<br/>Active"]
-    H3["#100<br/>Named page sizes<br/>Next"]
+    H2H["#106<br/>Syntax coloring study<br/>Done"]
+    H2I["#118<br/>Roadmap colors<br/>Active"]
+    H2J["#119<br/>Crazy markdown fixtures<br/>Next"]
+    H2K["#120<br/>Portable syntax coloring<br/>Todo"]
+    H2L["#122<br/>CJK + diacritics<br/>Todo"]
+    H2M["#123<br/>RTL manuscript<br/>Todo"]
+    H3["#100<br/>Named page sizes<br/>Todo"]
 
     H0 --> H1
     H1 --> H2
-    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H
+    H2 --> H2A --> H2B --> H2C --> H2D --> H2E --> H2F --> H2G --> H2H --> H2I --> H2J --> H2K --> H2L --> H2M
     H1 --> H3
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#111;
@@ -445,9 +450,10 @@ flowchart TD
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
     class H0 done;
     class H1 done;
-    class H2,H2H active;
-    class H2A,H2B,H2C,H2D,H2E,H2F,H2G done;
-    class H3 next;
+    class H2,H2I active;
+    class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H done;
+    class H2J next;
+    class H2K,H2L,H2M,H3 todo;
 ```
 
 ## License
