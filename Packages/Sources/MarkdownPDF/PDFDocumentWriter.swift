@@ -406,19 +406,29 @@ struct PDFDocumentWriter {
         ) -> PDFFontDescriptor {
             let metadata = resource.metadata
             let boundingBox = metadata.head.boundingBox
+            // FontDescriptor metrics (FontBBox, Ascent, Descent, CapHeight) are
+            // in 1000-unit glyph space, but the font tables store them in
+            // `unitsPerEm` space. Scale on emission so viewers derive correct
+            // glyph heights and line boxes; otherwise fonts with
+            // `unitsPerEm != 1000` (DejaVu, Liberation use 2048) report inflated
+            // line heights and collide vertically. See #194.
+            let unitsPerEm = Double(metadata.head.unitsPerEm)
+            func scaled(_ value: some BinaryInteger) -> Int {
+                Int((Double(value) * 1000.0 / unitsPerEm).rounded())
+            }
             return PDFFontDescriptor(
                 fontName: resource.baseName,
                 flags: 32,
                 fontBoundingBox: [
-                    Int(boundingBox.xMin),
-                    Int(boundingBox.yMin),
-                    Int(boundingBox.xMax),
-                    Int(boundingBox.yMax),
+                    scaled(boundingBox.xMin),
+                    scaled(boundingBox.yMin),
+                    scaled(boundingBox.xMax),
+                    scaled(boundingBox.yMax),
                 ],
                 italicAngle: Int(metadata.post.italicAngle.rounded()),
-                ascent: Int(metadata.hhea.ascender),
-                descent: Int(metadata.hhea.descender),
-                capHeight: Int(metadata.hhea.ascender),
+                ascent: scaled(metadata.hhea.ascender),
+                descent: scaled(metadata.hhea.descender),
+                capHeight: scaled(metadata.hhea.ascender),
                 stemV: 80,
                 embeddedFontFile: .trueType(fontFile),
             )
@@ -442,11 +452,18 @@ struct PDFDocumentWriter {
             guard !widthsByCID.isEmpty else {
                 throw PDFEmbeddedFontError.emptyGlyphSet(resourceName: usage.resource.resourceName)
             }
+            // CID `/W` values are in 1000-unit glyph space, but `advanceWidth` is in
+            // the font's `unitsPerEm` space. Scale on emission so viewers (which
+            // advance glyphs from `/W`) agree with the renderer's measured layout.
+            // Fonts with `unitsPerEm != 1000` (DejaVu, Liberation use 2048) garble
+            // text without this scaling. See #194.
+            let unitsPerEm = Double(usage.resource.metadata.head.unitsPerEm)
             let segments = widthsByCID.keys.sorted().compactMap { cid -> PDFCIDFontWidths.Segment? in
-                guard let width = widthsByCID[cid] else {
+                guard let advance = widthsByCID[cid] else {
                     return nil
                 }
-                return .array(startCID: Int(cid), widths: [Int(width)])
+                let scaled = Int((Double(advance) * 1000.0 / unitsPerEm).rounded())
+                return .array(startCID: Int(cid), widths: [scaled])
             }
             return PDFCIDFontWidths(segments: segments)
         }

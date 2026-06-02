@@ -35,6 +35,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opt-in portable syntax coloring for supported fenced code block language
   hints, with extraction, geometry, and raster witnesses.
 
+### Fixed
+
+- Scale embedded-font CID `/W` widths and FontDescriptor metrics (FontBBox,
+  Ascent, Descent, CapHeight) from the font `unitsPerEm` space to PDF 1000-unit
+  glyph space. Fonts with `unitsPerEm != 1000` (DejaVu and Liberation use 2048)
+  previously rendered garbled in viewers: glyphs spread apart, adjacent words
+  overlapped, and lines collided vertically, because viewers advance glyphs from
+  `/W` and derive glyph heights from the descriptor.
+- Run the full visual witness battery (Poppler `pdftotext -tsv` word-box
+  geometry, MuPDF character quads, and a Poppler-vs-MuPDF raster comparison) on
+  embedded-font fixtures so width and metric scaling regressions fail the build
+  instead of passing extraction-only checks.
+
 ### Changed
 
 - Model PDF object registration, xref tables, trailers, and file envelopes as

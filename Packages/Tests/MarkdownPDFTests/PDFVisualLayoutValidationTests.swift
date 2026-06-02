@@ -2942,7 +2942,7 @@ struct PDFVisualLayoutValidationTests {
     }
 }
 
-private struct PopplerTextLayout {
+struct PopplerTextLayout {
     struct Box: Equatable {
         var level: Int
         var page: Int

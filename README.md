@@ -499,8 +499,8 @@ flowchart TD
     H4G["#138<br/>Apple and custom fonts<br/>Done"]
     H3["#100<br/>Named page sizes<br/>Done"]
     H4H["#137<br/>Vendor canonical references<br/>Done"]
-    H5["#194<br/>Fix embedded /W width scaling<br/>Active"]
-    H6["#195<br/>Full witness battery on font fixtures<br/>Next"]
+    H5["#194<br/>Fix embedded /W width scaling<br/>Review"]
+    H6["#195<br/>Full witness battery on font fixtures<br/>Review"]
 
     H0 --> H1
     H1 --> H2
@@ -528,8 +528,8 @@ flowchart TD
     class H4G done;
     class H4H done;
     class H3 done;
-    class H5 active;
-    class H6 next;
+    class H5 review;
+    class H6 review;
 ```
 
 ## Math typesetting roadmap

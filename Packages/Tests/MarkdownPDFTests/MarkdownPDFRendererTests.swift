@@ -1005,13 +1005,19 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.text.contains("/Subtype /CIDFontType2"))
         #expect(inspector.text.contains("/FontFile2"))
         #expect(inspector.text.contains("/ToUnicode"))
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "open-font-fixture")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "open-font-fixture-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        let extractedText = normalizedExtractedText(textResult.output)
-        #expect(extractedText.contains("Table of Contents"))
-        #expect(extractedText.contains("Café résumé text uses embedded glyphs."))
+
+        // Run the full visual witness battery so a wrong CID `/W` width array or
+        // mis-scaled FontDescriptor metric fails the build instead of shipping a
+        // garbled render. See #194 and #195.
+        try assertEmbeddedFontVisualWitness(
+            data,
+            name: "open-font-fixture",
+            expectedSubstrings: [
+                "Table of Contents",
+                "Café résumé text uses embedded glyphs.",
+            ],
+            minWords: 6,
+        )
     }
 
     @Test(
@@ -1035,23 +1041,28 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.text.contains("/Subtype /Type0"))
         #expect(inspector.text.contains("/FontFile2"))
         #expect(inspector.text.contains("/ToUnicode"))
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "multilingual-corpus")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "multilingual-corpus-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        let extracted = normalizedExtractedText(textResult.output)
 
-        // Diacritic Latin, Cyrillic, and Greek are covered by the open CI fonts
-        // (DejaVu Sans on Linux, Liberation Sans on macOS) and round-trip through
-        // the subset and ToUnicode map.
-        #expect(extracted.contains("café"), "Unexpected extraction:\n\(textResult.output)")
-        #expect(extracted.contains("résumé"))
-        #expect(extracted.contains("Привет"))
-        #expect(extracted.contains("Καλημέρα"))
-        // Complex tables keep their headers and mixed-script cells.
-        #expect(extracted.contains("Script"))
-        #expect(extracted.contains("Sample"))
-        #expect(extracted.contains("Привет мир"))
+        // Extraction alone is blind to a wrong CID `/W` width array, so run the
+        // full visual witness battery (Poppler word-box geometry, MuPDF quads,
+        // and a Poppler-vs-MuPDF raster comparison). Diacritic Latin, Cyrillic,
+        // and Greek are covered by the open CI fonts (DejaVu Sans on Linux,
+        // Liberation Sans on macOS) and round-trip through the subset and
+        // ToUnicode map; complex tables keep their headers and mixed-script
+        // cells. See #194 and #195.
+        try assertEmbeddedFontVisualWitness(
+            data,
+            name: "multilingual-corpus",
+            expectedSubstrings: [
+                "café",
+                "résumé",
+                "Привет",
+                "Καλημέρα",
+                "Script",
+                "Sample",
+                "Привет мир",
+            ],
+            minWords: 50,
+        )
     }
 
     @Test("Renders Markdown links as PDF URI annotations")
