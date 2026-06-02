@@ -121,6 +121,10 @@ naming the missing path in the skip reason.
 - The detector now protects CJK opening and closing punctuation boundaries and
   unit-tests breaks between ideographs, kana, hangul syllables, and CJK
   punctuation runs.
+- #142 narrows that detector policy: Thai and Khmer do not get internal break
+  opportunities until a real segmentation pass exists; Japanese small kana and
+  U+30FC are protected as non-starters; Hangul syllables break at spaces rather
+  than between every adjacent syllable.
 - The synthetic TrueType test fixture now has a CJK format 12 profile. Parser,
   mapper, and renderer tests prove 1000-unit `hmtx` advances for ideographs,
   CID width emission, ToUnicode extraction, and narrow-page wrapping without

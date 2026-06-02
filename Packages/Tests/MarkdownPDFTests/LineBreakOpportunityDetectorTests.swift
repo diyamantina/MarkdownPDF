@@ -24,20 +24,16 @@ struct LineBreakOpportunityDetectorTests {
         ])
     }
 
-    @Test("Adds no-space script opportunities")
-    func addsNoSpaceScriptOpportunities() {
+    @Test("Keeps Thai and Khmer intact until word segmentation exists")
+    func keepsThaiAndKhmerIntactUntilWordSegmentationExists() {
         let detector = LineBreakOpportunityDetector()
 
-        #expect(detector.segments(in: "ภาษาไทย") == ["ภ", "า", "ษ", "า", "ไ", "ท", "ย"])
-        #expect(detector.opportunities(in: "ภาษาไทย") == [
-            LineBreakOpportunityDetector.Opportunity(scalarOffset: 1, kind: .allowed),
-            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
-            LineBreakOpportunityDetector.Opportunity(scalarOffset: 3, kind: .allowed),
-            LineBreakOpportunityDetector.Opportunity(scalarOffset: 4, kind: .allowed),
-            LineBreakOpportunityDetector.Opportunity(scalarOffset: 5, kind: .allowed),
-            LineBreakOpportunityDetector.Opportunity(scalarOffset: 6, kind: .allowed),
-        ])
-        #expect(detector.segments(in: "កខគ") == ["ក", "ខ", "គ"])
+        #expect(detector.segments(in: "\u{0E40}\u{0E01}") == ["\u{0E40}\u{0E01}"])
+        #expect(detector.opportunities(in: "\u{0E40}\u{0E01}").isEmpty)
+        #expect(detector.segments(in: "ภาษาไทย") == ["ภาษาไทย"])
+        #expect(detector.opportunities(in: "ภาษาไทย").isEmpty)
+        #expect(detector.segments(in: "កខគ") == ["កខគ"])
+        #expect(detector.opportunities(in: "កខគ").isEmpty)
     }
 
     @Test("Adds CJK ID-class break opportunities")
@@ -51,10 +47,36 @@ struct LineBreakOpportunityDetectorTests {
             LineBreakOpportunityDetector.Opportunity(scalarOffset: 3, kind: .allowed),
         ])
         #expect(detector.segments(in: "かなカナ") == ["か", "な", "カ", "ナ"])
-        #expect(detector.segments(in: "한글") == ["한", "글"])
         #expect(detector.segments(in: "\u{2EBF0}\u{2EBF1}") == ["\u{2EBF0}", "\u{2EBF1}"])
         #expect(detector.segments(in: "\u{2F800}\u{2F801}") == ["\u{2F800}", "\u{2F801}"])
         #expect(detector.segments(in: "\u{31350}\u{31351}") == ["\u{31350}", "\u{31351}"])
+    }
+
+    @Test("Protects Japanese non-starters")
+    func protectsJapaneseNonStarters() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "きゃく") == ["きゃ", "く"])
+        #expect(detector.opportunities(in: "きゃく") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
+        ])
+        #expect(detector.segments(in: "カーソル") == ["カー", "ソ", "ル"])
+        #expect(detector.opportunities(in: "カーソル") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 3, kind: .allowed),
+        ])
+    }
+
+    @Test("Keeps Hangul syllables together except at spaces")
+    func keepsHangulSyllablesTogetherExceptAtSpaces() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "한글") == ["한글"])
+        #expect(detector.opportunities(in: "한글").isEmpty)
+        #expect(detector.segments(in: "한글 테스트") == ["한글 ", "테스트"])
+        #expect(detector.opportunities(in: "한글 테스트") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 3, kind: .allowed),
+        ])
     }
 
     @Test("Protects CJK opening and closing punctuation boundaries")
@@ -73,10 +95,8 @@ struct LineBreakOpportunityDetectorTests {
     func doesNotSplitCombiningMarkClusters() {
         let detector = LineBreakOpportunityDetector()
 
-        #expect(detector.segments(in: "ก\u{0E49}ก") == ["ก\u{0E49}", "ก"])
-        #expect(detector.opportunities(in: "ก\u{0E49}ก") == [
-            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
-        ])
+        #expect(detector.segments(in: "ก\u{0E49}ก") == ["ก\u{0E49}ก"])
+        #expect(detector.opportunities(in: "ก\u{0E49}ก").isEmpty)
         #expect(detector.segments(in: "e\u{0301}e") == ["e\u{0301}e"])
         #expect(detector.opportunities(in: "e\u{0301}e").isEmpty)
     }

@@ -91,19 +91,21 @@ struct LineBreakOpportunityDetector {
     }
 
     private func canBreak(after current: ClassifiedCharacter, before next: ClassifiedCharacter) -> Bool {
-        if next.kind == .combiningMark || next.kind == .closingPunctuation {
+        if next.kind == .combiningMark || next.kind == .closingPunctuation || next.kind == .japaneseNonStarter {
             return false
         }
         if current.kind == .openingPunctuation {
             return false
         }
-        if current.kind == .closingPunctuation, next.kind == .noSpaceScript {
+        if current.kind == .closingPunctuation, next.kind == .cjkBreakable {
             return true
         }
         if current.kind == .space {
             return true
         }
-        return current.kind == .noSpaceScript && next.kind == .noSpaceScript
+        let currentAllowsCJKBreak = current.kind == .cjkBreakable || current.kind == .japaneseNonStarter
+        let nextAllowsCJKBreak = next.kind == .cjkBreakable || next.kind == .japaneseNonStarter
+        return currentAllowsCJKBreak && nextAllowsCJKBreak
     }
 
     private func normalizedText(for text: String) -> String {
@@ -126,8 +128,11 @@ struct LineBreakOpportunityDetector {
         if scalars.contains(where: isClosingPunctuation) {
             return .closingPunctuation
         }
-        if scalars.contains(where: isNoSpaceScriptScalar) {
-            return .noSpaceScript
+        if scalars.contains(where: isJapaneseNonStarter) {
+            return .japaneseNonStarter
+        }
+        if scalars.contains(where: isCJKBreakableScalar) {
+            return .cjkBreakable
         }
         return .other
     }
@@ -157,20 +162,35 @@ struct LineBreakOpportunityDetector {
         }
     }
 
-    private func isNoSpaceScriptScalar(_ scalar: UnicodeScalar) -> Bool {
+    private func isCJKBreakableScalar(_ scalar: UnicodeScalar) -> Bool {
         switch scalar.value {
-        case 0x0E00 ... 0x0E7F,
-             0x1780 ... 0x17FF,
-             0x3040 ... 0x30FF,
+        case 0x3040 ... 0x30FF,
              0x3400 ... 0x4DBF,
              0x4E00 ... 0x9FFF,
-             0xAC00 ... 0xD7AF,
              0xF900 ... 0xFAFF,
              0x20000 ... 0x2EBEF,
              0x2EBF0 ... 0x2EE5D,
              0x2F800 ... 0x2FA1F,
              0x30000 ... 0x3134F,
              0x31350 ... 0x323AF:
+            true
+        default:
+            false
+        }
+    }
+
+    private func isJapaneseNonStarter(_ scalar: UnicodeScalar) -> Bool {
+        switch scalar.value {
+        case 0x3041, 0x3043, 0x3045, 0x3047, 0x3049,
+             0x3063,
+             0x3083, 0x3085, 0x3087,
+             0x308E, 0x3095, 0x3096,
+             0x30A1, 0x30A3, 0x30A5, 0x30A7, 0x30A9,
+             0x30C3,
+             0x30E3, 0x30E5, 0x30E7,
+             0x30EE, 0x30F5, 0x30F6,
+             0x30FC,
+             0x31F0 ... 0x31FF:
             true
         default:
             false
@@ -211,7 +231,8 @@ private enum CharacterKind: Equatable {
     case newline
     case space
     case combiningMark
-    case noSpaceScript
+    case cjkBreakable
+    case japaneseNonStarter
     case openingPunctuation
     case closingPunctuation
     case other

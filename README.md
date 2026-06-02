@@ -425,10 +425,12 @@ swiftlint --config .swiftlint.yml
   [#141](https://github.com/mihaelamj/MarkdownPDF/issues/141) landed the #135
   negative-control proof. Issue
   [#146](https://github.com/mihaelamj/MarkdownPDF/issues/146) preserved staged
-  research for the next implementation shortlist. Issues
-  [#142](https://github.com/mihaelamj/MarkdownPDF/issues/142) and
-  [#143](https://github.com/mihaelamj/MarkdownPDF/issues/143) are queued
-  follow-ups.
+  research for the next implementation shortlist. Issue
+  [#142](https://github.com/mihaelamj/MarkdownPDF/issues/142) landed the
+  line-break correctness follow-up for Thai, Khmer, Japanese non-starters, and
+  Hangul. Issue
+  [#143](https://github.com/mihaelamj/MarkdownPDF/issues/143) is the next
+  queued follow-up.
 - Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) tracks
   named PDF page sizes, including A1, A3, A4, and A5.
 - Apple system font names remain available through
@@ -474,8 +476,8 @@ flowchart TD
     H2N["#123<br/>RTL manuscript<br/>Done"]
     H2O["#141<br/>Prove #135 witness<br/>Done"]
     H2R["#146<br/>Preserve staged research<br/>Done"]
-    H2P["#142<br/>Line-break correctness<br/>Todo"]
-    H2Q["#143<br/>More syntax languages<br/>Todo"]
+    H2P["#142<br/>Line-break correctness<br/>Done"]
+    H2Q["#143<br/>More syntax languages<br/>Next"]
     H3["#100<br/>Named page sizes<br/>Todo"]
 
     H0 --> H1
@@ -491,8 +493,9 @@ flowchart TD
     class H0,H1 done;
     class H2 active;
     class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J,H2K,H2L,H2M,H2N,H2O done;
-    class H2R done;
-    class H2P,H2Q,H3 todo;
+    class H2P,H2R done;
+    class H2Q next;
+    class H3 todo;
 ```
 
 ## License
