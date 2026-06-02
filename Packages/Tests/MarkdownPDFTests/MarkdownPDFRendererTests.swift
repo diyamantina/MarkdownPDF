@@ -987,6 +987,46 @@ struct MarkdownPDFRendererTests {
         #expect(extractedText.contains("Café résumé text uses embedded glyphs."))
     }
 
+    @Test(
+        .enabled(
+            if: OpenTrueTypeFontFixture.isAvailable,
+            OpenTrueTypeFontFixture.skipReason,
+        ),
+    )
+    func rendersMultilingualCorpusWithEmbeddedFont() throws {
+        let fontURL = try #require(OpenTrueTypeFontFixture.url)
+        let source = try PDFOptions.EmbeddedFontSource(data: Data(contentsOf: fontURL))
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/multilingual-corpus.md")
+        let markdown = try String(contentsOf: fixtureURL, encoding: .utf8)
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(embeddedFonts: .allRoles(source), title: "Multilingual corpus"),
+        ).render(markdown: markdown)
+        let inspector = PDFInspector(data)
+
+        #expect(inspector.text.contains("/Subtype /Type0"))
+        #expect(inspector.text.contains("/FontFile2"))
+        #expect(inspector.text.contains("/ToUnicode"))
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "multilingual-corpus")
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "multilingual-corpus-text")
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        let extracted = normalizedExtractedText(textResult.output)
+
+        // Diacritic Latin, Cyrillic, and Greek are covered by the open CI fonts
+        // (DejaVu Sans on Linux, Liberation Sans on macOS) and round-trip through
+        // the subset and ToUnicode map.
+        #expect(extracted.contains("café"), "Unexpected extraction:\n\(textResult.output)")
+        #expect(extracted.contains("résumé"))
+        #expect(extracted.contains("Привет"))
+        #expect(extracted.contains("Καλημέρα"))
+        // Complex tables keep their headers and mixed-script cells.
+        #expect(extracted.contains("Script"))
+        #expect(extracted.contains("Sample"))
+        #expect(extracted.contains("Привет мир"))
+    }
+
     @Test("Renders Markdown links as PDF URI annotations")
     func rendersLinkAnnotations() throws {
         let markdown = """
