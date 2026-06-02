@@ -124,6 +124,8 @@ struct FixtureTests {
         #expect(inspector.linkAnnotationCount >= 2)
         #expect(inspector.text.contains("/Names << /Dests"))
         #expect(inspector.text.contains("/Subtype /Image"))
+        #expect(imageXObjectCount(in: inspector.text) == 1)
+        #expect(imageDrawOperatorCount(in: inspector.text) == 1)
         #expect(inspector.text.contains("/Width 96"))
         #expect(inspector.text.contains("/Height 48"))
         #expect(inspector.text.contains("/FlateDecode"))
@@ -149,6 +151,8 @@ struct FixtureTests {
         #expect(inspector.linkAnnotationCount >= 4)
         #expect(inspector.text.contains("/Names << /Dests"))
         #expect(inspector.text.contains("/Subtype /Image"))
+        #expect(imageXObjectCount(in: inspector.text) == 1)
+        #expect(imageDrawOperatorCount(in: inspector.text) == 2)
         #expect(inspector.text.contains("/Width 96"))
         #expect(inspector.text.contains("/Height 48"))
         #expect(inspector.text.contains("/FlateDecode"))
@@ -181,6 +185,8 @@ struct FixtureTests {
         #expect(inspector.linkAnnotationCount >= 3)
         #expect(inspector.text.contains("/Names << /Dests"))
         #expect(inspector.text.contains("/Subtype /Image"))
+        #expect(imageXObjectCount(in: inspector.text) == 1)
+        #expect(imageDrawOperatorCount(in: inspector.text) == 1)
         #expect(inspector.text.contains("/Width 96"))
         #expect(inspector.text.contains("/Height 48"))
         #expect(inspector.text.contains("/FlateDecode"))
@@ -288,6 +294,61 @@ struct FixtureTests {
         #expect(dimensions != nil)
         #expect((dimensions?.width ?? 0) > 0)
         #expect((dimensions?.height ?? 0) > 0)
+    }
+
+    @Test("Manuscript fixture image references are audited")
+    func manuscriptFixtureImageReferencesAreAudited() throws {
+        let entries = try manuscriptImageAuditEntries()
+        let summary = imageAuditSummary(entries)
+
+        try PDFValidation.writeTextArtifact(
+            imageAuditReport(entries: entries, summary: summary),
+            name: "image-reference-audit.txt",
+        )
+
+        #expect(entries.count == 399)
+        #expect(summary[.rendered] == 40)
+        #expect(summary[.renderedInLargeStress] == 4)
+        #expect(summary[.fallbackOnly] == 4)
+        #expect(summary[.intentionallyOmitted] == 351)
+        #expect(summary[.missing, default: 0] == 0)
+        #expect(summary[.unsupported, default: 0] == 0)
+
+        for entry in entries where entry.requiresFixtureAsset {
+            let url = try fixtureURL(named: entry.fixtureName)
+                .deletingLastPathComponent()
+                .appendingPathComponent(entry.source)
+            #expect(FileManager.default.fileExists(atPath: url.path), "Missing fixture asset for \(entry.reportLine)")
+        }
+
+        for entry in entries where entry.policy.requiresLocalAsset {
+            #expect(supportedImageSource(entry.source))
+        }
+
+        let wwdcEntries = entries.filter { $0.fixtureName == "\(wwdcFixtureDirectory)/README.md" }
+        let wwdcAssetFileCount = try localAssetFileCount(directory: wwdcFixtureDirectory)
+        #expect(Set(wwdcEntries.map(\.source)).count == wwdcEntries.count)
+        #expect(wwdcEntries.count == wwdcAssetFileCount)
+        #expect(wwdcEntries.count { $0.policy == .rendered } == wwdcOptimizedAssetNames.count)
+        #expect(wwdcEntries.count { $0.policy == .renderedInLargeStress } == wwdcLargeStressAssetNames.count)
+        #expect(wwdcEntries.count { $0.policy == .intentionallyOmitted } == 351)
+    }
+
+    @Test("Local image failures are deterministic")
+    func localImageFailuresAreDeterministic() throws {
+        let directory = try PDFValidation.temporaryDirectory()
+        try Data("not an image".utf8).write(to: directory.appendingPathComponent("unsupported.gif"))
+
+        try expectImageError(
+            .unreadableImage("missing.png"),
+            markdown: "![missing](missing.png)",
+            assetsBaseURL: directory,
+        )
+        try expectImageError(
+            .unsupportedImage("unsupported.gif"),
+            markdown: "![unsupported](unsupported.gif)",
+            assetsBaseURL: directory,
+        )
     }
 
     @Test("Formidabble fixture renders code-heavy manuscript")
@@ -408,6 +469,7 @@ struct FixtureTests {
         )
         #expect(localImageReferenceCount(in: markdown) == expectedImageReferences)
         #expect(imageXObjectCount(in: inspector.text) == expectedImageReferences)
+        #expect(imageDrawOperatorCount(in: inspector.text) == expectedImageReferences)
 
         let qpdf = try PDFValidation.qpdfCheck(data: data, name: artifactName)
         #expect(qpdf.exitCode == 0, "qpdf --check failed for \(directory):\n\(qpdf.output)")
@@ -589,6 +651,10 @@ struct FixtureTests {
         pdfText.components(separatedBy: "/Subtype /Image").count - 1
     }
 
+    private func imageDrawOperatorCount(in pdfText: String) -> Int {
+        pdfText.components(separatedBy: " Do").count - 1
+    }
+
     private func selectedLocalImageFixtureMarkdown(
         from markdown: String,
         allowedAssetNames: Set<String>,
@@ -619,8 +685,174 @@ struct FixtureTests {
         return String(line.dropFirst(prefix.count).dropLast())
     }
 
+    private func manuscriptImageAuditEntries() throws -> [ImageAuditEntry] {
+        try manuscriptImageFixtureNames.flatMap { fixtureName in
+            let markdown = try fixture(named: fixtureName)
+            return try markdownImageReferences(in: markdown).map { reference in
+                let policy = try imageAuditPolicy(fixtureName: fixtureName, source: reference.source)
+                return ImageAuditEntry(
+                    fixtureName: fixtureName,
+                    line: reference.line,
+                    source: reference.source,
+                    policy: policy,
+                )
+            }
+        }
+    }
+
+    private func markdownImageReferences(in markdown: String) -> [MarkdownImageReference] {
+        markdown
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .enumerated()
+            .flatMap { index, line in
+                imageReferences(in: String(line), lineNumber: index + 1)
+            }
+    }
+
+    private func imageReferences(in line: String, lineNumber: Int) -> [MarkdownImageReference] {
+        var references: [MarkdownImageReference] = []
+        var searchIndex = line.startIndex
+
+        while let bang = line[searchIndex...].firstIndex(of: "!") {
+            let bracket = line.index(after: bang)
+            guard bracket < line.endIndex, line[bracket] == "[" else {
+                searchIndex = line.index(after: bang)
+                continue
+            }
+            guard let altEnd = line[bracket...].firstIndex(of: "]") else {
+                break
+            }
+            let parenStart = line.index(after: altEnd)
+            guard parenStart < line.endIndex, line[parenStart] == "(" else {
+                searchIndex = line.index(after: altEnd)
+                continue
+            }
+            guard let parenEnd = line[parenStart...].firstIndex(of: ")") else {
+                break
+            }
+
+            let sourceStart = line.index(after: parenStart)
+            let source = String(line[sourceStart ..< parenEnd])
+            references.append(MarkdownImageReference(line: lineNumber, source: source))
+            searchIndex = line.index(after: parenEnd)
+        }
+
+        return references
+    }
+
+    private func imageAuditPolicy(fixtureName: String, source: String) throws -> ImageAuditPolicy {
+        if source.hasPrefix("http://") || source.hasPrefix("https://") {
+            return .fallbackOnly
+        }
+
+        if generatedFixtureAssetSources.contains(source) {
+            return .rendered
+        }
+
+        guard try fixtureAssetExists(fixtureName: fixtureName, source: source) else {
+            return .missing
+        }
+
+        guard supportedImageSource(source) else {
+            return .unsupported
+        }
+
+        if fixtureName == "\(wwdcFixtureDirectory)/README.md",
+           let assetName = localImageAssetName(source: source)
+        {
+            if wwdcOptimizedAssetNames.contains(assetName) {
+                return .rendered
+            }
+            if wwdcLargeStressAssetNames.contains(assetName) {
+                return .renderedInLargeStress
+            }
+            return .intentionallyOmitted
+        }
+
+        return .rendered
+    }
+
+    private func supportedImageSource(_ source: String) -> Bool {
+        let lowercasedSource = source.lowercased()
+        return lowercasedSource.hasSuffix(".png")
+            || lowercasedSource.hasSuffix(".jpg")
+            || lowercasedSource.hasSuffix(".jpeg")
+    }
+
+    private func fixtureAssetExists(fixtureName: String, source: String) throws -> Bool {
+        let url = try fixtureURL(named: fixtureName)
+            .deletingLastPathComponent()
+            .appendingPathComponent(source)
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    private func imageAuditSummary(_ entries: [ImageAuditEntry]) -> [ImageAuditPolicy: Int] {
+        entries.reduce(into: [:]) { summary, entry in
+            summary[entry.policy, default: 0] += 1
+        }
+    }
+
+    private func imageAuditReport(
+        entries: [ImageAuditEntry],
+        summary: [ImageAuditPolicy: Int],
+    ) -> String {
+        let summaryLines = ImageAuditPolicy.allCases.map { policy in
+            "\(policy.rawValue): \(summary[policy, default: 0])"
+        }
+        let entryLines = entries.map(\.reportLine)
+
+        return (["MarkdownPDF fixture image reference audit", ""] + summaryLines + [""] + entryLines)
+            .joined(separator: "\n")
+    }
+
+    private func expectImageError(
+        _ expected: MarkdownPDFError,
+        markdown: String,
+        assetsBaseURL: URL,
+    ) throws {
+        do {
+            _ = try MarkdownPDFRenderer().render(markdown: markdown, assetsBaseURL: assetsBaseURL)
+            Issue.record("Expected \(expected), but render succeeded")
+        } catch let error as MarkdownPDFError {
+            #expect(error == expected)
+        } catch {
+            Issue.record("Expected \(expected), but got \(error)")
+        }
+    }
+
+    private func localAssetFileCount(directory: String) throws -> Int {
+        let assetsURL = try fixtureURL(named: "\(directory)/README.md")
+            .deletingLastPathComponent()
+            .appendingPathComponent("assets")
+        return try FileManager.default.contentsOfDirectory(
+            at: assetsURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles],
+        ).count
+    }
+
+    private func localImageAssetName(source: String) -> String? {
+        let prefix = "assets/"
+        guard source.hasPrefix(prefix) else {
+            return nil
+        }
+
+        return String(source.dropFirst(prefix.count))
+    }
+
     private func largeFixtureStressTestsEnabled() -> Bool {
         ProcessInfo.processInfo.environment["MARKDOWNPDF_LARGE_FIXTURE_TESTS"] == "1"
+    }
+
+    private var manuscriptImageFixtureNames: [String] {
+        articleGradeFixtureNames + [
+            "us-patent-8130226/README.md",
+            "\(wwdcFixtureDirectory)/README.md",
+        ]
+    }
+
+    private var generatedFixtureAssetSources: Set<String> {
+        Set(["local-chart.png"])
     }
 
     private var wwdcFixtureDirectory: String {
@@ -652,5 +884,60 @@ struct FixtureTests {
             "2019_613_page-216.png",
             "2019_613_page-232.png",
         ])
+    }
+
+    private struct MarkdownImageReference {
+        var line: Int
+        var source: String
+    }
+
+    private struct ImageAuditEntry {
+        var fixtureName: String
+        var line: Int
+        var source: String
+        var policy: ImageAuditPolicy
+
+        var reportLine: String {
+            "\(fixtureName):\(line) \(policy.rawValue) \(source) - \(policy.reason)"
+        }
+
+        var requiresFixtureAsset: Bool {
+            policy.requiresLocalAsset && source.hasPrefix("assets/")
+        }
+    }
+
+    private enum ImageAuditPolicy: String, CaseIterable {
+        case rendered
+        case renderedInLargeStress = "rendered-in-large-stress"
+        case intentionallyOmitted = "intentionally-omitted"
+        case fallbackOnly = "fallback-only"
+        case missing
+        case unsupported
+
+        var requiresLocalAsset: Bool {
+            switch self {
+            case .rendered, .renderedInLargeStress, .intentionallyOmitted:
+                true
+            case .fallbackOnly, .missing, .unsupported:
+                false
+            }
+        }
+
+        var reason: String {
+            switch self {
+            case .rendered:
+                "rendered by default fixture tests"
+            case .renderedInLargeStress:
+                "rendered by opt-in large fixture stress test"
+            case .intentionallyOmitted:
+                "omitted from default fixture render to keep CI bounded"
+            case .fallbackOnly:
+                "remote image policy renders visible fallback text without network access"
+            case .missing:
+                "local asset is absent"
+            case .unsupported:
+                "local asset format is outside the portable JPEG and PNG policy"
+            }
+        }
     }
 }
