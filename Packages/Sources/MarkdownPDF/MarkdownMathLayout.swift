@@ -4,6 +4,7 @@ struct MarkdownMathLayout {
     var font: StandardFont
     var color: PDFColor
     var measureText: (PDFTextRun) throws -> Double
+    var metrics: MarkdownMathLayoutMetrics = .default
 
     func layout(
         _ node: MarkdownMathNode,
@@ -18,7 +19,12 @@ struct MarkdownMathLayout {
         case let .symbol(display, _, _):
             try layoutText(display, size: size)
         case let .fraction(numerator, denominator):
-            try layoutFraction(numerator: numerator, denominator: denominator, size: size)
+            try layoutFraction(
+                numerator: numerator,
+                denominator: denominator,
+                size: size,
+                displayStyle: displayStyle,
+            )
         case let .radical(radicand):
             try layoutRadical(radicand, size: size, displayStyle: displayStyle)
         case let .scripts(base, subscriptNode, superscriptNode):
@@ -61,8 +67,8 @@ struct MarkdownMathLayout {
         let run = PDFTextRun(text: text, font: font, size: size, color: color)
         return try MarkdownMathLayoutBox(
             width: measureText(run),
-            height: size * 0.72,
-            depth: size * 0.22,
+            height: metrics.textHeight(size: size),
+            depth: metrics.textDepth(size: size),
             elements: [.text(run: run, x: 0, y: 0)],
         )
     }
@@ -71,29 +77,35 @@ struct MarkdownMathLayout {
         numerator: MarkdownMathNode,
         denominator: MarkdownMathNode,
         size: Double,
+        displayStyle: Bool,
     ) throws -> MarkdownMathLayoutBox {
-        let childSize = size * 0.82
+        let childSize = metrics.fractionChildSize(size: size)
         let numeratorBox = try layout(numerator, size: childSize, displayStyle: false)
         let denominatorBox = try layout(denominator, size: childSize, displayStyle: false)
-        let padding = size * 0.22
-        let gap = size * 0.24
-        let ruleThickness = max(0.45, size * 0.045)
+        let padding = metrics.fractionPadding(size: size)
+        let numeratorGap = metrics.fractionNumeratorGap(size: size, displayStyle: displayStyle)
+        let denominatorGap = metrics.fractionDenominatorGap(size: size, displayStyle: displayStyle)
+        let ruleThickness = metrics.fractionRuleThickness(size: size)
+        let axisY = metrics.axisHeight(size: size)
+        let ruleY = axisY - ruleThickness / 2
         let width = max(numeratorBox.width, denominatorBox.width) + padding * 2
-        let numeratorBaseline = ruleThickness / 2 + gap + numeratorBox.depth
-        let denominatorBaseline = -ruleThickness / 2 - gap - denominatorBox.height
+        let numeratorBaseline = axisY + ruleThickness / 2 + numeratorGap + numeratorBox.depth
+        let denominatorBaseline = axisY - ruleThickness / 2 - denominatorGap - denominatorBox.height
         let numeratorX = (width - numeratorBox.width) / 2
         let denominatorX = (width - denominatorBox.width) / 2
 
         var elements: [MarkdownMathLayoutElement] = [
-            .rule(x: 0, y: -ruleThickness / 2, width: width, height: ruleThickness, color: color),
+            .rule(x: 0, y: ruleY, width: width, height: ruleThickness, color: color),
         ]
         elements += numeratorBox.elements.map { $0.offsetBy(x: numeratorX, y: numeratorBaseline) }
         elements += denominatorBox.elements.map { $0.offsetBy(x: denominatorX, y: denominatorBaseline) }
+        let ruleHeight = max(axisY + ruleThickness / 2, 0)
+        let ruleDepth = max(-(axisY - ruleThickness / 2), 0)
 
         return MarkdownMathLayoutBox(
             width: width,
-            height: numeratorBaseline + numeratorBox.height,
-            depth: abs(denominatorBaseline) + denominatorBox.depth,
+            height: max(ruleHeight, numeratorBaseline + numeratorBox.height),
+            depth: max(ruleDepth, abs(denominatorBaseline) + denominatorBox.depth),
             elements: elements,
         )
     }
@@ -103,12 +115,14 @@ struct MarkdownMathLayout {
         size: Double,
         displayStyle: Bool,
     ) throws -> MarkdownMathLayoutBox {
-        let radical = try layoutText("sqrt", size: size * 0.82)
-        let radicandBox = try layout(radicand, size: size * 0.95, displayStyle: displayStyle)
-        let gap = size * 0.2
-        let ruleThickness = max(0.45, size * 0.045)
+        let radical = try layoutText("sqrt", size: metrics.radicalSignSize(size: size))
+        let radicandBox = try layout(radicand, size: metrics.radicalRadicandSize(size: size), displayStyle: displayStyle)
+        let gap = metrics.radicalHorizontalGap(size: size)
+        let verticalGap = metrics.radicalVerticalGap(size: size, displayStyle: displayStyle)
+        let ruleThickness = metrics.radicalRuleThickness(size: size)
+        let extraAscender = metrics.radicalExtraAscender(size: size)
         let radicandX = radical.width + gap
-        let overbarY = radicandBox.height + size * 0.08
+        let overbarY = radicandBox.height + verticalGap
 
         var elements = radical.elements
         elements += radicandBox.elements.map { $0.offsetBy(x: radicandX, y: 0) }
@@ -122,7 +136,7 @@ struct MarkdownMathLayout {
 
         return MarkdownMathLayoutBox(
             width: radical.width + gap + radicandBox.width,
-            height: max(radical.height, overbarY + ruleThickness),
+            height: max(radical.height, overbarY + ruleThickness + extraAscender),
             depth: max(radical.depth, radicandBox.depth),
             elements: elements,
         )
@@ -145,13 +159,13 @@ struct MarkdownMathLayout {
         }
 
         let baseBox = try layout(base, size: size, displayStyle: displayStyle)
-        let scriptSize = size * 0.68
+        let scriptSize = metrics.scriptSize(size: size)
         let subscriptBox = try subscriptNode.map { try layout($0, size: scriptSize, displayStyle: false) }
         let superscriptBox = try superscriptNode.map { try layout($0, size: scriptSize, displayStyle: false) }
-        let scriptGap = size * 0.08
+        let scriptGap = metrics.spaceAfterScript(size: size)
         let scriptX = baseBox.width + scriptGap
-        let superscriptY = baseBox.height * 0.58
-        let subscriptY = -baseBox.depth - scriptSize * 0.28
+        let superscriptY = metrics.superscriptShiftUp(size: size, baseBox: baseBox)
+        let subscriptY = -metrics.subscriptShiftDown(size: size, baseBox: baseBox, scriptSize: scriptSize)
 
         var elements = baseBox.elements
         var scriptWidth = 0.0
@@ -184,11 +198,12 @@ struct MarkdownMathLayout {
         upper: MarkdownMathNode?,
         size: Double,
     ) throws -> MarkdownMathLayoutBox {
-        let baseBox = try layout(base, size: size * 1.15, displayStyle: false)
-        let scriptSize = size * 0.68
+        let baseBox = try layout(base, size: metrics.displayOperatorSize(size: size), displayStyle: false)
+        let scriptSize = metrics.scriptSize(size: size)
         let lowerBox = try lower.map { try layout($0, size: scriptSize, displayStyle: false) }
         let upperBox = try upper.map { try layout($0, size: scriptSize, displayStyle: false) }
-        let gap = size * 0.16
+        let upperGap = metrics.upperLimitGap(size: size)
+        let lowerGap = metrics.lowerLimitGap(size: size)
         let width = max(baseBox.width, lowerBox?.width ?? 0, upperBox?.width ?? 0)
         let baseX = (width - baseBox.width) / 2
 
@@ -197,13 +212,13 @@ struct MarkdownMathLayout {
         var depth = baseBox.depth
 
         if let upperBox {
-            let upperY = baseBox.height + gap + upperBox.depth
+            let upperY = baseBox.height + upperGap + upperBox.depth
             elements += upperBox.elements.map { $0.offsetBy(x: (width - upperBox.width) / 2, y: upperY) }
             height = upperY + upperBox.height
         }
 
         if let lowerBox {
-            let lowerY = -baseBox.depth - gap - lowerBox.height
+            let lowerY = -baseBox.depth - lowerGap - lowerBox.height
             elements += lowerBox.elements.map { $0.offsetBy(x: (width - lowerBox.width) / 2, y: lowerY) }
             depth = abs(lowerY) + lowerBox.depth
         }

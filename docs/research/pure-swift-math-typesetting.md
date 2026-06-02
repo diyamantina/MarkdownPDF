@@ -35,6 +35,12 @@ implementation gates before claiming a production math font profile. Current
 rendering intentionally uses ASCII-safe names for Greek commands so the
 base-font path remains extractable and Linux-buildable.
 
+The math layout engine now has an internal metrics bridge that can consume scaled
+OpenType `MATH` constants when they are explicitly supplied. The default metrics
+preserve the current base-font geometry. The public renderer still does not
+discover or pass embedded-font `MATH` constants, so this is a staging step toward
+font-driven Appendix-G layout rather than a production math font claim.
+
 ## Product boundary
 
 Hard constraints, restated so they cannot drift:
@@ -229,7 +235,9 @@ Features that cannot meet this bar stay unsupported and visible.
    variants, assembly) with synthetic font unit tests. This internal parser
    slice is implemented; renderer consumption of the metrics remains separate.
 3. #131c Box tree + Appendix G subset layout (styles, scripts, fractions,
-   radicals) producing geometry, no PDF yet.
+   radicals) producing geometry, no PDF yet. The internal MATH-constant metrics
+   bridge for fractions, scripts, radicals, and display limits is implemented;
+   full font-driven box construction remains separate.
 4. #131d Big operators with limits, stretchy delimiters via variants/assembly.
 5. #131e PDF emission (text + rule rectangles) reusing the embedded-font path.
 6. #131f Text linearization + `ToUnicode` for extraction.
