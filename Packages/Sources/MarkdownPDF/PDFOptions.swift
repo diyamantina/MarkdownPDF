@@ -8,6 +8,7 @@ public struct PDFOptions: Equatable, Sendable {
     public var embeddedFonts: EmbeddedFonts
     public var title: String?
     public var tableOfContents: TableOfContents
+    public var codeSyntaxHighlighting: CodeSyntaxHighlighting
 
     public init(
         pageSize: PageSize = .a4,
@@ -17,6 +18,7 @@ public struct PDFOptions: Equatable, Sendable {
         embeddedFonts: EmbeddedFonts = .disabled,
         title: String? = nil,
         tableOfContents: TableOfContents = .disabled,
+        codeSyntaxHighlighting: CodeSyntaxHighlighting = .disabled,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -25,6 +27,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.embeddedFonts = embeddedFonts
         self.title = title
         self.tableOfContents = tableOfContents
+        self.codeSyntaxHighlighting = codeSyntaxHighlighting
     }
 
     public struct PageSize: Equatable, Sendable {
@@ -181,5 +184,23 @@ public struct PDFOptions: Equatable, Sendable {
 
         public static let disabled = TableOfContents(isEnabled: false)
         public static let enabled = TableOfContents(isEnabled: true)
+    }
+
+    /// Controls portable syntax coloring for fenced code blocks.
+    ///
+    /// The default value is ``disabled``. When enabled, the renderer applies a
+    /// narrow Pure Swift tokenizer to supported language hints and emits
+    /// DeviceRGB text colors directly in the PDF content stream. Unsupported or
+    /// missing language hints keep the existing plain monospaced rendering.
+    /// Mermaid fences keep their separate diagram-rendering path.
+    public struct CodeSyntaxHighlighting: Equatable, Sendable {
+        public var isEnabled: Bool
+
+        public init(isEnabled: Bool) {
+            self.isEnabled = isEnabled
+        }
+
+        public static let disabled = CodeSyntaxHighlighting(isEnabled: false)
+        public static let enabled = CodeSyntaxHighlighting(isEnabled: true)
     }
 }

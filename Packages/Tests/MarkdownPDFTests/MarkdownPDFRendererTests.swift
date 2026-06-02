@@ -167,6 +167,77 @@ struct MarkdownPDFRendererTests {
         #expect(streamBodies.contains("(let "))
     }
 
+    @Test("Code syntax coloring is opt in and preserves extracted text")
+    func codeSyntaxColoringIsOptInAndPreservesExtractedText() throws {
+        let markdown = """
+        ```swift
+        // extractable comment
+        let value = "record" + 42
+        ```
+        """
+        let plainData = try MarkdownPDFRenderer().render(markdown: markdown)
+        let coloredData = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled),
+        ).render(markdown: markdown)
+        let plainText = try PDFValidation.pdftotext(data: plainData, name: "plain-code-extraction")
+        let coloredText = try PDFValidation.pdftotext(data: coloredData, name: "colored-code-extraction")
+        let coloredStream = PDFInspector(coloredData).streams.map(\.body).joined(separator: "\n")
+        let plainStream = PDFInspector(plainData).streams.map(\.body).joined(separator: "\n")
+
+        try #require(plainText.exitCode == 0, "pdftotext failed for plain code:\n\(plainText.output)")
+        try #require(coloredText.exitCode == 0, "pdftotext failed for colored code:\n\(coloredText.output)")
+        #expect(normalizedExtractedText(plainText.output) == normalizedExtractedText(coloredText.output))
+        #expect(!plainStream.contains(sourceCodeKeywordOperator))
+        #expect(coloredStream.contains(sourceCodeKeywordOperator))
+        #expect(coloredStream.contains(sourceCodeCommentOperator))
+        #expect(coloredStream.contains(sourceCodeStringOperator))
+        #expect(coloredStream.contains(sourceCodeNumberOperator))
+        #expect(coloredStream.contains(sourceCodeOperatorOperator))
+        #expect(coloredStream.contains("(let)"))
+        #expect(coloredStream.contains(#"("record")"#))
+        #expect(coloredStream.contains("(42)"))
+    }
+
+    @Test("Unsupported code syntax coloring hints render plain")
+    func unsupportedCodeSyntaxColoringHintsRenderPlain() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled),
+        ).render(markdown: """
+        ```unknown-language
+        plainBlock = "this block must remain uncolored"
+        ```
+        """)
+        let stream = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "unsupported-code-coloring")
+
+        try #require(textResult.exitCode == 0, "pdftotext failed for unsupported code coloring:\n\(textResult.output)")
+        #expect(textResult.output.contains("plainBlock"))
+        #expect(!textResult.output.contains("Unsupported"))
+        #expect(!stream.contains(sourceCodeKeywordOperator))
+        #expect(!stream.contains(sourceCodeCommentOperator))
+        #expect(!stream.contains(sourceCodeStringOperator))
+        #expect(!stream.contains(sourceCodeNumberOperator))
+        #expect(!stream.contains(sourceCodeOperatorOperator))
+    }
+
+    @Test("Mermaid keeps diagram path when syntax coloring is enabled")
+    func mermaidKeepsDiagramPathWhenSyntaxColoringIsEnabled() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled),
+        ).render(markdown: """
+        ```mermaid
+        graph LR
+            A["Input"] --> B["PDF"]
+        ```
+        """)
+        let textResult = try PDFValidation.pdftotext(data: data, name: "syntax-coloring-mermaid")
+
+        try #require(textResult.exitCode == 0, "pdftotext failed for Mermaid with syntax coloring:\n\(textResult.output)")
+        #expect(textResult.output.contains("Input"))
+        #expect(textResult.output.contains("PDF"))
+        #expect(!textResult.output.contains("graph LR"))
+    }
+
     @Test("Writes minimal canonical PDF for one text page")
     func writesMinimalCanonicalPDFForOneTextPage() throws {
         let data = try MarkdownPDFRenderer().render(markdown: "Hello from MarkdownPDF.")
@@ -853,6 +924,12 @@ struct MarkdownPDFRendererTests {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
+
+private let sourceCodeKeywordOperator = "0.050 0.200 0.550 rg"
+private let sourceCodeStringOperator = "0.500 0.180 0.050 rg"
+private let sourceCodeNumberOperator = "0.340 0.180 0.550 rg"
+private let sourceCodeCommentOperator = "0.280 0.380 0.280 rg"
+private let sourceCodeOperatorOperator = "0.180 0.220 0.260 rg"
 
 private enum OpenTrueTypeFontFixture {
     static var isAvailable: Bool {

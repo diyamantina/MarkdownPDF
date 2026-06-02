@@ -4,13 +4,12 @@ Date: 2026-06-02
 
 Issue: #106
 
-Decision: defer visible syntax coloring for now. Keep the current source-code
-formatting baseline uncolored. If coloring is added later, make it opt-in,
-internal first, Pure Swift, macOS/Linux portable, and backed by extraction,
-geometry, contrast, and raster witnesses.
+Decision in #106: defer visible syntax coloring until the source-code layout
+baseline and witness stack were in place.
 
-This is a research recommendation, not product behavior until Swift source and
-tests exist.
+Implementation in #120: add opt-in portable syntax coloring for supported
+fenced-code language hints. The default remains uncolored. Unsupported or
+missing language hints render plain code with no warning in the PDF.
 
 ## Product Boundary
 
@@ -58,7 +57,7 @@ survive:
 - fallback to base PDF fonts,
 - unsupported language hints.
 
-## Recommendation
+## #106 Recommendation
 
 Do not implement visible syntax coloring in #106.
 
@@ -71,9 +70,9 @@ Close #106 with a deferred recommendation:
 5. Add a future issue only if a product need appears for colored code in PDF
    output.
 
-## Future Portable Model
+## Implemented Portable Model
 
-If coloring is implemented later, start with internal types:
+The #120 implementation starts with internal types equivalent to:
 
 ```swift
 enum SourceCodeTokenKind {
@@ -102,9 +101,8 @@ Rules:
 - Token ranges must refer to tab-expanded display text or must carry an
   explicit mapping from original source text to display text.
 - Tokenization failure renders plain code, not partially corrupt color output.
-- The first tokenizer should be deliberately narrow. A small Swift-only scanner
-  for one language or a language-agnostic lexer for comments, strings, numbers,
-  and punctuation is acceptable. Broad language claims are not.
+- The tokenizer is deliberately narrow. It supports Swift, C-family and Metal
+  hints, Python, and JSON. Broad language claims are not made.
 
 ## Color Policy
 
@@ -118,9 +116,9 @@ Future colors must satisfy:
 - stable PDF text extraction identical to the uncolored code text,
 - deterministic operator output that can be inspected structurally.
 
-## Required Witnesses For Any Future Coloring
+## Required Witnesses For Coloring
 
-Any future implementation must add tests that prove:
+The #120 implementation adds tests that prove:
 
 - `pdftotext` extraction is unchanged from the uncolored code text.
 - Poppler word boxes stay inside the code block and do not overlap.
@@ -135,8 +133,8 @@ Any future implementation must add tests that prove:
 
 ## Platform Notes
 
-- Portable macOS/Linux: the future internal token model and color emission can
-  live in the shared Swift renderer.
+- Portable macOS/Linux: the internal token model and color emission live in the
+  shared Swift renderer.
 - macOS-only: no part of this recommendation requires macOS APIs.
 - Linux-only: Poppler interpretation differences belong in witness tolerance
   unless production PDF bytes need an OS-specific branch as a last resort.
@@ -145,8 +143,7 @@ Any future implementation must add tests that prove:
 
 ## Conclusion
 
-Syntax coloring is useful presentation, not required correctness. The current
-priority remains faithful code layout, extraction, non-overlap, and PDF
-validity. The recommended #106 outcome is defer implementation and keep a clear
-future model ready for an opt-in, narrow, Pure Swift tokenizer if the product
-needs colored code later.
+Syntax coloring is useful presentation, not required correctness. The #120
+implementation keeps it opt-in and backs it with extraction, Poppler geometry,
+MuPDF character quads, qpdf, content-stream color inspection, and raster
+witnesses.

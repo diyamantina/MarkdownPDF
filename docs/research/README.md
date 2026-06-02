@@ -62,7 +62,7 @@ Swift source and tests.
 | `source-code-typesetting-literature.md` | Literature and standards research for source-code block formatting, wrapping, extraction, and witness policy. |
 | `source-code-renderer-analysis.md` | Comparison between source-code research and the current MarkdownPDF parser, renderer, PDF writer, and witness stack. |
 | `source-code-formatting-model.md` | Portable internal model for source-code block layout, inline-code policy, tab expansion, page breaks, spacing, and witnesses. |
-| `portable-syntax-coloring.md` | Portable syntax-coloring recommendation, dependency boundary, future token model, color policy, and witness requirements. |
+| `portable-syntax-coloring.md` | Portable syntax-coloring recommendation, dependency boundary, implemented token model, color policy, and witness requirements. |
 | `existing-pdf-writer-alignment.md` | Alignment notes between existing writer behavior and research findings. |
 | `pdf-validation-tooling.md` | Open source validation tools and the current CI validation strategy. |
 | `pdf-visual-layout-validation.md` | Visual layout validation strategy using text and render extraction tools. |

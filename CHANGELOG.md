@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PDFOptions.EmbeddedFonts` role mapping for caller-provided TrueType data.
 - CI-safe embedded-font fixtures using generated Swift TrueType data and an
   installed DejaVu Sans smoke-test path instead of committed font binaries.
+- Opt-in portable syntax coloring for supported fenced code block language
+  hints, with extraction, geometry, and raster witnesses.
 
 ### Changed
 

@@ -625,7 +625,7 @@ struct FixtureTests {
     }
 
     private var publicFixtureNames: [String] {
-        ["democv.md"] + articleGradeFixtureNames
+        ["democv.md", "syntax-coloring-manuscript.md"] + articleGradeFixtureNames
     }
 
     private var articleGradeFixtureNames: [String] {

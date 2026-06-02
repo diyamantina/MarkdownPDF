@@ -58,6 +58,88 @@ struct PDFVisualLayoutValidationTests {
         #expect(layout.words.contains { $0.text == "tools]\"" })
     }
 
+    @Test("Syntax-colored manuscript passes visual witness stack")
+    func syntaxColoredManuscriptPassesVisualWitnessStack() throws {
+        let data = try syntaxColoringManuscriptPDF()
+        let url = try PDFValidation.temporaryPDF(name: "syntax-coloring-manuscript", data: data)
+        let inspector = PDFInspector(data)
+        let pageCount = inspector.pageCount
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+
+        #expect(pageCount >= 2)
+        #expect(streamText.contains("0.050 0.200 0.550 rg"))
+        #expect(streamText.contains("0.280 0.380 0.280 rg"))
+        try PDFValidation.writeArtifact(data, name: "syntax-coloring-manuscript.pdf")
+
+        let qpdf = try PDFValidation.qpdfCheck(url: url)
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+
+        let textResult = try PDFValidation.pdftotext(url: url)
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        try PDFValidation.writeTextArtifact(textResult.output, name: "syntax-coloring-manuscript/text.txt")
+        let normalizedText = normalizedExtractedText(textResult.output)
+        #expect(normalizedText.contains("Portable Syntax Coloring Manuscript"))
+        #expect(normalizedText.contains("Source coloring must preserve extraction and spacing."))
+        #expect(normalizedText.contains("TabbedSyntaxColoringWitnessLongIdent"))
+        #expect(normalizedText.contains("plainUnsupported"))
+        #expect(normalizedText.contains("Syntax Coloring Manuscript Exit Marker"))
+
+        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
+        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
+        try PDFValidation.writeTextArtifact(tsvResult.output, name: "syntax-coloring-manuscript/poppler.tsv")
+        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
+        let popplerIssues = popplerLayout.visualLayoutIssues()
+
+        #expect(popplerLayout.pages.count == pageCount)
+        #expect(popplerLayout.words.count > 220)
+        #expect(
+            popplerIssues.isEmpty,
+            "Syntax-colored manuscript Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+        )
+
+        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
+        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
+        try PDFValidation.writeTextArtifact(structuredText.output, name: "syntax-coloring-manuscript/mupdf-stext.xml")
+        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
+        let mupdfIssues = mupdfLayout.characterQuadIssues()
+
+        #expect(mupdfLayout.pages.count == pageCount)
+        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 1200)
+        #expect(
+            mupdfIssues.isEmpty,
+            "Syntax-colored manuscript MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
+        )
+
+        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
+        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
+        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
+        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
+        try PDFValidation.writeTextArtifact(poppler.result.output, name: "syntax-coloring-manuscript/poppler-render.log")
+        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "syntax-coloring-manuscript/mupdf-render.log")
+
+        var rasterIssues: [String] = []
+        for page in 1 ... pageCount {
+            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
+            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
+            try PDFValidation.copyArtifact(
+                from: poppler.pnmURLs[page - 1],
+                name: "syntax-coloring-manuscript-pages/poppler/page-\(page).ppm",
+            )
+            try PDFValidation.copyArtifact(
+                from: mupdf.pnmURLs[page - 1],
+                name: "syntax-coloring-manuscript-pages/mupdf/page-\(page).pnm",
+            )
+            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
+                "page \(page): \($0)"
+            }
+        }
+
+        #expect(
+            rasterIssues.isEmpty,
+            "Syntax-colored manuscript raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+        )
+    }
+
     @Test("Generated PDFs do not have overlapping MuPDF character quads")
     func generatedPDFsDoNotHaveOverlappingMuPDFCharacterQuads() throws {
         let data = try visualValidationPDF()
@@ -1511,6 +1593,20 @@ struct PDFVisualLayoutValidationTests {
         return data
     }
 
+    private func syntaxColoringManuscriptPDF() throws -> Data {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 260, height: 320),
+                margins: PDFOptions.Margins(top: 24, right: 22, bottom: 24, left: 22),
+                baseFontSize: 10,
+                title: "Portable Syntax Coloring Manuscript",
+                codeSyntaxHighlighting: .enabled,
+            ),
+        ).render(markdown: fixture(named: "syntax-coloring-manuscript.md"))
+        try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
+        return data
+    }
+
     private func a4ManuscriptFixturePDF() throws -> Data {
         let assetsBaseURL = try TestImageAssets.directoryWithChartPNG()
         let data = try MarkdownPDFRenderer(
@@ -1843,6 +1939,17 @@ struct PDFVisualLayoutValidationTests {
 
     source-code-spacing-pages/
     Poppler and MuPDF page rasters for the source-code witness.
+
+    syntax-coloring-manuscript.pdf
+    Focused manuscript proving opt-in syntax coloring without extraction,
+    geometry, or raster regressions.
+
+    syntax-coloring-manuscript/
+    Text, geometry, structured text, and render logs for the syntax-coloring
+    manuscript.
+
+    syntax-coloring-manuscript-pages/
+    Poppler and MuPDF page rasters for the syntax-coloring manuscript.
 
     text-encoding-profile.pdf
     One-page PDF proving the portable text encoding replacement profile.

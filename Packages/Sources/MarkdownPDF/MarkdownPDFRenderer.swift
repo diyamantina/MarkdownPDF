@@ -184,7 +184,7 @@ private struct Layout {
             if isMermaidCodeBlock(info) {
                 try renderMermaidBlock(code)
             } else {
-                try renderCodeBlock(code)
+                try renderCodeBlock(code, info: info)
             }
         case let .table(table):
             try renderTable(table)
@@ -338,16 +338,22 @@ private struct Layout {
         y -= listTrailingSpacing
     }
 
-    private mutating func renderCodeBlock(_ code: String) throws {
+    private mutating func renderCodeBlock(_ code: String, info: String? = nil) throws {
         let size = options.baseFontSize * 0.9
         let lineHeight = size * 1.4
         let padding = codeBlockPadding
         let codeAreaWidth = max(1, contentWidth - padding * 2)
-        let lines = try code
-            .split(separator: "\n", omittingEmptySubsequences: false)
+        var syntaxHighlighter = syntaxHighlighter(for: info)
+        let sourceLines = code.split(separator: "\n", omittingEmptySubsequences: false)
+        let lines = try sourceLines
             .map { line in
-                try wrappedLines(
-                    [PDFTextRun(text: expandCodeTabs(String(line)), font: .courier, size: size)],
+                let displayText = expandCodeTabs(String(line))
+                return try wrappedLines(
+                    codeLineRuns(
+                        displayText,
+                        size: size,
+                        syntaxHighlighter: &syntaxHighlighter,
+                    ),
                     maxWidth: codeAreaWidth,
                 )
             }
@@ -374,6 +380,56 @@ private struct Layout {
         }
 
         y -= codeBlockFollowingGap
+    }
+
+    private func syntaxHighlighter(for info: String?) -> SourceCodeSyntaxHighlighter? {
+        guard options.codeSyntaxHighlighting.isEnabled,
+              let language = SourceCodeLanguage(hint: info)
+        else {
+            return nil
+        }
+
+        return SourceCodeSyntaxHighlighter(language: language)
+    }
+
+    private func codeLineRuns(
+        _ line: String,
+        size: Double,
+        syntaxHighlighter: inout SourceCodeSyntaxHighlighter?,
+    ) -> [PDFTextRun] {
+        guard var highlighter = syntaxHighlighter else {
+            return [PDFTextRun(text: line, font: .courier, size: size)]
+        }
+
+        let tokens = highlighter.tokens(for: line)
+        syntaxHighlighter = highlighter
+        return tokens.map { token in
+            PDFTextRun(
+                text: token.text,
+                font: .courier,
+                size: size,
+                color: color(for: token.kind),
+            )
+        }
+    }
+
+    private func color(for tokenKind: SourceCodeTokenKind) -> PDFColor {
+        switch tokenKind {
+        case .text, .identifier, .error:
+            .black
+        case .keyword:
+            .sourceCodeKeyword
+        case .string:
+            .sourceCodeString
+        case .number:
+            .sourceCodeNumber
+        case .comment:
+            .sourceCodeComment
+        case .operatorToken:
+            .sourceCodeOperator
+        case .punctuation:
+            .sourceCodePunctuation
+        }
     }
 
     private func isMermaidCodeBlock(_ info: String?) -> Bool {

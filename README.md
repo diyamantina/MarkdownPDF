@@ -32,6 +32,8 @@ The generic renderer currently covers:
 - Standard PDF base fonts by default, without embedding font files.
 - Opt-in embedded TrueType font data through `PDFOptions.EmbeddedFonts`, using
   Type 0 / CIDFontType2 fonts, ToUnicode maps, and subsetted FontFile2 streams.
+- Opt-in portable syntax coloring for supported fenced code-block language
+  hints, using direct DeviceRGB text operators.
 
 The compatibility target is CommonMark plus GitHub Flavored Markdown tables and
 images. The generated PDF profile is intentionally small, typed, and documented
@@ -90,6 +92,20 @@ let options = PDFOptions(tableOfContents: .enabled)
 let markdown = "# Report\n\n## Methods\n\nBody."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
+
+Enable portable syntax coloring for supported fenced code blocks:
+
+````swift
+import MarkdownPDF
+
+let options = PDFOptions(codeSyntaxHighlighting: .enabled)
+let markdown = """
+```swift
+let answer = "portable"
+```
+"""
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+````
 
 Embed caller-provided TrueType font data:
 
@@ -363,7 +379,8 @@ swiftlint --config .swiftlint.yml
 - [docs/research/source-code-formatting-model.md](docs/research/source-code-formatting-model.md):
   portable source-code formatting model for renderer implementation.
 - [docs/research/portable-syntax-coloring.md](docs/research/portable-syntax-coloring.md):
-  portable syntax-coloring recommendation and future witness requirements.
+  portable syntax-coloring recommendation, implementation policy, and witness
+  requirements.
 
 ## Platform Boundaries
 
@@ -394,6 +411,8 @@ swiftlint --config .swiftlint.yml
 - Issue [#99](https://github.com/mihaelamj/MarkdownPDF/issues/99) tracks
   source-code formatting research and implementation, including the reported
   quote-stroke, crammed-layout, glyph-overlap, and image-presence regressions.
+  Issue [#120](https://github.com/mihaelamj/MarkdownPDF/issues/120) is the
+  active portable syntax-coloring implementation.
 - Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) tracks
   named PDF page sizes, including A1, A3, A4, and A5.
 - Apple system font names remain available through
@@ -432,9 +451,9 @@ flowchart TD
     H2G["#113<br/>Image inclusion audit<br/>Done"]
     H2H["#106<br/>Syntax coloring study<br/>Done"]
     H2I["#118<br/>Roadmap colors<br/>Done"]
-    H2J["#119<br/>Crazy markdown fixtures<br/>Active"]
-    H2K["#120<br/>Portable syntax coloring<br/>Next"]
-    H2L["#122<br/>CJK + diacritics<br/>Todo"]
+    H2J["#119<br/>Crazy markdown fixtures<br/>Done"]
+    H2K["#120<br/>Portable syntax coloring<br/>Active"]
+    H2L["#122<br/>CJK + diacritics<br/>Next"]
     H2M["#123<br/>RTL manuscript<br/>Todo"]
     H3["#100<br/>Named page sizes<br/>Todo"]
 
@@ -449,10 +468,10 @@ flowchart TD
     classDef next fill:#fff8e1,stroke:#f9a825,color:#111;
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
     class H0,H1 done;
-    class H2,H2J active;
-    class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I done;
-    class H2K next;
-    class H2L,H2M,H3 todo;
+    class H2,H2K active;
+    class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J done;
+    class H2L next;
+    class H2M,H3 todo;
 ```
 
 ## License
