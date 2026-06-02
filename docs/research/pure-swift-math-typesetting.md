@@ -19,8 +19,10 @@ cannot be overlaid inside the current line wrapper. Supported display formulas
 render as PDF text plus filled rule rectangles. Unsupported input renders its
 original source visibly. The witnessed subset covers superscripts, subscripts,
 fractions, radicals, big operators with display limits, Greek command names, and
-common ASCII-safe symbols. Display math wraps the visual operators in PDF
-ActualText so `pdftotext` can extract the deterministic linearized formula.
+common ASCII-safe symbols. Balanced `\left...\right` expressions now support
+fixed ASCII-safe delimiters, while stretchy delimiter variants remain future
+work. Display math wraps the visual operators in PDF ActualText so `pdftotext`
+can extract the deterministic linearized formula.
 
 The internal TrueType parser can now read OpenType `MATH` table metadata when
 that parsing is explicitly requested: math constants, per-glyph value records,
@@ -251,6 +253,9 @@ Features that cannot meet this bar stay unsupported and visible.
    rendering without an embedded OpenType `MATH` table. Full font-driven inline
    box construction remains separate.
 4. #131d Big operators with limits, stretchy delimiters via variants/assembly.
+   Balanced `\left...\right` parsing now supports fixed delimiters and visible
+   fallback for malformed delimiter pairs. Stretchy variants and assembly remain
+   separate.
 5. #131e PDF emission (text + rule rectangles) reusing the embedded-font path.
 6. #131f Text linearization + `ToUnicode` for extraction.
 7. #131g Witness suite (qpdf, Poppler, MuPDF, raster) on macOS and Linux.

@@ -11,6 +11,8 @@ struct MarkdownMathParser {
         case duplicateScript(Character)
         case missingScriptBody(Character)
         case missingRequiredGroup(String)
+        case missingRightDelimiter
+        case missingDelimiter(String)
         case unmatchedGroup
         case unexpectedGroupClose
         case unsupportedControlWord(String)
@@ -39,11 +41,17 @@ struct MarkdownMathParser {
             return root
         }
 
-        private mutating func parseSequence(until terminator: Character?) throws -> MarkdownMathNode {
+        private mutating func parseSequence(
+            until terminator: Character?,
+            stopAtRightDelimiter: Bool = false,
+        ) throws -> MarkdownMathNode {
             var nodes: [MarkdownMathNode] = []
 
             while index < source.endIndex {
                 let character = source[index]
+                if stopAtRightDelimiter, controlWord(at: index)?.command == "right" {
+                    return compactSequence(nodes)
+                }
                 if let terminator, character == terminator {
                     index = source.index(after: index)
                     return compactSequence(nodes)
@@ -57,6 +65,9 @@ struct MarkdownMathParser {
 
             if terminator != nil {
                 throw ParseError.unmatchedGroup
+            }
+            if stopAtRightDelimiter {
+                throw ParseError.missingRightDelimiter
             }
 
             return compactSequence(nodes)
@@ -145,7 +156,9 @@ struct MarkdownMathParser {
                 )
             case "sqrt":
                 return try .radical(radicand: parseRequiredGroup(for: command))
-            case "left", "right", "begin", "end", "newcommand", "operatorname":
+            case "left":
+                return try parseDelimitedExpression()
+            case "right", "begin", "end", "newcommand", "operatorname":
                 throw ParseError.unsupportedControlWord(command)
             default:
                 guard let symbol = Self.symbols[command] else {
@@ -157,6 +170,99 @@ struct MarkdownMathParser {
                     isBigOperator: symbol.isBigOperator,
                 )
             }
+        }
+
+        private mutating func parseDelimitedExpression() throws -> MarkdownMathNode {
+            skipWhitespace()
+            let opening = try parseDelimiter(for: "left")
+            let body = try parseSequence(until: nil, stopAtRightDelimiter: true)
+            guard controlWord(at: index)?.command == "right" else {
+                throw ParseError.missingRightDelimiter
+            }
+
+            try consumeControlWord("right")
+            skipWhitespace()
+            let closing = try parseDelimiter(for: "right")
+            return compactSequence([opening, body, closing])
+        }
+
+        private mutating func skipWhitespace() {
+            while index < source.endIndex, source[index].isWhitespace {
+                index = source.index(after: index)
+            }
+        }
+
+        private mutating func parseDelimiter(for command: String) throws -> MarkdownMathNode {
+            guard index < source.endIndex else {
+                throw ParseError.missingDelimiter(command)
+            }
+
+            if source[index] == "\\" {
+                let slash = index
+                index = source.index(after: index)
+                let commandStart = index
+                while index < source.endIndex, source[index].isLetter {
+                    index = source.index(after: index)
+                }
+
+                if commandStart == index {
+                    return try parseEscapedDelimiter(for: command)
+                }
+
+                let delimiterCommand = String(source[commandStart ..< index])
+                guard let display = Self.namedDelimiters[delimiterCommand] else {
+                    index = slash
+                    throw ParseError.missingDelimiter(command)
+                }
+                return display.map(MarkdownMathNode.text) ?? .sequence([])
+            }
+
+            let character = source[index]
+            index = source.index(after: index)
+            guard let display = Self.characterDelimiters[character] else {
+                throw ParseError.missingDelimiter(command)
+            }
+            return display.map(MarkdownMathNode.text) ?? .sequence([])
+        }
+
+        private mutating func parseEscapedDelimiter(for command: String) throws -> MarkdownMathNode {
+            guard index < source.endIndex else {
+                throw ParseError.missingDelimiter(command)
+            }
+
+            let character = source[index]
+            index = source.index(after: index)
+            guard let display = Self.characterDelimiters[character] else {
+                throw ParseError.missingDelimiter(command)
+            }
+            return display.map(MarkdownMathNode.text) ?? .sequence([])
+        }
+
+        private func controlWord(at start: String.Index) -> (command: String, end: String.Index)? {
+            guard start < source.endIndex, source[start] == "\\" else {
+                return nil
+            }
+
+            var cursor = source.index(after: start)
+            let commandStart = cursor
+            while cursor < source.endIndex, source[cursor].isLetter {
+                cursor = source.index(after: cursor)
+            }
+            guard commandStart < cursor else {
+                return nil
+            }
+
+            return (String(source[commandStart ..< cursor]), cursor)
+        }
+
+        private mutating func consumeControlWord(_ expected: String) throws {
+            guard let word = controlWord(at: index),
+                  word.command == expected
+            else {
+                throw ParseError.unsupportedControlWord(expected)
+            }
+
+            index = word.end
         }
 
         private mutating func parseEscapedPunctuation() throws -> MarkdownMathNode {
@@ -236,6 +342,29 @@ struct MarkdownMathParser {
             "sum": ("sum", "sum", true),
             "prod": ("prod", "prod", true),
             "int": ("int", "int", true),
+        ]
+
+        private static let characterDelimiters: [Character: String?] = [
+            "(": "(",
+            ")": ")",
+            "[": "[",
+            "]": "]",
+            "{": "{",
+            "}": "}",
+            "|": "|",
+            "/": "/",
+            "<": "<",
+            ">": ">",
+            ".": nil,
+        ]
+
+        private static let namedDelimiters: [String: String?] = [
+            "langle": "<",
+            "rangle": ">",
+            "vert": "|",
+            "lvert": "|",
+            "rvert": "|",
+            "backslash": "\\",
         ]
     }
 }

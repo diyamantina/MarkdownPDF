@@ -212,6 +212,57 @@ struct MarkdownPDFRendererTests {
         #expect(extractedText.contains(#"$\unknown{x}$"#), "Unexpected extracted text:\n\(textResult.output)")
     }
 
+    @Test("Renders fixed left right math delimiters")
+    func rendersFixedLeftRightMathDelimiters() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(mathTypesetting: .enabled),
+        ).render(markdown: """
+        $$
+        \\left(\\frac{x}{y}\\right)
+        $$
+
+        $$
+        \\left\\langle{x}\\right\\rangle
+        $$
+
+        $$
+        \\left.\\frac{x}{y}\\right\\}
+        $$
+
+        $$
+        \\left/x\\right\\backslash
+        $$
+        """)
+        let inspector = PDFInspector(data)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-fixed-delimiters")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "math-fixed-delimiters-text")
+        let extractedText = normalizedExtractedText(textResult.output)
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        #expect(extractedText.contains("(frac(x, y))"), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(extractedText.contains("<x>"), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(extractedText.contains("frac(x, y)}"), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(extractedText.contains(#"/x\"#), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(streamText.contains("/ActualText (\\(frac\\(x, y\\)\\))"))
+        #expect(streamText.components(separatedBy: " re f").count - 1 >= 2)
+    }
+
+    @Test("Malformed left delimiter renders visible source fallback")
+    func malformedLeftDelimiterRendersVisibleSourceFallback() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(mathTypesetting: .enabled),
+        ).render(markdown: #"Malformed $\left(x$ stays visible."#)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-malformed-left-fallback")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "math-malformed-left-fallback-text")
+        let extractedText = normalizedExtractedText(textResult.output)
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        #expect(extractedText.contains(#"$\left(x$"#), "Unexpected extracted text:\n\(textResult.output)")
+    }
+
     @Test("Block quotes indent without vertical border strokes")
     func blockQuotesDoNotEmitVerticalBorderStrokes() throws {
         let data = try MarkdownPDFRenderer().render(markdown: """

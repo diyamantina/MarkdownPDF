@@ -38,9 +38,10 @@ The generic renderer currently covers:
   themes plus a code-syntax color surface.
 - Opt-in TeX-style math parsing through `PDFOptions.MathTypesetting`, with an
   initial Pure Swift subset for inline math, display math, scripts, fractions,
-  roots, symbols, extraction text, and visible fallback for unsupported
-  commands. `PDFOptions.MathTypesetting.fontBacked` additionally requires the
-  styled math role to use an embedded OpenType font with a `MATH` table.
+  roots, fixed delimiters, symbols, extraction text, and visible fallback for
+  unsupported commands. `PDFOptions.MathTypesetting.fontBacked` additionally
+  requires the styled math role to use an embedded OpenType font with a `MATH`
+  table.
 - Opt-in Pure Swift `/FlateDecode` compression for page content streams and
   embedded FontFile2 streams when the encoded bytes are smaller than raw bytes.
 - Opt-in tagged PDF structure output with `/MarkInfo`, `/StructTreeRoot`,
