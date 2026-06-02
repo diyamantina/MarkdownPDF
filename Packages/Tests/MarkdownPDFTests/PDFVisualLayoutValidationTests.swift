@@ -1498,6 +1498,68 @@ struct PDFVisualLayoutValidationTests {
         )
     }
 
+    @Test("Screenshot source-code regression witness rejects mutated failures")
+    func screenshotSourceCodeRegressionWitnessRejectsMutatedFailures() throws {
+        let strokeMutation = """
+        52 720 m
+        52 660 l
+        S
+        """
+        #expect(!verticalRuleOperatorLines(in: strokeMutation).isEmpty)
+
+        let mutatedLayout = try PopplerTextLayout(tsv: """
+        level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext
+        1\t1\t0\t0\t0\t0\t0.000000\t0.000000\t220.000000\t220.000000\t-1\t###PAGE###
+        4\t1\t0\t1\t0\t0\t10.000000\t90.000000\t120.000000\t10.000000\t-1\t###LINE###
+        5\t1\t0\t1\t0\t0\t10.00\t90.00\t80.00\t10.00\t100\tDirectCodeEndToken
+        4\t1\t0\t1\t1\t0\t10.000000\t94.000000\t130.000000\t10.000000\t-1\t###LINE###
+        5\t1\t0\t1\t1\t0\t10.00\t94.00\t120.00\t10.00\t100\tDirectQuoteStartToken
+        4\t1\t0\t1\t2\t0\t10.000000\t130.000000\t120.000000\t10.000000\t-1\t###LINE###
+        5\t1\t0\t1\t2\t0\t10.00\t130.00\t60.00\t10.00\t100\tOverlapLeft
+        5\t1\t0\t1\t2\t1\t50.00\t130.00\t60.00\t10.00\t100\tOverlapRight
+        """)
+        let mutatedCodeEnd = try word("DirectCodeEndToken", in: mutatedLayout)
+        let mutatedQuoteStart = try word("DirectQuoteStartToken", in: mutatedLayout)
+        let mutatedStructuredText = try MuPDFStructuredText(xml: """
+        <?xml version="1.0"?>
+        <document filename="mutated-source-code-witness.pdf">
+        <page id="page1" width="100" height="100">
+        <block bbox="10 10 40 20" justify="unknown">
+        <line bbox="10 10 40 20" wmode="0" dir="1 0" flags="0" text="AB">
+        <font name="Helvetica" size="12">
+        <char quad="10 10 20 10 10 20 20 20" x="10" y="20" c="A"/>
+        <char quad="19 10 30 10 19 20 30 20" x="19" y="20" c="B"/>
+        </font>
+        </line>
+        </block>
+        </page>
+        </document>
+        """)
+        let mutatedPopplerRaster = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 2 ... 5))
+        let mutatedMuPDFRaster = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 16 ... 19))
+
+        #expect(mutatedLayout.visualLayoutIssues().contains { $0.contains("overlaps") })
+        #expect(mutatedStructuredText.characterQuadIssues().contains { $0.contains("overlaps") })
+        #expect(
+            rasterComparisonIssues(poppler: mutatedPopplerRaster, mupdf: mutatedMuPDFRaster)
+                .contains { $0.contains("ink bounds differ") },
+        )
+        #expect(
+            verticalGapIssue(
+                after: mutatedCodeEnd,
+                before: mutatedQuoteStart,
+                minimum: 10,
+                context: "mutated code block to quote",
+            ) != nil,
+        )
+        #expect(imageXObjectCount(in: "") != 1)
+        #expect(imageDrawOperatorCount(in: "/Im1 Do") != 2)
+
+        let mutatedText = normalizedExtractedText("DirectCodeEndToken DirectQuoteStartToken")
+        #expect(!mutatedText.contains("[Remote image: Remote regression figure]"))
+        #expect(!mutatedText.contains("Reference style regression fallback text"))
+    }
+
     @Test("Visual layout validator rejects overlapping words")
     func visualLayoutValidatorRejectsOverlappingWords() throws {
         let layout = try PopplerTextLayout(tsv: """
@@ -1942,14 +2004,23 @@ struct PDFVisualLayoutValidationTests {
         minimum: Double,
         context: String,
     ) {
+        let issue = verticalGapIssue(after: upper, before: lower, minimum: minimum, context: context)
+        #expect(issue == nil, "\(issue ?? "")")
+    }
+
+    private func verticalGapIssue(
+        after upper: PopplerTextLayout.Box,
+        before lower: PopplerTextLayout.Box,
+        minimum: Double,
+        context: String,
+    ) -> String? {
         if lower.page == upper.page {
-            #expect(
-                lower.top > upper.bottom + minimum,
-                "\(context) gap was too small: \(lower.top - upper.bottom)",
-            )
-        } else {
-            #expect(lower.page > upper.page, "\(context) moved backward across pages")
+            return lower.top > upper.bottom + minimum
+                ? nil
+                : "\(context) gap was too small: \(lower.top - upper.bottom)"
         }
+
+        return lower.page > upper.page ? nil : "\(context) moved backward across pages"
     }
 
     private func imageXObjectCount(in pdfText: String) -> Int {
