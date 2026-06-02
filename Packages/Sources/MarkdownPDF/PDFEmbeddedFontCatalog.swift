@@ -5,16 +5,23 @@ struct PDFEmbeddedFontCatalog {
         var resource: PDFEmbeddedFontResource
         var mapper: TrueTypeGlyphMapper
         var shaper: OpenTypeShaper
+        var mathMetrics: MarkdownMathLayoutMetrics?
     }
 
     private var entriesByFont: [StandardFont: Entry]
 
-    init(fonts: PDFOptions.EmbeddedFonts) throws {
+    init(fonts: PDFOptions.EmbeddedFonts, parseMathTables: Bool = false) throws {
         var entries: [StandardFont: Entry] = [:]
-        try Self.add(fonts.regular, for: .helvetica, resourceName: "EF1", to: &entries)
-        try Self.add(fonts.bold, for: .helveticaBold, resourceName: "EF2", to: &entries)
-        try Self.add(fonts.italic, for: .helveticaOblique, resourceName: "EF3", to: &entries)
-        try Self.add(fonts.monospaced, for: .courier, resourceName: "EF4", to: &entries)
+        try Self.add(fonts.regular, for: .helvetica, resourceName: "EF1", parseMathTables: parseMathTables, to: &entries)
+        try Self.add(fonts.bold, for: .helveticaBold, resourceName: "EF2", parseMathTables: parseMathTables, to: &entries)
+        try Self.add(
+            fonts.italic,
+            for: .helveticaOblique,
+            resourceName: "EF3",
+            parseMathTables: parseMathTables,
+            to: &entries,
+        )
+        try Self.add(fonts.monospaced, for: .courier, resourceName: "EF4", parseMathTables: parseMathTables, to: &entries)
         entriesByFont = entries
     }
 
@@ -48,13 +55,14 @@ struct PDFEmbeddedFontCatalog {
         _ source: PDFOptions.EmbeddedFontSource?,
         for font: StandardFont,
         resourceName: String,
+        parseMathTables: Bool,
         to entries: inout [StandardFont: Entry],
     ) throws {
         guard let source else {
             return
         }
 
-        let metadata = try TrueTypeFontParser().parse(source.data)
+        let metadata = try TrueTypeFontParser().parse(source.data, parseMathTable: parseMathTables)
         let resource = PDFEmbeddedFontResource(
             resourceName: resourceName,
             fontProgram: source.data,
@@ -65,6 +73,9 @@ struct PDFEmbeddedFontCatalog {
             resource: resource,
             mapper: TrueTypeGlyphMapper(data: source.data, metadata: metadata),
             shaper: OpenTypeShaper(data: source.data, metadata: metadata),
+            mathMetrics: metadata.math.map {
+                MarkdownMathLayoutMetrics.openType(constants: $0.constants, unitsPerEm: metadata.head.unitsPerEm)
+            },
         )
     }
 

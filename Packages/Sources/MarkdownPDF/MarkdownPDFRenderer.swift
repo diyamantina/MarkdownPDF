@@ -265,7 +265,10 @@ private struct Layout {
         self.options = options
         self.assetsBaseURL = assetsBaseURL
         try Self.validateConformance(options)
-        embeddedFonts = try PDFEmbeddedFontCatalog(fonts: options.embeddedFonts)
+        embeddedFonts = try PDFEmbeddedFontCatalog(
+            fonts: options.embeddedFonts,
+            parseMathTables: options.mathTypesetting.isEnabled,
+        )
         taggedContentBuilder = options.taggedPDF.isEnabled || options.conformance.requiresTaggedPDF
             ? PDFTaggedContentBuilder()
             : nil
@@ -829,11 +832,7 @@ private struct Layout {
 
         do {
             let parsed = try MarkdownMathParser().parse(math.source)
-            let layout = MarkdownMathLayout(
-                font: standardFont(for: style.fontRole),
-                color: style.color,
-                measureText: textWidth,
-            )
+            let layout = mathLayout(for: style)
             let box = try layout.layout(parsed.root, size: size, displayStyle: true)
             let totalHeight = topSpacing + box.height + box.depth + bottomSpacing
             ensureSpace(totalHeight)
@@ -3113,6 +3112,16 @@ private struct Layout {
             let width = try textWidth(run)
             return partial + width
         }
+    }
+
+    private func mathLayout(for style: PDFOptions.ElementStyle) -> MarkdownMathLayout {
+        let font = standardFont(for: style.fontRole)
+        return MarkdownMathLayout(
+            font: font,
+            color: style.color,
+            measureText: textWidth,
+            metrics: embeddedFonts.entry(for: font)?.mathMetrics ?? .default,
+        )
     }
 
     private func style(for role: PDFOptions.ElementRole) -> PDFOptions.ElementStyle {

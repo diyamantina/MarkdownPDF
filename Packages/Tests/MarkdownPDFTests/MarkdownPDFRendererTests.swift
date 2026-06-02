@@ -762,6 +762,51 @@ struct MarkdownPDFRendererTests {
         #expect(text.contains("/EF4"))
     }
 
+    @Test("Embedded font catalog parses MATH tables only when requested")
+    func embeddedFontCatalogParsesMathTablesOnlyWhenRequested() throws {
+        let fontData = SyntheticTrueTypeFont.data(
+            glyphProfile: .latinWitness,
+            includeGlyphOutlines: true,
+            includeMATHTable: true,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Public Math")
+        let fonts = PDFOptions.EmbeddedFonts(regular: source)
+
+        let defaultCatalog = try PDFEmbeddedFontCatalog(fonts: fonts)
+        let mathCatalog = try PDFEmbeddedFontCatalog(fonts: fonts, parseMathTables: true)
+
+        #expect(defaultCatalog.entry(for: .helvetica)?.resource.metadata.math == nil)
+        #expect(defaultCatalog.entry(for: .helvetica)?.mathMetrics == nil)
+        #expect(mathCatalog.entry(for: .helvetica)?.resource.metadata.math != nil)
+        #expect(mathCatalog.entry(for: .helvetica)?.mathMetrics != nil)
+    }
+
+    @Test("Embedded font catalog does not eagerly parse malformed MATH tables")
+    func embeddedFontCatalogDoesNotEagerlyParseMalformedMathTables() throws {
+        let fontData = SyntheticTrueTypeFont.data(
+            glyphProfile: .latinWitness,
+            includeGlyphOutlines: true,
+            includeMATHTable: true,
+            invalidMATHConstantsOffset: true,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Malformed Math")
+        let fonts = PDFOptions.EmbeddedFonts(regular: source)
+
+        _ = try PDFEmbeddedFontCatalog(fonts: fonts)
+        #expect(throws: TrueTypeFontError.self) {
+            _ = try PDFEmbeddedFontCatalog(fonts: fonts, parseMathTables: true)
+        }
+    }
+
+    @Test("Display math uses embedded OpenType MATH metrics when available")
+    func displayMathUsesEmbeddedOpenTypeMathMetricsWhenAvailable() throws {
+        let defaultRule = try displayMathFractionRule(includeMATHTable: false)
+        let mathRule = try displayMathFractionRule(includeMATHTable: true)
+
+        #expect(mathRule.height > defaultRule.height + 0.5)
+        #expect(mathRule.y != defaultRule.y)
+    }
+
     @Test("Embedded font API rejects fonts that forbid embedding")
     func embeddedFontAPIRejectsFontsThatForbidEmbedding() throws {
         let fontData = SyntheticTrueTypeFont.data(fsType: 0x0002)
@@ -1347,6 +1392,55 @@ struct MarkdownPDFRendererTests {
         channel <= 0.03928
             ? channel / 12.92
             : pow((channel + 0.055) / 1.055, 2.4)
+    }
+
+    private func displayMathFractionRule(includeMATHTable: Bool) throws -> (y: Double, height: Double) {
+        let fontData = SyntheticTrueTypeFont.data(
+            glyphProfile: .latinWitness,
+            includeGlyphOutlines: true,
+            includeMATHTable: includeMATHTable,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Public Math")
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 260, height: 180),
+                margins: PDFOptions.Margins(top: 24, right: 24, bottom: 24, left: 24),
+                embeddedFonts: .allRoles(source),
+                mathTypesetting: .enabled,
+            ),
+        ).render(markdown: """
+        $$
+        \\frac{A}{B}
+        $$
+        """)
+        let streamTokens = PDFInspector(data)
+            .streams
+            .map(\.body)
+            .joined(separator: "\n")
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+
+        for index in streamTokens.indices where streamTokens[index] == "re" {
+            let fillIndex = streamTokens.index(after: index)
+            guard fillIndex < streamTokens.endIndex,
+                  streamTokens[fillIndex] == "f",
+                  index >= 4
+            else {
+                continue
+            }
+
+            let yIndex = streamTokens.index(index, offsetBy: -3)
+            let heightIndex = streamTokens.index(before: index)
+            guard let y = Double(streamTokens[yIndex]),
+                  let height = Double(streamTokens[heightIndex])
+            else {
+                continue
+            }
+            return (y: y, height: height)
+        }
+
+        Issue.record("Expected display math to draw a filled fraction rule")
+        return (y: 0, height: 0)
     }
 }
 
