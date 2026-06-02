@@ -45,16 +45,30 @@ struct PDFDocumentMetadata {
         let pdfUAIdentifier = conformance.isPDFUA1Enabled
             ? "<pdfuaid:part>1</pdfuaid:part>"
             : ""
+        let pdfAAttributes = conformance.isPDFA2AEnabled
+            ? " xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\""
+            : ""
+        let pdfAIdentifier = conformance.isPDFA2AEnabled
+            ? """
+            <pdfaid:part>2</pdfaid:part>
+            <pdfaid:conformance>A</pdfaid:conformance>
+            """
+            : ""
+        let pdfUAExtensionSchema = conformance.isPDFUA1Enabled && conformance.isPDFA2AEnabled
+            ? Self.pdfUAExtensionSchema
+            : ""
 
         return """
         <?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
         <x:xmpmeta xmlns:x="adobe:ns:meta/">
         <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-        <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/"\(pdfUAAttributes)>
+        <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/"\(pdfUAAttributes)\(pdfAAttributes)>
         \(titleXML)
         <pdf:Producer>\(Self.producer.xmlEscaped)</pdf:Producer>
         \(pdfUAIdentifier)
+        \(pdfAIdentifier)
         </rdf:Description>
+        \(pdfUAExtensionSchema)
         </rdf:RDF>
         </x:xmpmeta>
         <?xpacket end="w"?>
@@ -66,6 +80,30 @@ struct PDFDocumentMetadata {
     }
 
     private static let producer = "MarkdownPDF"
+
+    private static let pdfUAExtensionSchema = """
+    <rdf:Description rdf:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#">
+    <pdfaExtension:schemas>
+    <rdf:Bag>
+    <rdf:li rdf:parseType="Resource">
+    <pdfaSchema:schema>PDF/UA Identification Schema</pdfaSchema:schema>
+    <pdfaSchema:namespaceURI>http://www.aiim.org/pdfua/ns/id/</pdfaSchema:namespaceURI>
+    <pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>
+    <pdfaSchema:property>
+    <rdf:Seq>
+    <rdf:li rdf:parseType="Resource">
+    <pdfaProperty:name>part</pdfaProperty:name>
+    <pdfaProperty:valueType>Integer</pdfaProperty:valueType>
+    <pdfaProperty:category>internal</pdfaProperty:category>
+    <pdfaProperty:description>Part of ISO 14289</pdfaProperty:description>
+    </rdf:li>
+    </rdf:Seq>
+    </pdfaSchema:property>
+    </rdf:li>
+    </rdf:Bag>
+    </pdfaExtension:schemas>
+    </rdf:Description>
+    """
 }
 
 private extension String {

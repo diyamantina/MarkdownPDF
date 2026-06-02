@@ -138,6 +138,46 @@ struct PDFTaggedContentTests {
         #expect(veraPDF.output.contains("\"compliant\" : true"))
     }
 
+    @Test("Renderer writes a PDF/A-2a profile when requested")
+    func rendererWritesPDFA2AProfileWhenRequested() throws {
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "PDF A Fixture")
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 300, height: 260),
+                margins: PDFOptions.Margins(top: 24, right: 24, bottom: 24, left: 24),
+                embeddedFonts: .allRoles(source),
+                title: "PDF A Fixture",
+                conformance: .pdfUA1AndPDFA2A,
+            ),
+        ).render(markdown: """
+        # WIDE
+
+        WIDE WILLIAM
+        """)
+        let inspector = PDFInspector(data)
+        let xmp = inspector.streams.map(\.body).joined(separator: "\n")
+
+        try PDFValidation.writeArtifact(data, name: "pdfa-profile.pdf")
+        #expect(inspector.canonicalStructureIssues().isEmpty)
+        #expect(inspector.text.contains("/OutputIntents [<< /Type /OutputIntent /S /GTS_PDFA1"))
+        #expect(inspector.text.contains("/DestOutputProfile"))
+        #expect(inspector.text.contains("/N 3 /Alternate /DeviceRGB"))
+        #expect(inspector.text.contains("/ID [<4D61726B646F776E5044462D50444641> <4D61726B646F776E5044462D50444641>]"))
+        #expect(xmp.contains("xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\""))
+        #expect(xmp.contains("<pdfaid:part>2</pdfaid:part>"))
+        #expect(xmp.contains("<pdfaid:conformance>A</pdfaid:conformance>"))
+
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "pdfa-profile-qpdf")
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let veraPDFA = try PDFValidation.veraPDF(data: data, name: "pdfa-profile-verapdf", flavour: "2a")
+        try #require(veraPDFA.exitCode == 0, "veraPDF PDF/A-2a failed:\n\(veraPDFA.output)")
+        #expect(veraPDFA.output.contains("\"compliant\" : true"))
+        let veraPDFUA = try PDFValidation.veraPDF(data: data, name: "pdfa-profile-ua-verapdf", flavour: "ua1")
+        try #require(veraPDFUA.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDFUA.output)")
+        #expect(veraPDFUA.output.contains("\"compliant\" : true"))
+    }
+
     @Test("PDF/UA-1 profile requires a document title")
     func pdfUA1ProfileRequiresDocumentTitle() throws {
         let renderer = MarkdownPDFRenderer(options: PDFOptions(conformance: .pdfUA1))
@@ -153,6 +193,26 @@ struct PDFTaggedContentTests {
 
         #expect(
             throws: MarkdownPDFError.unembeddedBaseFontsForConformance(profile: "PDF/UA-1", fonts: ["Helvetica"]),
+        ) {
+            try renderer.render(markdown: "Plain text")
+        }
+    }
+
+    @Test("PDF/A-2a profile requires a document title")
+    func pdfA2AProfileRequiresDocumentTitle() throws {
+        let renderer = MarkdownPDFRenderer(options: PDFOptions(conformance: .pdfA2A))
+
+        #expect(throws: MarkdownPDFError.missingConformanceTitle(profile: "PDF/A-2a")) {
+            try renderer.render(markdown: "# Missing title")
+        }
+    }
+
+    @Test("PDF/A-2a profile rejects base font fallback")
+    func pdfA2AProfileRejectsBaseFontFallback() throws {
+        let renderer = MarkdownPDFRenderer(options: PDFOptions(title: "Missing Fonts", conformance: .pdfA2A))
+
+        #expect(
+            throws: MarkdownPDFError.unembeddedBaseFontsForConformance(profile: "PDF/A-2a", fonts: ["Helvetica"]),
         ) {
             try renderer.render(markdown: "Plain text")
         }

@@ -26,6 +26,7 @@ struct PDFObjectRegistry {
     func serializedFile(
         root: PDFSyntax.Reference,
         info: PDFSyntax.Reference? = nil,
+        fileID: (original: PDFSyntax.HexString, modified: PDFSyntax.HexString)? = nil,
     ) -> Data {
         _ = index(for: root)
         if let info {
@@ -35,6 +36,7 @@ struct PDFObjectRegistry {
             objects: objects.map(\.indirectObject),
             root: root,
             info: info,
+            fileID: fileID,
         ).serialized
     }
 

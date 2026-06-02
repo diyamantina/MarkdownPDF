@@ -187,6 +187,7 @@ enum PDFSyntax {
         case number(Double)
         case bool(Bool)
         case literalString(LiteralString)
+        case hexString(HexString)
         case array(Array)
         case dictionary(Dictionary)
         case reference(Reference)
@@ -203,6 +204,8 @@ enum PDFSyntax {
             case let .bool(value):
                 value ? "true" : "false"
             case let .literalString(string):
+                string.serialized
+            case let .hexString(string):
                 string.serialized
             case let .array(array):
                 array.serialized
@@ -321,6 +324,7 @@ enum PDFSyntax {
         var size: Int
         var root: Reference
         var info: Reference?
+        var fileID: (original: HexString, modified: HexString)?
 
         var serialized: String {
             var entries: [Dictionary.Entry] = [
@@ -329,6 +333,12 @@ enum PDFSyntax {
             ]
             if let info {
                 entries.append(.init("Info", .reference(info)))
+            }
+            if let fileID {
+                entries.append(.init("ID", .pdfArray([
+                    .hexString(fileID.original),
+                    .hexString(fileID.modified),
+                ])))
             }
 
             return """
@@ -342,6 +352,7 @@ enum PDFSyntax {
         var objects: [IndirectObject]
         var root: Reference
         var info: Reference?
+        var fileID: (original: HexString, modified: HexString)?
 
         var serialized: Data {
             let objectReferences = Set(objects.map(\.reference))
@@ -362,7 +373,7 @@ enum PDFSyntax {
             let xrefStart = output.count
             let xref = XrefTable(objectOffsets: objectOffsets)
             output.appendString(xref.serialized)
-            output.appendString(Trailer(size: xref.entries.count, root: root, info: info).serialized)
+            output.appendString(Trailer(size: xref.entries.count, root: root, info: info, fileID: fileID).serialized)
             output.appendString("\nstartxref\n\(xrefStart)\n%%EOF")
             return output
         }

@@ -47,6 +47,26 @@ struct PDFDocumentStructureTests {
         )
     }
 
+    @Test("Serializes catalog dictionary with output intent")
+    func serializesCatalogDictionaryWithOutputIntent() {
+        let catalog = PDFDocumentCatalog(
+            pages: PDFSyntax.Reference(objectNumber: 2),
+            outputIntents: [
+                PDFOutputIntent(
+                    destinationOutputProfile: PDFSyntax.Reference(objectNumber: 9),
+                    outputConditionIdentifier: "sRGB IEC61966-2.1",
+                ),
+            ],
+            displayDocumentTitle: false,
+        )
+
+        #expect(
+            catalog.pdfDictionary.serialized()
+                ==
+                "<< /Type /Catalog /Pages 2 0 R /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFA1 /OutputCondition (sRGB IEC61966-2.1) /OutputConditionIdentifier (sRGB IEC61966-2.1) /RegistryName (http://www.color.org) /Info (sRGB IEC61966-2.1) /DestOutputProfile 9 0 R >>] >>",
+        )
+    }
+
     @Test("Serializes deterministic metadata dictionaries and XMP")
     func serializesDeterministicMetadataDictionariesAndXMP() {
         let metadata = PDFDocumentMetadata(title: "Article & Report")
@@ -58,6 +78,34 @@ struct PDFDocumentStructureTests {
         #expect(xmp.contains("<dc:title>"))
         #expect(xmp.contains("Article &amp; Report"))
         #expect(!xmp.contains("CreationDate"))
+    }
+
+    @Test("Serializes PDF UA and PDF A identifiers in XMP")
+    func serializesPDFUAAndPDFAIdentifiersInXMP() {
+        let metadata = PDFDocumentMetadata(title: "Archive", conformance: .pdfUA1AndPDFA2A)
+        let xmp = String(decoding: metadata.xmpData, as: UTF8.self)
+
+        #expect(xmp.contains("xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\""))
+        #expect(xmp.contains("<pdfuaid:part>1</pdfuaid:part>"))
+        #expect(xmp.contains("xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\""))
+        #expect(xmp.contains("<pdfaid:part>2</pdfaid:part>"))
+        #expect(xmp.contains("<pdfaid:conformance>A</pdfaid:conformance>"))
+    }
+
+    @Test("Serializes trailer file identifier")
+    func serializesTrailerFileIdentifier() {
+        let identifier = PDFSyntax.HexString(bytes: Array("MarkdownPDF-PDFA".utf8))
+        let trailer = PDFSyntax.Trailer(
+            size: 2,
+            root: PDFSyntax.Reference(objectNumber: 1),
+            info: nil,
+            fileID: (original: identifier, modified: identifier),
+        )
+
+        #expect(
+            trailer.serialized
+                == "trailer\n<< /Size 2 /Root 1 0 R /ID [<4D61726B646F776E5044462D50444641> <4D61726B646F776E5044462D50444641>] >>",
+        )
     }
 
     @Test("Serializes outline tree from heading destinations")

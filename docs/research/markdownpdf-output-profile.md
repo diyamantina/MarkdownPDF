@@ -43,13 +43,16 @@ The PDF compatibility target is a conservative PDF 1.4 file:
 - Optional tagged PDF structure when `PDFOptions.taggedPDF` is enabled or a
   conformance profile requires it.
 - Optional PDF/UA-1 identification when `PDFOptions.conformance == .pdfUA1`.
+- Optional PDF/A-2a identification when `PDFOptions.conformance == .pdfA2A`,
+  or combined PDF/UA-1 plus PDF/A-2a identification when
+  `PDFOptions.conformance == .pdfUA1AndPDFA2A`.
 
-The profile does not claim PDF/A, linearized PDF, incremental updates,
-encryption, digital signatures, object streams, xref streams, JavaScript
-actions, SVG import, or arbitrary Mermaid language support. PDF/UA-1 is claimed
-only for the opt-in `.pdfUA1` conformance path, which requires tagged structure,
-embedded font programs for rendered text, document title metadata, and a
-veraPDF witness.
+The default profile does not claim PDF/A, PDF/UA, linearized PDF, incremental
+updates, encryption, digital signatures, object streams, xref streams,
+JavaScript actions, SVG import, or arbitrary Mermaid language support. PDF/UA-1
+and PDF/A-2a are claimed only for their opt-in conformance paths, which require
+tagged structure, embedded font programs for rendered text, document title
+metadata, and a veraPDF witness.
 
 ## File envelope
 
@@ -132,13 +135,15 @@ Optional entries are emitted only when the corresponding feature is active:
 - `/Names << /Dests ... >>` when headings produce named destinations.
 - `/Metadata` when `PDFOptions.title` or `PDFOptions.conformance` produces an
   XMP metadata stream.
+- `/OutputIntents` with an embedded sRGB ICC profile when
+  `PDFOptions.conformance` enables PDF/A-2a.
 - `/MarkInfo`, `/StructTreeRoot`, and `/Lang` when `PDFOptions.taggedPDF` is
   enabled or a conformance profile requires tagged structure.
 - `/ViewerPreferences << /DisplayDocTitle true >>` when title metadata exists or
   tagged PDF structure is enabled. PDF/UA-1 also requires this entry.
 
-The catalog does not emit `/OpenAction`, JavaScript, output intents, or PDF/A
-conformance declarations.
+The catalog does not emit `/OpenAction` or JavaScript. It emits output intents
+and PDF/A conformance declarations only for the opt-in PDF/A-2a path.
 
 ## Page tree and pages
 
@@ -255,10 +260,10 @@ are emitted as `/Artifact` marked content.
 The structure-only path does not claim PDF/UA or PDF/A conformance. The
 PDF/UA-1 conformance path additionally requires a non-empty document title and
 embedded font programs for every rendered text role, emits `pdfuaid` XMP
-identification, and is validated with `verapdf -f ua1 --format json`.
-
-The renderer does not yet claim PDF/A conformance and does not emit PDF/A output
-intents or `pdfaid` XMP declarations.
+identification, and is validated with `verapdf -f ua1 --format json`. The
+PDF/A-2a path emits an sRGB output intent, `pdfaid` XMP identification, and a
+deterministic trailer `/ID`; the combined path also includes the PDF/UA XMP
+extension schema required by PDF/A.
 
 ## Tables
 
@@ -492,10 +497,11 @@ the writer emits:
 - `/ViewerPreferences << /DisplayDocTitle true >>`.
 
 `/Producer` is deterministic and currently `MarkdownPDF`. The PDF/UA-1
-conformance path also writes `pdfuaid:part` with value `1` in XMP.
+conformance path writes `pdfuaid:part` with value `1` in XMP. The PDF/A-2a path
+writes `pdfaid:part` with value `2` and `pdfaid:conformance` with value `A`.
 
-The current profile does not emit document `/ID` values. It also does not claim
-PDF/A metadata, output intents, or conformance declarations.
+The default profile does not emit document `/ID` values. The PDF/A-2a path emits
+a deterministic trailer `/ID`.
 
 ## Validation requirements
 
@@ -569,7 +575,6 @@ The following remain future profiles or unsupported features:
 - Linearization.
 - Encryption and permission dictionaries.
 - Digital signatures.
-- PDF/A output intents, metadata, and conformance declarations.
 - Complex-script shaping and bidirectional text.
 - SVG import.
 - General chart or graph rendering beyond the documented Mermaid subset.

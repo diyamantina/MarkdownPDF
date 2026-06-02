@@ -3,6 +3,7 @@ struct PDFDocumentCatalog {
     var outlines: PDFSyntax.Reference?
     var names: PDFSyntax.Dictionary?
     var metadata: PDFSyntax.Reference?
+    var outputIntents: [PDFOutputIntent] = []
     var structTreeRoot: PDFSyntax.Reference?
     var language: String?
     var marked: Bool = false
@@ -22,6 +23,12 @@ struct PDFDocumentCatalog {
         }
         if let metadata {
             entries.append(.init("Metadata", .reference(metadata)))
+        }
+        if !outputIntents.isEmpty {
+            entries.append(.init(
+                "OutputIntents",
+                .pdfArray(outputIntents.map { .dictionary($0.pdfDictionary) }),
+            ))
         }
         if marked {
             entries.append(

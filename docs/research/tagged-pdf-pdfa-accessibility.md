@@ -229,10 +229,15 @@ The portable renderer now has two separate opt-in paths:
 - `PDFOptions.conformance == .pdfUA1` auto-enables tagged structure, requires a
   non-empty document title, rejects PDF base-font fallback, emits `pdfuaid`
   XMP identification, and is checked with `verapdf -f ua1 --format json`.
+- `PDFOptions.conformance == .pdfA2A` emits the PDF/A-2a archival layer:
+  sRGB ICC output intent, `pdfaid` XMP, deterministic trailer `/ID`, and the
+  same embedded-font and title gates.
+- `PDFOptions.conformance == .pdfUA1AndPDFA2A` combines both profiles and adds
+  the PDF/UA XMP extension schema that PDF/A requires.
 
-PDF/A remains unclaimed. The remaining archival work is the PDF/A layer:
-validated sRGB ICC output intent, `pdfaid` XMP, document ID handling if needed
-by the chosen profile, and validator fixtures for `verapdf -f 2a`.
+The remaining archival work is broader fixture coverage beyond the focused
+profile witness, including tagged RTL/CJK documents and documents with richer
+images or annotations.
 
 ## Platform notes
 

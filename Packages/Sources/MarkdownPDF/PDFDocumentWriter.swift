@@ -95,6 +95,12 @@ struct PDFDocumentWriter {
             : PDFNamedDestinations(destinations: resolvedDestinations).pdfDictionary
         let metadata = PDFDocumentMetadata(title: title, conformance: conformance)
         let metadataRefs = metadata.isEmpty ? nil : builder.addMetadata(metadata)
+        let outputIntent = conformance.requiresOutputIntent
+            ? PDFOutputIntent(
+                destinationOutputProfile: builder.addSRGBOutputProfile(),
+                outputConditionIdentifier: PDFSRGBICCProfile.outputConditionIdentifier,
+            )
+            : nil
         let taggedRefs = taggedContent.map {
             builder.addTaggedContent($0, pageReferences: pageRefs)
         }
@@ -111,6 +117,7 @@ struct PDFDocumentWriter {
                     outlines: outlineRef,
                     names: names,
                     metadata: metadataRefs?.xmp,
+                    outputIntents: outputIntent.map { [$0] } ?? [],
                     structTreeRoot: taggedRefs?.structTreeRoot,
                     language: taggedContent?.language,
                     marked: taggedContent != nil,
@@ -119,11 +126,11 @@ struct PDFDocumentWriter {
             ),
         )
 
-        return builder.build(root: catalogRef, info: metadataRefs?.info)
+        return builder.build(root: catalogRef, info: metadataRefs?.info, fileID: fileIdentifier)
     }
 
     private func validateConformance(usedFonts: [StandardFont]) throws {
-        guard conformance.isPDFUA1Enabled, !usedFonts.isEmpty else {
+        guard conformance.isEnabled, !usedFonts.isEmpty else {
             return
         }
 
@@ -131,6 +138,15 @@ struct PDFDocumentWriter {
             profile: conformance.displayName,
             fonts: usedFonts.map { $0.baseName(in: fontSet) },
         )
+    }
+
+    private var fileIdentifier: (original: PDFSyntax.HexString, modified: PDFSyntax.HexString)? {
+        guard conformance.requiresFileIdentifier else {
+            return nil
+        }
+
+        let identifier = PDFSyntax.HexString(bytes: Array("MarkdownPDF-PDFA".utf8))
+        return (original: identifier, modified: identifier)
     }
 
     private static func mergedEmbeddedFontUsages(from pages: [PDFPageCanvas]) throws -> [PDFEmbeddedFontUsage] {
@@ -257,6 +273,10 @@ struct PDFDocumentWriter {
             )
         }
 
+        mutating func addSRGBOutputProfile() -> PDFSyntax.Reference {
+            addStream(dictionary: PDFSRGBICCProfile.streamDictionary, data: PDFSRGBICCProfile.data)
+        }
+
         mutating func addTaggedContent(
             _ taggedContent: PDFTaggedContent,
             pageReferences: [PDFSyntax.Reference],
@@ -355,8 +375,12 @@ struct PDFDocumentWriter {
             )
         }
 
-        func build(root: PDFSyntax.Reference, info: PDFSyntax.Reference?) -> Data {
-            registry.serializedFile(root: root, info: info)
+        func build(
+            root: PDFSyntax.Reference,
+            info: PDFSyntax.Reference?,
+            fileID: (original: PDFSyntax.HexString, modified: PDFSyntax.HexString)? = nil,
+        ) -> Data {
+            registry.serializedFile(root: root, info: info, fileID: fileID)
         }
 
         private mutating func setDictionary(_ dictionary: PDFSyntax.Dictionary, for ref: PDFSyntax.Reference) {

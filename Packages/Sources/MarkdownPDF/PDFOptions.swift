@@ -253,34 +253,55 @@ public struct PDFOptions: Equatable, Sendable {
 
     /// Controls opt-in standards identification for generated PDFs.
     ///
-    /// The default value is ``none`` and claims no conformance profile. The
-    /// PDF/UA-1 profile automatically enables tagged PDF structure and requires
-    /// a non-empty document title before rendering. PDF/A remains unclaimed
-    /// until the renderer can emit and validate the required archival profile.
+    /// The default value is ``none`` and claims no conformance profile. PDF/UA-1
+    /// and PDF/A-2a profiles automatically enable tagged PDF structure and
+    /// require a non-empty document title before rendering. PDF/A-2a also emits
+    /// an sRGB output intent, `pdfaid` XMP, and a deterministic trailer `/ID`.
     public struct Conformance: Equatable, Sendable {
         public var isPDFUA1Enabled: Bool
+        public var isPDFA2AEnabled: Bool
 
-        public init(pdfUA1: Bool) {
+        public init(pdfUA1: Bool, pdfA2A: Bool = false) {
             isPDFUA1Enabled = pdfUA1
+            isPDFA2AEnabled = pdfA2A
         }
 
-        public static let none = Conformance(pdfUA1: false)
-        public static let pdfUA1 = Conformance(pdfUA1: true)
+        public static let none = Conformance(pdfUA1: false, pdfA2A: false)
+        public static let pdfUA1 = Conformance(pdfUA1: true, pdfA2A: false)
+        public static let pdfA2A = Conformance(pdfUA1: false, pdfA2A: true)
+        public static let pdfUA1AndPDFA2A = Conformance(pdfUA1: true, pdfA2A: true)
 
         var isEnabled: Bool {
-            isPDFUA1Enabled
+            isPDFUA1Enabled || isPDFA2AEnabled
         }
 
         var requiresTaggedPDF: Bool {
-            isPDFUA1Enabled
+            isPDFUA1Enabled || isPDFA2AEnabled
         }
 
         var requiresDocumentTitle: Bool {
-            isPDFUA1Enabled
+            isPDFUA1Enabled || isPDFA2AEnabled
+        }
+
+        var requiresOutputIntent: Bool {
+            isPDFA2AEnabled
+        }
+
+        var requiresFileIdentifier: Bool {
+            isPDFA2AEnabled
         }
 
         var displayName: String {
-            isPDFUA1Enabled ? "PDF/UA-1" : "default PDF"
+            switch (isPDFUA1Enabled, isPDFA2AEnabled) {
+            case (true, true):
+                "PDF/UA-1 + PDF/A-2a"
+            case (true, false):
+                "PDF/UA-1"
+            case (false, true):
+                "PDF/A-2a"
+            case (false, false):
+                "default PDF"
+            }
         }
     }
 }
