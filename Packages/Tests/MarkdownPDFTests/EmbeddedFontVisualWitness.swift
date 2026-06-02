@@ -87,7 +87,12 @@ func assertEmbeddedFontVisualWitness(
     )
 }
 
-private func embeddedFontRasterIssues(poppler: PNMImage, mupdf: PNMImage) -> [String] {
+/// Shared raster comparison for both the embedded-font witness above and the
+/// `PDFVisualLayoutValidationTests` suite. Reports dimension mismatches,
+/// under-rendered (near-blank) pages, fully blank pages, and diverging ink
+/// bounds. A near-blank page is the failure mode of a badly scaled font, so the
+/// `nonWhitePixelCount` floor must stay here.
+func embeddedFontRasterIssues(poppler: PNMImage, mupdf: PNMImage) -> [String] {
     var issues: [String] = []
     if poppler.width != mupdf.width || poppler.height != mupdf.height {
         issues.append(
@@ -98,6 +103,13 @@ private func embeddedFontRasterIssues(poppler: PNMImage, mupdf: PNMImage) -> [St
 
     let popplerInk = poppler.inkMetrics()
     let mupdfInk = mupdf.inkMetrics()
+    if popplerInk.nonWhitePixelCount < 1000 {
+        issues.append("Poppler rendered too little ink: \(popplerInk.nonWhitePixelCount) pixels")
+    }
+    if mupdfInk.nonWhitePixelCount < 1000 {
+        issues.append("MuPDF rendered too little ink: \(mupdfInk.nonWhitePixelCount) pixels")
+    }
+
     guard let popplerBox = popplerInk.box, let mupdfBox = mupdfInk.box else {
         issues.append("one renderer produced a blank page")
         return issues
@@ -105,16 +117,13 @@ private func embeddedFontRasterIssues(poppler: PNMImage, mupdf: PNMImage) -> [St
 
     let overlap = inkOverlapRatio(popplerBox, mupdfBox)
     if overlap < 0.85 {
-        issues.append(
-            "ink bounds differ (overlap \(String(format: "%.2f", overlap))): "
-                + "Poppler \(popplerBox), MuPDF \(mupdfBox)",
-        )
+        issues.append("ink bounds differ: Poppler \(popplerBox), MuPDF \(mupdfBox)")
     }
 
     return issues
 }
 
-private func inkOverlapRatio(_ left: PNMImage.InkBox, _ right: PNMImage.InkBox) -> Double {
+func inkOverlapRatio(_ left: PNMImage.InkBox, _ right: PNMImage.InkBox) -> Double {
     let intersectionLeft = max(left.left, right.left)
     let intersectionTop = max(left.top, right.top)
     let intersectionRight = min(left.right, right.right)

@@ -2855,36 +2855,7 @@ struct PDFVisualLayoutValidationTests {
     }
 
     private func rasterComparisonIssues(poppler: PNMImage, mupdf: PNMImage) -> [String] {
-        var issues: [String] = []
-        if poppler.width != mupdf.width || poppler.height != mupdf.height {
-            issues.append(
-                "image dimensions differ: Poppler \(poppler.width)x\(poppler.height), "
-                    + "MuPDF \(mupdf.width)x\(mupdf.height)",
-            )
-        }
-
-        let popplerInk = poppler.inkMetrics()
-        let mupdfInk = mupdf.inkMetrics()
-        if popplerInk.nonWhitePixelCount < 1000 {
-            issues.append("Poppler rendered too little ink: \(popplerInk.nonWhitePixelCount) pixels")
-        }
-        if mupdfInk.nonWhitePixelCount < 1000 {
-            issues.append("MuPDF rendered too little ink: \(mupdfInk.nonWhitePixelCount) pixels")
-        }
-
-        guard let popplerBox = popplerInk.box,
-              let mupdfBox = mupdfInk.box
-        else {
-            issues.append("one renderer produced a blank page")
-            return issues
-        }
-
-        let overlapRatio = inkOverlapRatio(popplerBox, mupdfBox)
-        if overlapRatio < 0.85 {
-            issues.append("ink bounds differ: Poppler \(popplerBox), MuPDF \(mupdfBox)")
-        }
-
-        return issues
+        embeddedFontRasterIssues(poppler: poppler, mupdf: mupdf)
     }
 
     private func normalizedExtractedText(_ text: String) -> String {
@@ -2915,20 +2886,6 @@ struct PDFVisualLayoutValidationTests {
 
     private static func pdfHex(_ value: Int) -> String {
         String(format: "<%04X>", locale: Locale(identifier: "en_US_POSIX"), value)
-    }
-
-    private func inkOverlapRatio(_ left: PNMImage.InkBox, _ right: PNMImage.InkBox) -> Double {
-        let intersectionLeft = max(left.left, right.left)
-        let intersectionTop = max(left.top, right.top)
-        let intersectionRight = min(left.right, right.right)
-        let intersectionBottom = min(left.bottom, right.bottom)
-        guard intersectionLeft <= intersectionRight, intersectionTop <= intersectionBottom else {
-            return 0
-        }
-
-        let intersectionArea = (intersectionRight - intersectionLeft + 1) * (intersectionBottom - intersectionTop + 1)
-        let smallerArea = min(left.width * left.height, right.width * right.height)
-        return Double(intersectionArea) / Double(smallerArea)
     }
 
     private func pnmImage(width: Int, height: Int, inkBox: ClosedRange<Int>) -> Data {
