@@ -30,8 +30,10 @@ Swift source and tests.
     inline-code rendering.
 11. Use `source-code-renderer-analysis.md` to connect source-code research to
     current parser, layout, PDF writer, and witness paths.
-12. Use the source studies when planning new writer features.
-13. Use macOS-specific research only for macOS targets. It is not a Linux or iOS
+12. Use `source-code-formatting-model.md` before implementing source-code block
+    layout, inline-code policy, tab expansion, or code-specific witnesses.
+13. Use the source studies when planning new writer features.
+14. Use macOS-specific research only for macOS targets. It is not a Linux or iOS
    implementation plan.
 
 ## Boundaries
@@ -57,6 +59,7 @@ Swift source and tests.
 | `complex-script-fixture-witness-policy.md` | Fixture and witness policy for future complex-script, bidi, ligature, combining-mark, no-space line-break, failure, and platform-boundary claims. |
 | `source-code-typesetting-literature.md` | Literature and standards research for source-code block formatting, wrapping, extraction, and witness policy. |
 | `source-code-renderer-analysis.md` | Comparison between source-code research and the current MarkdownPDF parser, renderer, PDF writer, and witness stack. |
+| `source-code-formatting-model.md` | Portable internal model for source-code block layout, inline-code policy, tab expansion, page breaks, spacing, and witnesses. |
 | `existing-pdf-writer-alignment.md` | Alignment notes between existing writer behavior and research findings. |
 | `pdf-validation-tooling.md` | Open source validation tools and the current CI validation strategy. |
 | `pdf-visual-layout-validation.md` | Visual layout validation strategy using text and render extraction tools. |

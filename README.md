@@ -360,6 +360,8 @@ swiftlint --config .swiftlint.yml
   source-code formatting literature and witness notes.
 - [docs/research/source-code-renderer-analysis.md](docs/research/source-code-renderer-analysis.md):
   source-code formatting comparison against current renderer and witness paths.
+- [docs/research/source-code-formatting-model.md](docs/research/source-code-formatting-model.md):
+  portable source-code formatting model for renderer implementation.
 
 ## Platform Boundaries
 
