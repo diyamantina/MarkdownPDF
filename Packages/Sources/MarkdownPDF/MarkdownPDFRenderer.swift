@@ -2515,7 +2515,26 @@ private struct Layout {
                 strikethrough: strikethrough,
                 linkDestination: linkDestination,
             )]
-        case .fraction, .radical, .accent, .matrix, .scaledDelimiter:
+        case .fraction, .radical:
+            if let run = inlineMathBoxRun(
+                for: node,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            ) {
+                return [run]
+            }
+            return [inlineMathTextRun(
+                MarkdownMathLinearizer().linearize(node),
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case .accent, .matrix, .scaledDelimiter:
             return [inlineMathTextRun(
                 MarkdownMathLinearizer().linearize(node),
                 size: size,
@@ -2597,6 +2616,38 @@ private struct Layout {
             underline: underline,
             strikethrough: strikethrough,
             linkDestination: linkDestination,
+        )
+    }
+
+    /// Lays a fraction or radical out as a typeset inline box. Returns nil when
+    /// the math layout cannot be built (for example when a font-backed math
+    /// profile lacks an embedded math table), so the caller can fall back to the
+    /// readable linearization.
+    private func inlineMathBoxRun(
+        for node: MarkdownMathNode,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) -> PDFTextRun? {
+        let mathStyle = style(for: .inlineMath)
+        let boxSize = size * mathStyle.sizeMultiplier
+        guard let layout = try? mathLayout(for: mathStyle),
+              let box = try? layout.layout(node, size: boxSize, displayStyle: false),
+              box.width > 0
+        else {
+            return nil
+        }
+        return PDFTextRun(
+            text: MarkdownMathLinearizer().linearize(node),
+            font: standardFont(for: mathStyle.fontRole),
+            size: boxSize,
+            color: inheritedColor == style(for: .body).color ? mathStyle.color : inheritedColor,
+            underline: underline,
+            strikethrough: strikethrough,
+            linkDestination: linkDestination,
+            inlineMathBox: box,
         )
     }
 
@@ -2773,6 +2824,7 @@ private struct Layout {
         maxWidth: Double,
     ) throws -> [PDFTextRun] {
         guard token.text != "\n",
+              token.inlineMathBox == nil,
               maxWidth > 0,
               try textWidth(token) > maxWidth
         else {
@@ -2804,6 +2856,12 @@ private struct Layout {
         let lineBreaker = LineBreakOpportunityDetector()
 
         for run in runs {
+            // An inline math box is an atomic, indivisible token: it must not be
+            // split into word segments, which would drop its laid-out box.
+            if run.inlineMathBox != nil {
+                tokens.append(run)
+                continue
+            }
             for segment in lineBreaker.segments(in: run.text) where !segment.isEmpty {
                 tokens.append(run.withText(segment))
             }
@@ -2888,6 +2946,13 @@ private struct Layout {
         for run in runs {
             if let destination = run.namedDestination {
                 addNamedDestination(destination, x: cursor, y: y + run.baselineOffset + run.size)
+            }
+            if let box = run.inlineMathBox {
+                currentPage.beginActualText(run.text)
+                try drawMathBox(box, x: cursor, baselineY: y + run.baselineOffset)
+                currentPage.endMarkedContent()
+                cursor += box.width
+                continue
             }
             try currentPage.drawTextRun(
                 run,
@@ -3109,7 +3174,10 @@ private struct Layout {
     }
 
     private func textWidth(_ run: PDFTextRun) throws -> Double {
-        try embeddedFonts.width(of: run, fallbackFontSet: options.fontSet)
+        if let box = run.inlineMathBox {
+            return box.width
+        }
+        return try embeddedFonts.width(of: run, fallbackFontSet: options.fontSet)
     }
 
     private func textWidth(_ runs: [PDFTextRun]) throws -> Double {

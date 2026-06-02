@@ -217,6 +217,31 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.streamLengthsMatch())
     }
 
+    @Test("Inline fractions and radicals typeset as 2D boxes in the text flow")
+    func inlineFractionsTypesetAsBoxes() throws {
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(mathTypesetting: .enabled),
+        ).render(markdown: "Pressure is $\\frac{a}{b}$ and the bound is $\\sqrt{x}$ inline.")
+        let inspector = PDFInspector(data)
+        let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "inline-math-box")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "inline-math-box-text")
+        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        let extracted = normalizedExtractedText(textResult.output)
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        // The inline fraction bar and radical overbar emit rule rectangles in the
+        // text flow rather than the parenthesized prose fallback.
+        #expect(streamText.components(separatedBy: " re f").count - 1 >= 2)
+        // ActualText preserves a readable linearization for extraction.
+        #expect(extracted.contains("frac(a, b)"), "Unexpected extraction:\n\(textResult.output)")
+        #expect(extracted.contains("sqrt(x)"), "Unexpected extraction:\n\(textResult.output)")
+        #expect(extracted.contains("Pressure is"))
+        #expect(extracted.contains("inline"))
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+    }
+
     @Test("Unsupported math renders visible source fallback")
     func unsupportedMathRendersVisibleSourceFallback() throws {
         let data = try MarkdownPDFRenderer(
