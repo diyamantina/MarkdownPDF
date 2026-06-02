@@ -17,7 +17,7 @@ same document and cross page boundaries.
 ## 1. Navigation Links and Autolinks
 
 The first section links to [the operations table](#3-wide-operations-table) and
-to [the closing marker](#11-closing-marker). It also includes an external
+to [the closing marker](#closing-marker). It also includes an external
 reference to [portable fixture evidence](https://example.com/fixtures/crazy)
 and a bare autolink <https://example.com/fixtures/crazy/autolink>.
 

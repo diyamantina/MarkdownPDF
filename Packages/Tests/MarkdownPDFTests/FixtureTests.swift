@@ -180,6 +180,8 @@ struct FixtureTests {
         #expect(inspector.pageCount >= 6)
         #expect(inspector.linkAnnotationCount >= 3)
         #expect(inspector.text.contains("/Names << /Dests"))
+        #expect(inspector.internalLinkDestinationNames.contains("3-wide-operations-table"))
+        #expect(inspector.internalLinkDestinationNames.contains("closing-marker"))
         #expect(inspector.text.contains("/Subtype /Image"))
         #expect(imageXObjectCount(in: inspector.text) == 1)
         #expect(imageDrawOperatorCount(in: inspector.text) == 2)
