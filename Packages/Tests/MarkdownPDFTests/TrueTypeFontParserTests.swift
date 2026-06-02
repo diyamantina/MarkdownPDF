@@ -29,6 +29,7 @@ struct TrueTypeFontParserTests {
         #expect(!metadata.os2.permissions.noSubsetting)
         #expect(metadata.post.format == 3)
         #expect(metadata.post.italicAngle == 0)
+        #expect(metadata.math == nil)
     }
 
     @Test("Parses renderable synthetic Latin witness font")
@@ -77,6 +78,131 @@ struct TrueTypeFontParserTests {
         #expect(metadata.hhea.numberOfHMetrics == 19)
         #expect(Array(metadata.hmtx.advanceWidths[1 ... 9]) == [1000, 1000, 1000, 1000, 1000, 500, 280, 500, 0])
         #expect(Array(metadata.hmtx.advanceWidths[10 ... 18]) == [520, 500, 450, 250, 520, 500, 500, 500, 250])
+    }
+
+    @Test("Parses OpenType MATH constants glyph info variants and assembly")
+    func parsesOpenTypeMathConstantsGlyphInfoVariantsAndAssembly() throws {
+        let defaultMetadata = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data(includeMATHTable: true))
+        #expect(defaultMetadata.math == nil)
+
+        let metadata = try TrueTypeFontParser().parse(
+            SyntheticTrueTypeFont.data(includeMATHTable: true),
+            parseMathTable: true,
+        )
+        let math = try #require(metadata.math)
+
+        #expect(math.majorVersion == 1)
+        #expect(math.minorVersion == 0)
+        #expect(math.constants.scriptPercentScaleDown == 80)
+        #expect(math.constants.scriptScriptPercentScaleDown == 60)
+        #expect(math.constants.delimitedSubFormulaMinHeight == 1500)
+        #expect(math.constants.displayOperatorMinHeight == 900)
+        #expect(math.constants.value(.axisHeight)?.value == 101)
+        #expect(math.constants.value(.fractionRuleThickness)?.value == 134)
+        #expect(math.constants.value(.radicalKernAfterDegree)?.value == 150)
+        #expect(math.constants.radicalDegreeBottomRaisePercent == 60)
+
+        #expect(math.glyphInfo.italicsCorrections == [
+            TrueTypeMathTable.GlyphValueRecord(
+                glyphID: 1,
+                value: TrueTypeMathTable.MathValueRecord(value: 37, deviceOffset: 0),
+            ),
+        ])
+        #expect(math.glyphInfo.topAccentAttachments == [
+            TrueTypeMathTable.GlyphValueRecord(
+                glyphID: 1,
+                value: TrueTypeMathTable.MathValueRecord(value: 250, deviceOffset: 0),
+            ),
+        ])
+        #expect(math.glyphInfo.extendedShapeGlyphIDs == [2])
+
+        let kern = try #require(math.glyphInfo.mathKerns.first)
+        #expect(kern.glyphID == 1)
+        #expect(kern.topRight?.correctionHeights.map(\.value) == [-100, 400])
+        #expect(kern.topRight?.kernValues.map(\.value) == [15, 5, -20])
+        #expect(kern.topLeft == nil)
+        #expect(kern.bottomRight == nil)
+        #expect(kern.bottomLeft == nil)
+
+        #expect(math.variants.minConnectorOverlap == 12)
+        let vertical = try #require(math.variants.verticalConstructions.first)
+        #expect(vertical.glyphID == 2)
+        #expect(vertical.variants == [
+            TrueTypeMathTable.GlyphVariant(glyphID: 1, advanceMeasurement: 900),
+        ])
+        #expect(vertical.assembly?.italicsCorrection.value == 11)
+        #expect(vertical.assembly?.parts == [
+            TrueTypeMathTable.GlyphPart(
+                glyphID: 1,
+                startConnectorLength: 10,
+                endConnectorLength: 20,
+                fullAdvance: 400,
+                partFlags: 0,
+            ),
+            TrueTypeMathTable.GlyphPart(
+                glyphID: 2,
+                startConnectorLength: 15,
+                endConnectorLength: 15,
+                fullAdvance: 300,
+                partFlags: 1,
+            ),
+        ])
+        #expect(vertical.assembly?.parts.last?.isExtender == true)
+
+        let horizontal = try #require(math.variants.horizontalConstructions.first)
+        #expect(horizontal.glyphID == 1)
+        #expect(horizontal.assembly == nil)
+        #expect(horizontal.variants == [
+            TrueTypeMathTable.GlyphVariant(glyphID: 2, advanceMeasurement: 800),
+        ])
+    }
+
+    @Test("Rejects malformed OpenType MATH table offsets and record counts")
+    func rejectsMalformedOpenTypeMathTableOffsetsAndRecordCounts() {
+        expectTrueTypeError {
+            _ = try TrueTypeFontParser().parse(
+                SyntheticTrueTypeFont.data(includeMATHTable: true, invalidMATHConstantsOffset: true),
+                parseMathTable: true,
+            )
+        } verify: { error in
+            guard case let .malformedTable(tag, reason) = error else {
+                Issue.record("Expected malformed MATH table")
+                return
+            }
+            #expect(tag == "MATH")
+            #expect(reason.contains("MathConstants"))
+        }
+
+        expectTrueTypeError {
+            _ = try TrueTypeFontParser().parse(
+                SyntheticTrueTypeFont.data(includeMATHTable: true, mismatchedMATHItalicsCount: true),
+                parseMathTable: true,
+            )
+        } verify: { error in
+            guard case let .malformedTable(tag, reason) = error else {
+                Issue.record("Expected malformed MATH table")
+                return
+            }
+            #expect(tag == "MATH")
+            #expect(reason.contains("count"))
+        }
+    }
+
+    @Test("Rejects OpenType MATH glyph IDs outside maxp")
+    func rejectsOpenTypeMathGlyphIDsOutsideMaxp() {
+        expectTrueTypeError {
+            _ = try TrueTypeFontParser().parse(
+                SyntheticTrueTypeFont.data(includeMATHTable: true, invalidMATHGlyphID: true),
+                parseMathTable: true,
+            )
+        } verify: { error in
+            guard case let .malformedTable(tag, reason) = error else {
+                Issue.record("Expected malformed MATH table")
+                return
+            }
+            #expect(tag == "MATH")
+            #expect(reason.contains("maxp.numGlyphs"))
+        }
     }
 
     @Test("Rejects malformed table checksums")
@@ -380,6 +506,10 @@ enum SyntheticTrueTypeFont {
         glyphProfile: GlyphProfile = .basic,
         includeGlyphOutlines: Bool = false,
         includeGSUBLigatures: Bool = false,
+        includeMATHTable: Bool = false,
+        invalidMATHConstantsOffset: Bool = false,
+        mismatchedMATHItalicsCount: Bool = false,
+        invalidMATHGlyphID: Bool = false,
     ) -> Data {
         let glyphSet = GlyphSet(profile: glyphProfile)
         var tables = [
@@ -425,6 +555,13 @@ enum SyntheticTrueTypeFont {
         }
         if includeGSUBLigatures, !omittedTables.contains("GSUB") {
             tables["GSUB"] = gsubLigatureTable(glyphSet: glyphSet)
+        }
+        if includeMATHTable, !omittedTables.contains("MATH") {
+            tables["MATH"] = mathTable(
+                invalidConstantsOffset: invalidMATHConstantsOffset,
+                mismatchedItalicsCount: mismatchedMATHItalicsCount,
+                invalidGlyphID: invalidMATHGlyphID,
+            )
         }
 
         var records: [(tag: String, checksum: UInt32, offset: UInt32, length: UInt32)] = []
@@ -833,6 +970,196 @@ enum SyntheticTrueTypeFont {
         appendUInt32(0x005A, to: &data)
         appendUInt32(2, to: &data)
         return data
+    }
+
+    private static func mathTable(
+        invalidConstantsOffset: Bool,
+        mismatchedItalicsCount: Bool,
+        invalidGlyphID: Bool,
+    ) -> Data {
+        let constants = mathConstantsTable()
+        let glyphInfo = mathGlyphInfoTable(mismatchedItalicsCount: mismatchedItalicsCount)
+        let variants = mathVariantsTable(invalidGlyphID: invalidGlyphID)
+        let constantsOffset = UInt16(10)
+        let glyphInfoOffset = UInt16(10 + constants.count)
+        let variantsOffset = UInt16(10 + constants.count + glyphInfo.count)
+
+        var data = Data()
+        appendUInt16(1, to: &data)
+        appendUInt16(0, to: &data)
+        appendUInt16(invalidConstantsOffset ? 0xFF00 : constantsOffset, to: &data)
+        appendUInt16(glyphInfoOffset, to: &data)
+        appendUInt16(variantsOffset, to: &data)
+        data.append(constants)
+        data.append(glyphInfo)
+        data.append(variants)
+        return data
+    }
+
+    private static func mathConstantsTable() -> Data {
+        var data = Data()
+        appendInt16(80, to: &data)
+        appendInt16(60, to: &data)
+        appendUInt16(1500, to: &data)
+        appendUInt16(900, to: &data)
+        for (index, _) in TrueTypeMathTable.Constants.ValueName.allCases.enumerated() {
+            appendMathValue(Int16(100 + index), to: &data)
+        }
+        appendInt16(60, to: &data)
+        return data
+    }
+
+    private static func mathGlyphInfoTable(mismatchedItalicsCount: Bool) -> Data {
+        let italics = mathGlyphValueTable(
+            coverageGlyphIDs: [1],
+            values: mismatchedItalicsCount ? [37, 38] : [37],
+        )
+        let topAccent = mathGlyphValueTable(coverageGlyphIDs: [1], values: [250])
+        let extendedShapes = coverageFormat1([2])
+        let kernInfo = mathKernInfoTable()
+
+        var data = Data(count: 8)
+        data.append(italics)
+        data.append(topAccent)
+        data.append(extendedShapes)
+        data.append(kernInfo)
+
+        var offset = 8
+        writeUInt16(UInt16(offset), at: 0, in: &data)
+        offset += italics.count
+        writeUInt16(UInt16(offset), at: 2, in: &data)
+        offset += topAccent.count
+        writeUInt16(UInt16(offset), at: 4, in: &data)
+        offset += extendedShapes.count
+        writeUInt16(UInt16(offset), at: 6, in: &data)
+        return data
+    }
+
+    private static func mathGlyphValueTable(
+        coverageGlyphIDs: [UInt16],
+        values: [Int16],
+    ) -> Data {
+        let coverage = coverageFormat1(coverageGlyphIDs)
+        var data = Data()
+        appendUInt16(UInt16(4 + values.count * 4), to: &data)
+        appendUInt16(UInt16(values.count), to: &data)
+        values.forEach { appendMathValue($0, to: &data) }
+        data.append(coverage)
+        return data
+    }
+
+    private static func mathKernInfoTable() -> Data {
+        let coverage = coverageFormat1([1])
+        let kern = mathKernTable()
+        var data = Data(count: 12)
+        data.append(coverage)
+        data.append(kern)
+
+        writeUInt16(12, at: 0, in: &data)
+        writeUInt16(1, at: 2, in: &data)
+        writeUInt16(UInt16(12 + coverage.count), at: 4, in: &data)
+        writeUInt16(0, at: 6, in: &data)
+        writeUInt16(0, at: 8, in: &data)
+        writeUInt16(0, at: 10, in: &data)
+        return data
+    }
+
+    private static func mathKernTable() -> Data {
+        var data = Data()
+        appendUInt16(2, to: &data)
+        appendMathValue(-100, to: &data)
+        appendMathValue(400, to: &data)
+        appendMathValue(15, to: &data)
+        appendMathValue(5, to: &data)
+        appendMathValue(-20, to: &data)
+        return data
+    }
+
+    private static func mathVariantsTable(invalidGlyphID: Bool) -> Data {
+        let verticalCoverage = coverageFormat1([2])
+        let horizontalCoverage = coverageFormat1([1])
+        let verticalConstruction = mathGlyphConstructionTable(
+            assembly: mathGlyphAssemblyTable(),
+            variants: [(glyphID: invalidGlyphID ? 99 : 1, advanceMeasurement: 900)],
+        )
+        let horizontalConstruction = mathGlyphConstructionTable(
+            assembly: nil,
+            variants: [(glyphID: 2, advanceMeasurement: 800)],
+        )
+
+        var data = Data(count: 14)
+        data.append(verticalCoverage)
+        data.append(horizontalCoverage)
+        data.append(verticalConstruction)
+        data.append(horizontalConstruction)
+
+        var offset = 14
+        writeUInt16(12, at: 0, in: &data)
+        writeUInt16(UInt16(offset), at: 2, in: &data)
+        offset += verticalCoverage.count
+        writeUInt16(UInt16(offset), at: 4, in: &data)
+        offset += horizontalCoverage.count
+        writeUInt16(1, at: 6, in: &data)
+        writeUInt16(1, at: 8, in: &data)
+        writeUInt16(UInt16(offset), at: 10, in: &data)
+        offset += verticalConstruction.count
+        writeUInt16(UInt16(offset), at: 12, in: &data)
+        return data
+    }
+
+    private static func mathGlyphConstructionTable(
+        assembly: Data?,
+        variants: [(glyphID: UInt16, advanceMeasurement: UInt16)],
+    ) -> Data {
+        var data = Data()
+        let assemblyOffset = assembly.map { _ in UInt16(4 + variants.count * 4) } ?? 0
+        appendUInt16(assemblyOffset, to: &data)
+        appendUInt16(UInt16(variants.count), to: &data)
+        for variant in variants {
+            appendUInt16(variant.glyphID, to: &data)
+            appendUInt16(variant.advanceMeasurement, to: &data)
+        }
+        if let assembly {
+            data.append(assembly)
+        }
+        return data
+    }
+
+    private static func mathGlyphAssemblyTable() -> Data {
+        var data = Data()
+        appendMathValue(11, to: &data)
+        appendUInt16(2, to: &data)
+        appendGlyphPart(glyphID: 1, start: 10, end: 20, fullAdvance: 400, flags: 0, to: &data)
+        appendGlyphPart(glyphID: 2, start: 15, end: 15, fullAdvance: 300, flags: 1, to: &data)
+        return data
+    }
+
+    private static func coverageFormat1(_ glyphIDs: [UInt16]) -> Data {
+        var data = Data()
+        appendUInt16(1, to: &data)
+        appendUInt16(UInt16(glyphIDs.count), to: &data)
+        glyphIDs.forEach { appendUInt16($0, to: &data) }
+        return data
+    }
+
+    private static func appendMathValue(_ value: Int16, to data: inout Data) {
+        appendInt16(value, to: &data)
+        appendUInt16(0, to: &data)
+    }
+
+    private static func appendGlyphPart(
+        glyphID: UInt16,
+        start: UInt16,
+        end: UInt16,
+        fullAdvance: UInt16,
+        flags: UInt16,
+        to data: inout Data,
+    ) {
+        appendUInt16(glyphID, to: &data)
+        appendUInt16(start, to: &data)
+        appendUInt16(end, to: &data)
+        appendUInt16(fullAdvance, to: &data)
+        appendUInt16(flags, to: &data)
     }
 
     private static func gsubLigatureTable(glyphSet: GlyphSet) -> Data {

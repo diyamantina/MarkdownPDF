@@ -22,11 +22,18 @@ fractions, radicals, big operators with display limits, Greek command names, and
 common ASCII-safe symbols. Display math wraps the visual operators in PDF
 ActualText so `pdftotext` can extract the deterministic linearized formula.
 
-This first slice does not yet read the OpenType `MATH` table, does not assemble
-stretchy glyph variants, and does not require or bundle an embedded math font.
-Those remain the next implementation gates before claiming a production math
-font profile. Current rendering intentionally uses ASCII-safe names for Greek
-commands so the base-font path remains extractable and Linux-buildable.
+The internal TrueType parser can now read OpenType `MATH` table metadata when
+that parsing is explicitly requested: math constants, per-glyph value records,
+extended-shape coverage, math kerns, variants, glyph constructions, and glyph
+assembly parts. The reader validates subtable offsets, coverage counts, and
+glyph IDs with synthetic font fixtures so the public repo still commits no font
+binaries. MATH parsing remains opt in because existing embedded-font rendering
+can subset fonts before math metrics are needed. The renderer does not yet
+consume those MATH metrics, does not assemble stretchy glyph variants, and does
+not require or bundle an embedded math font. Those remain the next
+implementation gates before claiming a production math font profile. Current
+rendering intentionally uses ASCII-safe names for Greek commands so the
+base-font path remains extractable and Linux-buildable.
 
 ## Product boundary
 
@@ -219,7 +226,8 @@ Features that cannot meet this bar stay unsupported and visible.
 1. #131a Doc and grammar boundary: define the exact supported subset, math-class
    table, and symbol/Greek mapping. No renderer code.
 2. #131b OpenType `MATH` table reader (constants, italic correction, math kern,
-   variants, assembly) with unit tests against a CI-provided font.
+   variants, assembly) with synthetic font unit tests. This internal parser
+   slice is implemented; renderer consumption of the metrics remains separate.
 3. #131c Box tree + Appendix G subset layout (styles, scripts, fractions,
    radicals) producing geometry, no PDF yet.
 4. #131d Big operators with limits, stretchy delimiters via variants/assembly.

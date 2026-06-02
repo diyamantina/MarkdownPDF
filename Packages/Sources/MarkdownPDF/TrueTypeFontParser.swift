@@ -17,6 +17,7 @@ struct TrueTypeFontParser {
         var names: NameTable
         var os2: OS2Metrics
         var post: PostScriptTable
+        var math: TrueTypeMathTable?
 
         func table(named tag: String) -> TableRecord? {
             tables.first { $0.tag == tag }
@@ -124,6 +125,7 @@ struct TrueTypeFontParser {
     func parse(
         _ data: Data,
         embeddingPolicy: EmbeddingPolicy = .requireSubsetting,
+        parseMathTable: Bool = false,
     ) throws -> Metadata {
         let bytes = [UInt8](data)
         guard !bytes.isEmpty else {
@@ -165,6 +167,16 @@ struct TrueTypeFontParser {
             embeddingPolicy: embeddingPolicy,
         )
         let post = try parsePostScriptTable(table(named: "post", recordsByTag: recordsByTag, bytes: bytes))
+        let math: TrueTypeMathTable? = if parseMathTable {
+            try recordsByTag["MATH"].map { record in
+                try TrueTypeMathTableParser(
+                    bytes: tableBytes(record, in: bytes),
+                    numGlyphs: maxp.numGlyphs,
+                ).parse()
+            }
+        } else {
+            nil
+        }
 
         return Metadata(
             scalerType: scalerType,
@@ -177,6 +189,7 @@ struct TrueTypeFontParser {
             names: names,
             os2: os2,
             post: post,
+            math: math,
         )
     }
 
