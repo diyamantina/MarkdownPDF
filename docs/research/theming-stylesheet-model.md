@@ -8,7 +8,8 @@ Scope: this note defines a portable theming / stylesheet model for the
 Markdown-to-PDF engine. It covers per-element typography, color, and spacing, a
 dark theme and a print theme, and a code-syntax theme surface that feeds the
 #120 syntax-color work. It is portable macOS and Linux research. It is design
-direction, not product behavior until Swift source and witnesses exist.
+direction plus the #130 implementation record once Swift source and witnesses
+exist.
 
 ## Product boundary
 
@@ -47,7 +48,7 @@ Cited-system licenses (study only, nothing linked or vendored):
 | WCAG 2.1 SC 1.4.3 Contrast (Minimum). <https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html> | Requires >=4.5:1 for body text, >=3:1 for large text (>=18pt, or >=14pt bold); AAA is 7:1 / 4.5:1. | Every built-in theme's text-on-background pairs must pass 4.5:1; assert it in tests. |
 | WebAIM contrast reference. <https://webaim.org/articles/contrast/> | States the relative-luminance contrast formula `(L1+0.05)/(L2+0.05)` with the sRGB linearization. | Implement this exactly in a pure-Swift `contrastRatio` helper for witnesses. |
 | APCA (SAPC-APCA). <https://github.com/Myndex/SAPC-APCA> and <https://git.apcacontrast.com/documentation/WhyAPCA.html> | Perceptually uniform, size/weight-aware, polarity-sensitive; targeted at WCAG 3, not yet a replacement. | Note as a future-facing alternative metric; keep WCAG 2.x as the gate for now. Record APCA as a planned secondary check. |
-| Pygments token taxonomy. <https://pygments.org/docs/tokens/> and styles. <https://pygments.org/docs/styles/> | Hierarchical token kinds (Keyword, Name, String, Number, Comment, Operator...); a Style is a dict from token type to color/weight, subtypes inherit. | The code-syntax theme is a map from our `SourceCodeTokenKind` (#120) to color+style, with inheritance from a base entry. |
+| Pygments token taxonomy. <https://pygments.org/docs/tokens/> and styles. <https://pygments.org/docs/styles/> | Hierarchical token kinds (Keyword, Name, String, Number, Comment, Operator...); a Style is a dict from token type to color/weight, subtypes inherit. | The code-syntax theme exposes closed color slots matching our #120 tokenizer kinds, with deterministic fallback through the renderer. |
 | TextMate/VS Code theme model. <https://code.visualstudio.com/api/language-extensions/syntax-highlight-guide> and <https://code.visualstudio.com/api/extension-guides/color-theme> | `tokenColors`: rules of (scope selector -> foreground + fontStyle); most specific scope wins. | Confirms selector->style with specificity. We use a small closed enum of kinds instead of open dotted scopes, so resolution is total and deterministic. |
 | base16 architecture and styling. <https://github.com/tinted-theming/home> and <https://github.com/Misterio77/base16/blob/main/styling.md> | 16 colors: base00-07 grayscale ramp (bg->fg), base08-0F accent hues for types/operators/names; dark vs light just reverses the ramp direction. | Adopt base16 as the canonical 16-slot palette shape. Dark theme = reverse the base00-07 ramp; accent slots map to syntax kinds. Lets one palette drive both UI and code colors. |
 | highlight.js scope/theme reference. <https://highlightjs.readthedocs.io/en/latest/css-classes-reference.html> | A theme is a flat stylesheet over a fixed closed set of scope classes (keyword, string, comment...). | Validates a fixed, closed token-kind set as a stable theming surface (easier to make total than open scopes). |
@@ -63,11 +64,12 @@ Three layers, mirroring Typst set/show and LaTeX class/extension:
 1. Palette: a base16-shaped set of DeviceRGB colors (grayscale ramp + accents).
 2. Element styles: per-element typography/color/spacing defaults (the "set"
    layer), keyed by a closed `ElementRole` enum.
-3. Code-syntax styles: a map from the #120 `SourceCodeTokenKind` to color+style
-   (the TextMate/Pygments/base16 "tokenColors" surface).
+3. Code-syntax styles: a closed set of token color slots matching the #120
+   tokenizer kinds (the TextMate/Pygments/base16 "tokenColors" surface).
 
-Resolution is total: every `ElementRole` and every `SourceCodeTokenKind` has a
-resolved style, falling back to the palette so no element can be unstyled.
+Resolution is total: every `ElementRole` and every code token slot has a
+resolved style, falling back to the body style or palette so no element can be
+unstyled.
 
 ## How to (Swift)
 
@@ -76,48 +78,81 @@ The current `PDFColor` is exactly DeviceRGB, so it is the palette primitive.
 so a `theme` field slots in without breaking callers.
 
 ```swift
-public struct Palette: Equatable, Sendable {
-    // base16-style ramp: index 0 = background ... 7 = foreground.
-    public var ramp: [PDFColor]            // 8 grayscale-leaning steps
-    public var accents: [PDFColor]         // base08...base0F, 8 hues
-    public var foreground: PDFColor { ramp[7] }
-    public var background: PDFColor { ramp[0] }
+public struct PDFColor: Equatable, Sendable {
+    public var red: Double
+    public var green: Double
+    public var blue: Double
 }
 
-public enum ElementRole: Hashable, Sendable {
-    case body, heading(level: Int), blockquote, link
-    case codeInline, codeBlock, listMarker, tableHeader, rule, footnote
+extension PDFOptions {
+    public struct Palette: Equatable, Sendable {
+        public var base00, base01, base02, base03: PDFColor
+        public var base04, base05, base06, base07: PDFColor
+        public var base08, base09, base0A, base0B: PDFColor
+        public var base0C, base0D, base0E, base0F: PDFColor
+        public var foreground: PDFColor { base07 }
+        public var background: PDFColor { base00 }
+    }
+
+    public enum ElementRole: CaseIterable, Hashable, Sendable {
+        case body, paragraph
+        case heading1, heading2, heading3, heading4, heading5, heading6
+        case blockQuote, list, listMarker, link
+        case inlineCode, codeBlock, tableHeader, tableCell
+        case thematicBreak, footnote, html, imagePlaceholder
+    }
+
+    public enum FontRole: Equatable, Sendable {
+        case regular, bold, italic, monospaced
+    }
+
+    public struct ElementStyle: Equatable, Sendable {
+        public var fontRole: FontRole
+        public var sizeMultiplier: Double
+        public var lineHeightMultiplier: Double
+        public var color: PDFColor
+        public var backgroundColor: PDFColor?
+        public var borderColor: PDFColor?
+        public var underline: Bool
+        public var spacingBeforeMultiplier: Double
+        public var spacingAfterMultiplier: Double
+    }
 }
 
-public struct ElementStyle: Equatable, Sendable {
-    public var font: StandardFont
-    public var size: Double
-    public var color: PDFColor
-    public var bold: Bool, italic: Bool, underline: Bool
-    public var spacingBefore: Double, spacingAfter: Double
+extension PDFOptions {
+    public struct CodeSyntaxTheme: Equatable, Sendable {
+        public var text: PDFColor
+        public var keyword: PDFColor
+        public var identifier: PDFColor
+        public var string: PDFColor
+        public var number: PDFColor
+        public var comment: PDFColor
+        public var operatorToken: PDFColor
+        public var punctuation: PDFColor
+        public var error: PDFColor
+    }
 }
 
-public struct CodeSyntaxTheme: Equatable, Sendable {
-    public var base: PDFColor                                   // default token
-    public var byKind: [SourceCodeTokenKind: PDFColor]         // #120 surface
-    public func color(for k: SourceCodeTokenKind) -> PDFColor { byKind[k] ?? base }
-}
-
-public struct Theme: Equatable, Sendable {
-    public var palette: Palette
-    public var elements: [ElementRole: ElementStyle]
-    public var code: CodeSyntaxTheme
-    public func style(for role: ElementRole) -> ElementStyle { elements[role] ?? .body(palette) }
+extension PDFOptions {
+    public struct Theme: Equatable, Sendable {
+        public var palette: Palette
+        public var pageBackground: PDFColor?
+        public var elements: [ElementRole: ElementStyle]
+        public var codeSyntax: CodeSyntaxTheme
+        public func style(for role: ElementRole) -> ElementStyle {
+            elements[role] ?? elements[.body]!
+        }
+    }
 }
 ```
 
 Built-ins resolve to concrete values:
 
 ```swift
-extension Theme {
+extension PDFOptions.Theme {
     public static let `default` = Theme(/* current output, verbatim */)
-    public static let dark      = Theme(/* base00-07 ramp reversed */)
-    public static let print     = Theme(/* grayscale-only, no hue accents */)
+    public static let dark = Theme(/* dark page background and base16 accents */)
+    public static let print = Theme(/* grayscale-only palette */)
 }
 ```
 
@@ -125,21 +160,21 @@ Wiring (one new defaulted field, source-compatible):
 
 ```swift
 public struct PDFOptions {
-    public var theme: Theme = .default   // append to the initializer with a default
+    public var theme: Theme = .default
 }
 ```
 
 The renderer already builds `PDFTextRun(color:)` (default `.black`). Per-element
 resolution replaces the literal `.black`/`.gray`/`.link` constants with
-`theme.style(for: role).color`, and code runs use `theme.code.color(for: kind)`.
+`theme.style(for: role).color`, and code runs use `theme.codeSyntax` colors.
 Because `.default` reproduces today's `PDFColor.black/.gray/.link` and current
 sizes, default output is byte-identical and the existing snapshot witnesses stay
 green.
 
 Backward compatibility contract: `Theme.default` MUST encode exactly the current
-hard-coded values. The first PR is a pure refactor (introduce `Theme`, route the
-existing constants through `.default`) with zero pixel diff, proven by the
-current raster and extraction witnesses before any new theme ships.
+hard-coded values. In #130, explicit `.default` is byte-identical to the implicit
+default renderer for a mixed document witness, and the minimal canonical PDF
+witness remains unchanged.
 
 Contrast helper (pure Swift, for witnesses), per the WebAIM formula:
 
@@ -166,29 +201,28 @@ func contrastRatio(_ a: PDFColor, _ b: PDFColor) -> Double {
 
 ## Witness policy
 
-Any theming PR must prove:
+#130 proves:
 
-- `Theme.default` produces byte-identical PDFs to pre-theme output (raster +
-  `pdftotext` extraction unchanged) for the existing fixture corpus.
-- Each built-in theme's body-text-on-background pair passes WCAG 2.1 4.5:1, and
-  large-heading pairs pass 3:1, via the pure-Swift `contrastRatio` helper.
-- The `print` theme is grayscale-safe: rasterizing then desaturating keeps all
-  text/background pairs above 4.5:1, so it survives black-and-white printing.
-- Resolution is total: a property test over all `ElementRole` and
-  `SourceCodeTokenKind` cases returns a concrete style with no fallback gap.
-- Code-syntax colors leave `pdftotext` extraction identical to uncolored code
-  and keep Poppler/MuPDF token boxes non-overlapping (inherits #120 policy).
-- qpdf validates structure with no warnings for every built-in theme.
-- macOS and Linux produce equivalent results within existing raster tolerance.
+- `PDFOptions.Theme.default` produces byte-identical PDFs to the implicit
+  default renderer for a mixed document.
+- `dark` and `print` produce valid PDFs under `qpdf --check`.
+- `pdftotext` extraction is unchanged across `default`, `dark`, and `print`.
+- Every built-in theme's element text and code token colors pass the WCAG 2.1
+  4.5:1 contrast gate against their resolved backgrounds.
+- The minimal canonical PDF witness remains unchanged, proving `.default` does
+  not add an explicit background or new resources.
 
 ## Ordered work
 
-1. #130 Land this model doc and the `Theme`/`Palette`/`ElementStyle` value types.
-2. Refactor renderer to route current constants through `Theme.default`; prove
-   zero pixel diff.
-3. Add `contrastRatio` helper + WCAG witness; gate built-ins on 4.5:1.
-4. Ship `dark` and `print` built-ins behind the contrast/grayscale witnesses.
-5. Expose `code: CodeSyntaxTheme` and wire it to the #120 token kinds (opt-in).
+1. Done in #130: land the `PDFOptions.Theme`/`Palette`/`ElementStyle` value
+   types.
+2. Done in #130: route renderer constants through `Theme.default` and prove
+   explicit default byte identity.
+3. Done in #130: add a pure-Swift WCAG contrast witness for built-ins.
+4. Done in #130: ship `dark` and `print` built-ins with qpdf and extraction
+   witnesses.
+5. Done in #130: expose `codeSyntax: CodeSyntaxTheme` and wire it to the #120
+   tokenizer colors.
 6. Future: DTCG-shaped JSON load/save; add APCA as a secondary advisory metric.
 
 ## Platform notes

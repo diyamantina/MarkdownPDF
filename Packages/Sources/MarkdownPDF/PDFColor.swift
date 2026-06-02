@@ -1,14 +1,20 @@
 import Foundation
 
-struct PDFColor: Equatable {
-    var red: Double
-    var green: Double
-    var blue: Double
+public struct PDFColor: Equatable, Sendable {
+    public var red: Double
+    public var green: Double
+    public var blue: Double
 
-    static let black = PDFColor(red: 0, green: 0, blue: 0)
-    static let white = PDFColor(red: 1, green: 1, blue: 1)
-    static let link = PDFColor(red: 0.05, green: 0.24, blue: 0.62)
-    static let gray = PDFColor(red: 0.35, green: 0.35, blue: 0.35)
+    public init(red: Double, green: Double, blue: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+
+    public static let black = PDFColor(red: 0, green: 0, blue: 0)
+    public static let white = PDFColor(red: 1, green: 1, blue: 1)
+    public static let link = PDFColor(red: 0.05, green: 0.24, blue: 0.62)
+    public static let gray = PDFColor(red: 0.35, green: 0.35, blue: 0.35)
     static let sourceCodeKeyword = PDFColor(red: 0.05, green: 0.2, blue: 0.55)
     static let sourceCodeString = PDFColor(red: 0.5, green: 0.18, blue: 0.05)
     static let sourceCodeNumber = PDFColor(red: 0.34, green: 0.18, blue: 0.55)

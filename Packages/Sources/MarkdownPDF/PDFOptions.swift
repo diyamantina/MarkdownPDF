@@ -9,6 +9,7 @@ public struct PDFOptions: Equatable, Sendable {
     public var title: String?
     public var tableOfContents: TableOfContents
     public var codeSyntaxHighlighting: CodeSyntaxHighlighting
+    public var theme: Theme
     public var streamCompression: StreamCompression
     public var taggedPDF: TaggedPDF
     public var conformance: Conformance
@@ -22,6 +23,7 @@ public struct PDFOptions: Equatable, Sendable {
         title: String? = nil,
         tableOfContents: TableOfContents = .disabled,
         codeSyntaxHighlighting: CodeSyntaxHighlighting = .disabled,
+        theme: Theme = .default,
         streamCompression: StreamCompression = .disabled,
         taggedPDF: TaggedPDF = .disabled,
         conformance: Conformance = .none,
@@ -34,6 +36,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.title = title
         self.tableOfContents = tableOfContents
         self.codeSyntaxHighlighting = codeSyntaxHighlighting
+        self.theme = theme
         self.streamCompression = streamCompression
         self.taggedPDF = taggedPDF
         self.conformance = conformance
@@ -213,6 +216,376 @@ public struct PDFOptions: Equatable, Sendable {
         public static let enabled = CodeSyntaxHighlighting(isEnabled: true)
     }
 
+    /// A complete document theme resolved by the portable renderer.
+    ///
+    /// Sizes, line heights, and spacing are multipliers of ``baseFontSize``.
+    /// Colors are emitted as PDF DeviceRGB values. The default theme preserves
+    /// the renderer's historical output and does not draw an explicit page
+    /// background, so default PDFs remain byte-stable.
+    public struct Theme: Equatable, Sendable {
+        public var palette: Palette
+        public var pageBackground: PDFColor?
+        public var elements: [ElementRole: ElementStyle]
+        public var codeSyntax: CodeSyntaxTheme
+
+        public init(
+            palette: Palette,
+            pageBackground: PDFColor? = nil,
+            elements: [ElementRole: ElementStyle],
+            codeSyntax: CodeSyntaxTheme,
+        ) {
+            self.palette = palette
+            self.pageBackground = pageBackground
+            self.elements = elements
+            self.codeSyntax = codeSyntax
+        }
+
+        public func style(for role: ElementRole) -> ElementStyle {
+            elements[role] ?? elements[.body] ?? ElementStyle(fontRole: .regular, color: palette.foreground)
+        }
+
+        public static let `default` = Theme(
+            palette: .default,
+            elements: Self.defaultElements(palette: .default),
+            codeSyntax: .default,
+        )
+
+        public static let dark = Theme(
+            palette: .dark,
+            pageBackground: Palette.dark.background,
+            elements: Self.darkElements(palette: .dark),
+            codeSyntax: .dark,
+        )
+
+        public static let print = Theme(
+            palette: .print,
+            elements: Self.printElements(palette: .print),
+            codeSyntax: .print,
+        )
+
+        public static var builtInThemes: [Theme] {
+            [.default, .dark, .print]
+        }
+    }
+
+    public struct Palette: Equatable, Sendable {
+        public var base00: PDFColor
+        public var base01: PDFColor
+        public var base02: PDFColor
+        public var base03: PDFColor
+        public var base04: PDFColor
+        public var base05: PDFColor
+        public var base06: PDFColor
+        public var base07: PDFColor
+        public var base08: PDFColor
+        public var base09: PDFColor
+        public var base0A: PDFColor
+        public var base0B: PDFColor
+        public var base0C: PDFColor
+        public var base0D: PDFColor
+        public var base0E: PDFColor
+        public var base0F: PDFColor
+
+        public init(
+            base00: PDFColor,
+            base01: PDFColor,
+            base02: PDFColor,
+            base03: PDFColor,
+            base04: PDFColor,
+            base05: PDFColor,
+            base06: PDFColor,
+            base07: PDFColor,
+            base08: PDFColor,
+            base09: PDFColor,
+            base0A: PDFColor,
+            base0B: PDFColor,
+            base0C: PDFColor,
+            base0D: PDFColor,
+            base0E: PDFColor,
+            base0F: PDFColor,
+        ) {
+            self.base00 = base00
+            self.base01 = base01
+            self.base02 = base02
+            self.base03 = base03
+            self.base04 = base04
+            self.base05 = base05
+            self.base06 = base06
+            self.base07 = base07
+            self.base08 = base08
+            self.base09 = base09
+            self.base0A = base0A
+            self.base0B = base0B
+            self.base0C = base0C
+            self.base0D = base0D
+            self.base0E = base0E
+            self.base0F = base0F
+        }
+
+        public var background: PDFColor {
+            base00
+        }
+
+        public var foreground: PDFColor {
+            base07
+        }
+
+        public var mutedForeground: PDFColor {
+            base04
+        }
+
+        public var border: PDFColor {
+            base03
+        }
+
+        public var surface: PDFColor {
+            base01
+        }
+
+        public var raisedSurface: PDFColor {
+            base02
+        }
+
+        public var link: PDFColor {
+            base0D
+        }
+
+        public var accents: [PDFColor] {
+            [base08, base09, base0A, base0B, base0C, base0D, base0E, base0F]
+        }
+
+        public static let `default` = Palette(
+            base00: .white,
+            base01: PDFColor(red: 0.98, green: 0.985, blue: 0.99),
+            base02: PDFColor(red: 0.95, green: 0.95, blue: 0.95),
+            base03: .gray,
+            base04: .gray,
+            base05: PDFColor(red: 0.2, green: 0.2, blue: 0.2),
+            base06: PDFColor(red: 0.1, green: 0.1, blue: 0.1),
+            base07: .black,
+            base08: PDFColor(red: 0.89, green: 0.10, blue: 0.11),
+            base09: PDFColor(red: 0.89, green: 0.47, blue: 0.20),
+            base0A: PDFColor(red: 0.74, green: 0.74, blue: 0.13),
+            base0B: PDFColor(red: 0.20, green: 0.63, blue: 0.17),
+            base0C: PDFColor(red: 0.11, green: 0.47, blue: 0.71),
+            base0D: .link,
+            base0E: PDFColor(red: 0.58, green: 0.40, blue: 0.74),
+            base0F: PDFColor(red: 0.55, green: 0.34, blue: 0.29),
+        )
+
+        public static let dark = Palette(
+            base00: PDFColor(red: 0.08, green: 0.08, blue: 0.09),
+            base01: PDFColor(red: 0.13, green: 0.14, blue: 0.16),
+            base02: PDFColor(red: 0.18, green: 0.20, blue: 0.23),
+            base03: PDFColor(red: 0.35, green: 0.39, blue: 0.44),
+            base04: PDFColor(red: 0.72, green: 0.76, blue: 0.80),
+            base05: PDFColor(red: 0.84, green: 0.87, blue: 0.90),
+            base06: PDFColor(red: 0.90, green: 0.92, blue: 0.94),
+            base07: PDFColor(red: 0.96, green: 0.97, blue: 0.98),
+            base08: PDFColor(red: 1.00, green: 0.55, blue: 0.58),
+            base09: PDFColor(red: 1.00, green: 0.68, blue: 0.38),
+            base0A: PDFColor(red: 0.94, green: 0.82, blue: 0.42),
+            base0B: PDFColor(red: 0.53, green: 0.82, blue: 0.56),
+            base0C: PDFColor(red: 0.46, green: 0.82, blue: 0.86),
+            base0D: PDFColor(red: 0.54, green: 0.72, blue: 1.00),
+            base0E: PDFColor(red: 0.78, green: 0.64, blue: 1.00),
+            base0F: PDFColor(red: 0.82, green: 0.64, blue: 0.50),
+        )
+
+        public static let print = Palette(
+            base00: .white,
+            base01: PDFColor(red: 0.98, green: 0.98, blue: 0.98),
+            base02: PDFColor(red: 0.94, green: 0.94, blue: 0.94),
+            base03: PDFColor(red: 0.42, green: 0.42, blue: 0.42),
+            base04: PDFColor(red: 0.30, green: 0.30, blue: 0.30),
+            base05: PDFColor(red: 0.18, green: 0.18, blue: 0.18),
+            base06: PDFColor(red: 0.08, green: 0.08, blue: 0.08),
+            base07: .black,
+            base08: PDFColor(red: 0.12, green: 0.12, blue: 0.12),
+            base09: PDFColor(red: 0.18, green: 0.18, blue: 0.18),
+            base0A: PDFColor(red: 0.24, green: 0.24, blue: 0.24),
+            base0B: PDFColor(red: 0.30, green: 0.30, blue: 0.30),
+            base0C: PDFColor(red: 0.36, green: 0.36, blue: 0.36),
+            base0D: PDFColor(red: 0.12, green: 0.12, blue: 0.12),
+            base0E: PDFColor(red: 0.24, green: 0.24, blue: 0.24),
+            base0F: PDFColor(red: 0.18, green: 0.18, blue: 0.18),
+        )
+    }
+
+    public enum ElementRole: CaseIterable, Hashable, Sendable {
+        case body
+        case paragraph
+        case heading1
+        case heading2
+        case heading3
+        case heading4
+        case heading5
+        case heading6
+        case blockQuote
+        case list
+        case listMarker
+        case link
+        case inlineCode
+        case codeBlock
+        case tableHeader
+        case tableCell
+        case thematicBreak
+        case footnote
+        case html
+        case imagePlaceholder
+
+        public static func heading(level: Int) -> ElementRole {
+            switch level {
+            case 1:
+                .heading1
+            case 2:
+                .heading2
+            case 3:
+                .heading3
+            case 4:
+                .heading4
+            case 5:
+                .heading5
+            default:
+                .heading6
+            }
+        }
+    }
+
+    public enum FontRole: Equatable, Sendable {
+        case regular
+        case bold
+        case italic
+        case monospaced
+    }
+
+    public struct ElementStyle: Equatable, Sendable {
+        public var fontRole: FontRole
+        public var sizeMultiplier: Double
+        public var lineHeightMultiplier: Double
+        public var color: PDFColor
+        public var backgroundColor: PDFColor?
+        public var borderColor: PDFColor?
+        public var underline: Bool
+        public var spacingBeforeMultiplier: Double
+        public var spacingAfterMultiplier: Double
+
+        public init(
+            fontRole: FontRole,
+            sizeMultiplier: Double = 1,
+            lineHeightMultiplier: Double = 1.24,
+            color: PDFColor,
+            backgroundColor: PDFColor? = nil,
+            borderColor: PDFColor? = nil,
+            underline: Bool = false,
+            spacingBeforeMultiplier: Double = 0,
+            spacingAfterMultiplier: Double = 0,
+        ) {
+            self.fontRole = fontRole
+            self.sizeMultiplier = sizeMultiplier
+            self.lineHeightMultiplier = lineHeightMultiplier
+            self.color = color
+            self.backgroundColor = backgroundColor
+            self.borderColor = borderColor
+            self.underline = underline
+            self.spacingBeforeMultiplier = spacingBeforeMultiplier
+            self.spacingAfterMultiplier = spacingAfterMultiplier
+        }
+    }
+
+    public struct CodeSyntaxTheme: Equatable, Sendable {
+        public var text: PDFColor
+        public var keyword: PDFColor
+        public var identifier: PDFColor
+        public var string: PDFColor
+        public var number: PDFColor
+        public var comment: PDFColor
+        public var operatorToken: PDFColor
+        public var punctuation: PDFColor
+        public var error: PDFColor
+
+        public init(
+            text: PDFColor,
+            keyword: PDFColor,
+            identifier: PDFColor,
+            string: PDFColor,
+            number: PDFColor,
+            comment: PDFColor,
+            operatorToken: PDFColor,
+            punctuation: PDFColor,
+            error: PDFColor,
+        ) {
+            self.text = text
+            self.keyword = keyword
+            self.identifier = identifier
+            self.string = string
+            self.number = number
+            self.comment = comment
+            self.operatorToken = operatorToken
+            self.punctuation = punctuation
+            self.error = error
+        }
+
+        public static let `default` = CodeSyntaxTheme(
+            text: .black,
+            keyword: .sourceCodeKeyword,
+            identifier: .black,
+            string: .sourceCodeString,
+            number: .sourceCodeNumber,
+            comment: .sourceCodeComment,
+            operatorToken: .sourceCodeOperator,
+            punctuation: .sourceCodePunctuation,
+            error: .black,
+        )
+
+        public static let dark = CodeSyntaxTheme(
+            text: Palette.dark.foreground,
+            keyword: Palette.dark.base0D,
+            identifier: Palette.dark.foreground,
+            string: Palette.dark.base0B,
+            number: Palette.dark.base0E,
+            comment: Palette.dark.base04,
+            operatorToken: Palette.dark.base05,
+            punctuation: Palette.dark.base05,
+            error: Palette.dark.base08,
+        )
+
+        public static let print = CodeSyntaxTheme(
+            text: Palette.print.foreground,
+            keyword: Palette.print.base0D,
+            identifier: Palette.print.foreground,
+            string: Palette.print.base04,
+            number: Palette.print.base05,
+            comment: Palette.print.base03,
+            operatorToken: Palette.print.base05,
+            punctuation: Palette.print.base05,
+            error: Palette.print.foreground,
+        )
+
+        func color(for tokenKind: SourceCodeTokenKind) -> PDFColor {
+            switch tokenKind {
+            case .text:
+                text
+            case .keyword:
+                keyword
+            case .identifier:
+                identifier
+            case .string:
+                string
+            case .number:
+                number
+            case .comment:
+                comment
+            case .operatorToken:
+                operatorToken
+            case .punctuation:
+                punctuation
+            case .error:
+                error
+            }
+        }
+    }
+
     /// Controls opt-in FlateDecode compression for PDF streams written by the
     /// portable renderer.
     ///
@@ -303,5 +676,187 @@ public struct PDFOptions: Equatable, Sendable {
                 "default PDF"
             }
         }
+    }
+}
+
+private extension PDFOptions.Theme {
+    static func defaultElements(palette: PDFOptions.Palette) -> [PDFOptions.ElementRole: PDFOptions.ElementStyle] {
+        baseElements(
+            palette: palette,
+            bodyColor: .black,
+            mutedColor: .gray,
+            linkColor: .link,
+            codeBackground: PDFColor(red: 0.95, green: 0.95, blue: 0.95),
+            tableHeaderBackground: PDFColor(red: 0.93, green: 0.93, blue: 0.93),
+            tableBorder: .gray,
+        )
+    }
+
+    static func darkElements(palette: PDFOptions.Palette) -> [PDFOptions.ElementRole: PDFOptions.ElementStyle] {
+        baseElements(
+            palette: palette,
+            bodyColor: palette.foreground,
+            mutedColor: palette.mutedForeground,
+            linkColor: palette.link,
+            codeBackground: palette.surface,
+            tableHeaderBackground: palette.raisedSurface,
+            tableBorder: palette.border,
+        )
+    }
+
+    static func printElements(palette: PDFOptions.Palette) -> [PDFOptions.ElementRole: PDFOptions.ElementStyle] {
+        baseElements(
+            palette: palette,
+            bodyColor: palette.foreground,
+            mutedColor: palette.mutedForeground,
+            linkColor: palette.link,
+            codeBackground: palette.raisedSurface,
+            tableHeaderBackground: palette.raisedSurface,
+            tableBorder: palette.border,
+        )
+    }
+
+    static func baseElements(
+        palette _: PDFOptions.Palette,
+        bodyColor: PDFColor,
+        mutedColor: PDFColor,
+        linkColor: PDFColor,
+        codeBackground: PDFColor,
+        tableHeaderBackground: PDFColor,
+        tableBorder: PDFColor,
+    ) -> [PDFOptions.ElementRole: PDFOptions.ElementStyle] {
+        [
+            .body: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                color: bodyColor,
+            ),
+            .paragraph: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                lineHeightMultiplier: 1.24,
+                color: bodyColor,
+                spacingAfterMultiplier: 6.0 / 11.0,
+            ),
+            .heading1: PDFOptions.ElementStyle(
+                fontRole: .bold,
+                sizeMultiplier: 2.0,
+                lineHeightMultiplier: 1.25,
+                color: bodyColor,
+                spacingBeforeMultiplier: 1.4,
+                spacingAfterMultiplier: 0.5,
+            ),
+            .heading2: PDFOptions.ElementStyle(
+                fontRole: .bold,
+                sizeMultiplier: 1.55,
+                lineHeightMultiplier: 1.25,
+                color: bodyColor,
+                spacingBeforeMultiplier: 1.8,
+                spacingAfterMultiplier: 0.5,
+            ),
+            .heading3: PDFOptions.ElementStyle(
+                fontRole: .bold,
+                sizeMultiplier: 1.3,
+                lineHeightMultiplier: 1.25,
+                color: bodyColor,
+                spacingBeforeMultiplier: 1.45,
+                spacingAfterMultiplier: 0.5,
+            ),
+            .heading4: PDFOptions.ElementStyle(
+                fontRole: .bold,
+                sizeMultiplier: 1.1,
+                lineHeightMultiplier: 1.25,
+                color: bodyColor,
+                spacingBeforeMultiplier: 0.95,
+                spacingAfterMultiplier: 0.5,
+            ),
+            .heading5: PDFOptions.ElementStyle(
+                fontRole: .bold,
+                sizeMultiplier: 1.1,
+                lineHeightMultiplier: 1.25,
+                color: bodyColor,
+                spacingBeforeMultiplier: 0.5,
+                spacingAfterMultiplier: 0.5,
+            ),
+            .heading6: PDFOptions.ElementStyle(
+                fontRole: .bold,
+                sizeMultiplier: 1.1,
+                lineHeightMultiplier: 1.25,
+                color: bodyColor,
+                spacingBeforeMultiplier: 0.5,
+                spacingAfterMultiplier: 0.5,
+            ),
+            .blockQuote: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                color: bodyColor,
+                spacingBeforeMultiplier: 0.45,
+                spacingAfterMultiplier: 0.55,
+            ),
+            .list: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                lineHeightMultiplier: 1.15,
+                color: bodyColor,
+                spacingAfterMultiplier: 3.0 / 11.0,
+            ),
+            .listMarker: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                color: bodyColor,
+            ),
+            .link: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                color: linkColor,
+                underline: true,
+            ),
+            .inlineCode: PDFOptions.ElementStyle(
+                fontRole: .monospaced,
+                sizeMultiplier: 0.95,
+                color: bodyColor,
+            ),
+            .codeBlock: PDFOptions.ElementStyle(
+                fontRole: .monospaced,
+                sizeMultiplier: 0.9,
+                lineHeightMultiplier: 1.4,
+                color: bodyColor,
+                backgroundColor: codeBackground,
+                spacingAfterMultiplier: 0.75,
+            ),
+            .tableHeader: PDFOptions.ElementStyle(
+                fontRole: .bold,
+                sizeMultiplier: 0.9,
+                lineHeightMultiplier: 1.35,
+                color: bodyColor,
+                backgroundColor: tableHeaderBackground,
+                borderColor: tableBorder,
+            ),
+            .tableCell: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                sizeMultiplier: 0.9,
+                lineHeightMultiplier: 1.35,
+                color: bodyColor,
+                borderColor: tableBorder,
+            ),
+            .thematicBreak: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                color: mutedColor,
+                borderColor: tableBorder,
+            ),
+            .footnote: PDFOptions.ElementStyle(
+                fontRole: .regular,
+                sizeMultiplier: 0.86,
+                lineHeightMultiplier: 1.32,
+                color: bodyColor,
+                borderColor: mutedColor,
+                spacingAfterMultiplier: 0.35,
+            ),
+            .html: PDFOptions.ElementStyle(
+                fontRole: .monospaced,
+                sizeMultiplier: 0.9,
+                lineHeightMultiplier: 1.35,
+                color: mutedColor,
+                spacingAfterMultiplier: 9.0 / 11.0,
+            ),
+            .imagePlaceholder: PDFOptions.ElementStyle(
+                fontRole: .italic,
+                color: mutedColor,
+            ),
+        ]
     }
 }

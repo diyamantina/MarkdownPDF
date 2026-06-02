@@ -268,6 +268,7 @@ private struct Layout {
             ? PDFTaggedContentBuilder()
             : nil
         y = options.pageSize.height - options.margins.top
+        drawPageBackgroundIfNeeded()
     }
 
     private static func validateConformance(_ options: PDFOptions) throws {
@@ -342,26 +343,29 @@ private struct Layout {
         case let .heading(level, content):
             let element = beginStructureElement(.heading(level: level))
             defer { endStructureElement(element) }
+            let style = style(for: .heading(level: level))
             let size = headingSize(level)
             let topSpacing = headingTopSpacing(level)
             ensureSpace(size * 1.8 + topSpacing)
             addHeadingTopSpacing(topSpacing)
             addHeadingDestination(level: level, content: content, y: y + size * 0.4)
             try drawWrapped(
-                flatten(content, font: .helveticaBold, size: size),
+                flatten(content, font: standardFont(for: style.fontRole), size: size, color: style.color),
                 x: options.margins.left,
                 maxWidth: contentWidth,
-                lineHeight: size * 1.25,
+                lineHeight: size * style.lineHeightMultiplier,
             )
-            y -= size * 0.5
+            y -= size * style.spacingAfterMultiplier
         case let .paragraph(content):
             if try renderStandaloneImage(content) {
                 y -= 12
             } else {
                 let element = beginStructureElement(.paragraph)
                 defer { endStructureElement(element) }
+                let role: PDFOptions.ElementRole = listDepth > 0 ? .list : .paragraph
+                let style = style(for: role)
                 try drawWrapped(
-                    flatten(content, font: .helvetica, size: options.baseFontSize),
+                    flatten(content, font: standardFont(for: style.fontRole), size: fontSize(for: role), color: style.color),
                     x: options.margins.left,
                     maxWidth: contentWidth,
                     lineHeight: bodyLineHeight,
@@ -404,19 +408,20 @@ private struct Layout {
                 x2: options.pageSize.width - options.margins.right,
                 y2: y,
                 width: 0.75,
-                color: .gray,
+                color: style(for: .thematicBreak).borderColor ?? style(for: .thematicBreak).color,
             )
             y -= 18
         case let .html(html):
             let element = beginStructureElement(.paragraph)
             defer { endStructureElement(element) }
+            let style = style(for: .html)
             try drawWrapped(
-                [PDFTextRun(text: html, font: .courier, size: options.baseFontSize * 0.9, color: .gray)],
+                [PDFTextRun(text: html, font: standardFont(for: style.fontRole), size: fontSize(for: .html), color: style.color)],
                 x: options.margins.left,
                 maxWidth: contentWidth,
-                lineHeight: options.baseFontSize * 1.35,
+                lineHeight: fontSize(for: .html) * style.lineHeightMultiplier,
             )
-            y -= 9
+            y -= options.baseFontSize * style.spacingAfterMultiplier
         case .footnoteDefinition:
             break
         }
@@ -439,6 +444,7 @@ private struct Layout {
         let titleSize = options.baseFontSize * 1.55
         let entrySize = options.baseFontSize * 0.95
         let lineHeight = entrySize * 1.35
+        let titleStyle = style(for: .heading2)
         let widestPageNumber = try entries
             .map { try textWidth(PDFTextRun(text: "\($0.pageNumber)", font: .helvetica, size: entrySize)) }
             .max() ?? 0
@@ -448,7 +454,14 @@ private struct Layout {
         ensureSpace(titleSize * 2.2 + lineHeight)
         let titleElement = beginStructureElement(.paragraph)
         try drawRuns(
-            [PDFTextRun(text: title.isEmpty ? "Table of Contents" : title, font: .helveticaBold, size: titleSize)],
+            [
+                PDFTextRun(
+                    text: title.isEmpty ? "Table of Contents" : title,
+                    font: standardFont(for: titleStyle.fontRole),
+                    size: titleSize,
+                    color: titleStyle.color,
+                ),
+            ],
             x: options.margins.left,
             y: y,
         )
@@ -479,7 +492,9 @@ private struct Layout {
         let indent = Double(max(0, entry.level - 1)) * 14
         let x = options.margins.left + indent
         let pageText = "\(entry.pageNumber)"
-        let pageRun = PDFTextRun(text: pageText, font: .helvetica, size: entrySize)
+        let bodyStyle = style(for: .body)
+        let linkStyle = style(for: .link)
+        let pageRun = PDFTextRun(text: pageText, font: standardFont(for: bodyStyle.fontRole), size: entrySize, color: bodyStyle.color)
         let pageRunWidth = try textWidth(pageRun)
         let pageX = options.pageSize.width - options.margins.right - pageRunWidth
         let titleWidth = max(36, contentWidth - indent - pageColumnWidth - 10)
@@ -487,9 +502,9 @@ private struct Layout {
             [
                 PDFTextRun(
                     text: entry.title,
-                    font: .helvetica,
+                    font: standardFont(for: bodyStyle.fontRole),
                     size: entrySize,
-                    color: .link,
+                    color: linkStyle.color,
                     linkDestination: "#\(entry.destinationName)",
                 ),
             ],
@@ -527,7 +542,9 @@ private struct Layout {
             x2: endX,
             y2: y,
             width: 0.25,
-            color: PDFColor(red: 0.72, green: 0.72, blue: 0.72),
+            color: options.theme == .default
+                ? PDFColor(red: 0.72, green: 0.72, blue: 0.72)
+                : style(for: .thematicBreak).borderColor ?? PDFColor(red: 0.72, green: 0.72, blue: 0.72),
         )
     }
 
@@ -536,6 +553,7 @@ private struct Layout {
             return
         }
 
+        let footnoteStyle = style(for: .footnote)
         let titleSize = options.baseFontSize * 0.95
         let titleLineHeight = titleSize * 1.35
         ensureSpace(titleLineHeight * 3)
@@ -550,14 +568,14 @@ private struct Layout {
             x2: options.margins.left + min(contentWidth, 120),
             y2: y,
             width: 0.5,
-            color: .gray,
+            color: footnoteStyle.borderColor ?? footnoteStyle.color,
         )
         endMarkedContentIfNeeded(artifact)
         y -= titleLineHeight
 
         let titleElement = beginStructureElement(.paragraph)
         try drawRuns(
-            [PDFTextRun(text: "Footnotes", font: .helveticaBold, size: titleSize)],
+            [PDFTextRun(text: "Footnotes", font: .helveticaBold, size: titleSize, color: footnoteStyle.color)],
             x: options.margins.left,
             y: y,
         )
@@ -570,13 +588,20 @@ private struct Layout {
     }
 
     private mutating func renderFootnote(_ footnote: ResolvedFootnote) throws {
-        let size = options.baseFontSize * 0.86
-        let lineHeight = size * 1.32
+        let footnoteStyle = style(for: .footnote)
+        let linkStyle = style(for: .link)
+        let size = fontSize(for: .footnote)
+        let lineHeight = size * footnoteStyle.lineHeightMultiplier
         let labelWidth = max(22, size * 2.2)
         let bodyX = options.margins.left + labelWidth
         let bodyWidth = max(1, contentWidth - labelWidth)
         let blocks = footnote.blocks.isEmpty ? [.paragraph([])] : footnote.blocks
-        let firstRuns = flatten(footnoteInlines(for: blocks[0]), font: .helvetica, size: size)
+        let firstRuns = flatten(
+            footnoteInlines(for: blocks[0]),
+            font: standardFont(for: footnoteStyle.fontRole),
+            size: size,
+            color: footnoteStyle.color,
+        )
         let firstLines = try wrappedLines(firstRuns, maxWidth: bodyWidth)
 
         ensureSpace(lineHeight)
@@ -586,10 +611,10 @@ private struct Layout {
             [
                 PDFTextRun(
                     text: "\(footnote.number).",
-                    font: .helvetica,
+                    font: standardFont(for: footnoteStyle.fontRole),
                     size: size,
-                    color: .link,
-                    underline: true,
+                    color: linkStyle.color,
+                    underline: linkStyle.underline,
                     linkDestination: "#\(footnote.referenceDestinationName)",
                 ),
             ],
@@ -612,7 +637,7 @@ private struct Layout {
         for block in blocks.dropFirst() {
             try renderFootnoteBlock(block, x: bodyX, maxWidth: bodyWidth, size: size, lineHeight: lineHeight)
         }
-        y -= max(2, size * 0.35)
+        y -= max(2, size * footnoteStyle.spacingAfterMultiplier)
     }
 
     private mutating func renderFootnoteBlock(
@@ -624,8 +649,9 @@ private struct Layout {
     ) throws {
         let element = beginStructureElement(.paragraph)
         defer { endStructureElement(element) }
+        let footnoteStyle = style(for: .footnote)
         try drawWrapped(
-            flatten(footnoteInlines(for: block), font: .helvetica, size: size),
+            flatten(footnoteInlines(for: block), font: standardFont(for: footnoteStyle.fontRole), size: size, color: footnoteStyle.color),
             x: x,
             maxWidth: maxWidth,
             lineHeight: lineHeight,
@@ -671,8 +697,16 @@ private struct Layout {
             ensureSpace(bodyLineHeight)
             if start != nil {
                 let labelElement = beginStructureElement(.listLabel)
+                let markerStyle = style(for: .listMarker)
                 try drawRuns(
-                    [PDFTextRun(text: "\(number).", font: .helvetica, size: options.baseFontSize)],
+                    [
+                        PDFTextRun(
+                            text: "\(number).",
+                            font: standardFont(for: markerStyle.fontRole),
+                            size: fontSize(for: .listMarker),
+                            color: markerStyle.color,
+                        ),
+                    ],
                     x: options.margins.left,
                     y: y,
                     applyBidi: false,
@@ -705,13 +739,14 @@ private struct Layout {
         let size = max(7, options.baseFontSize * 0.72)
         let boxX = x + max(0, (16 - size) / 2)
         let boxY = baselineY - size * 0.2
+        let markerColor = style(for: .listMarker).color
         let marked = beginMarkedContentForCurrentElement()
         currentPage.drawRectangle(
             x: boxX,
             y: boxY,
             width: size,
             height: size,
-            stroke: .black,
+            stroke: markerColor,
             fill: nil,
         )
 
@@ -723,6 +758,7 @@ private struct Layout {
                     PDFPageCanvas.Point(x: boxX + size * 0.82, y: boxY + size * 0.78),
                 ],
                 width: 1.0,
+                color: markerColor,
             )
         }
         endMarkedContentIfNeeded(marked)
@@ -732,8 +768,9 @@ private struct Layout {
         let codeElement = beginStructureElement(.code)
         defer { endStructureElement(codeElement) }
 
-        let size = options.baseFontSize * 0.9
-        let lineHeight = size * 1.4
+        let codeStyle = style(for: .codeBlock)
+        let size = fontSize(for: .codeBlock)
+        let lineHeight = size * codeStyle.lineHeightMultiplier
         let padding = codeBlockPadding
         let codeAreaWidth = max(1, contentWidth - padding * 2)
         var syntaxHighlighter = syntaxHighlighter(for: info)
@@ -791,15 +828,17 @@ private struct Layout {
         syntaxHighlighter: inout SourceCodeSyntaxHighlighter?,
     ) -> [PDFTextRun] {
         guard var highlighter = syntaxHighlighter else {
-            return [PDFTextRun(text: line, font: .courier, size: size)]
+            let codeStyle = style(for: .codeBlock)
+            return [PDFTextRun(text: line, font: standardFont(for: codeStyle.fontRole), size: size, color: codeStyle.color)]
         }
 
         let tokens = highlighter.tokens(for: line)
         syntaxHighlighter = highlighter
+        let codeStyle = style(for: .codeBlock)
         return tokens.map { token in
             PDFTextRun(
                 text: token.text,
-                font: .courier,
+                font: standardFont(for: codeStyle.fontRole),
                 size: size,
                 color: color(for: token.kind),
             )
@@ -807,22 +846,7 @@ private struct Layout {
     }
 
     private func color(for tokenKind: SourceCodeTokenKind) -> PDFColor {
-        switch tokenKind {
-        case .text, .identifier, .error:
-            .black
-        case .keyword:
-            .sourceCodeKeyword
-        case .string:
-            .sourceCodeString
-        case .number:
-            .sourceCodeNumber
-        case .comment:
-            .sourceCodeComment
-        case .operatorToken:
-            .sourceCodeOperator
-        case .punctuation:
-            .sourceCodePunctuation
-        }
+        options.theme.codeSyntax.color(for: tokenKind)
     }
 
     private func isMermaidCodeBlock(_ info: String?) -> Bool {
@@ -1884,8 +1908,9 @@ private struct Layout {
         defer { endStructureElement(tableElement) }
 
         let cellPadding = 4.0
-        let fontSize = options.baseFontSize * 0.9
-        let lineHeight = fontSize * 1.35
+        let cellStyle = style(for: .tableCell)
+        let fontSize = fontSize(for: .tableCell)
+        let lineHeight = fontSize * cellStyle.lineHeightMultiplier
         let columns = tableColumnCount(table)
         let columnWidths = try measuredTableColumnWidths(
             table,
@@ -2001,11 +2026,11 @@ private struct Layout {
         let headerRuns = tableRuns(
             table.headers,
             column: column,
-            font: .helveticaBold,
+            style: style(for: .tableHeader),
             size: fontSize,
         )
         let bodyRuns = table.rows.map {
-            tableRuns($0, column: column, font: .helvetica, size: fontSize)
+            tableRuns($0, column: column, style: style(for: .tableCell), size: fontSize)
         }
         let allRuns = [headerRuns] + bodyRuns
         let contentWidths = try allRuns.map { try textWidth($0) }
@@ -2030,13 +2055,13 @@ private struct Layout {
     private func tableRuns(
         _ cells: [[MarkdownInline]],
         column: Int,
-        font: StandardFont,
+        style: PDFOptions.ElementStyle,
         size: Double,
     ) -> [PDFTextRun] {
         guard column < cells.count else {
             return []
         }
-        return flatten(cells[column], font: font, size: size)
+        return flatten(cells[column], font: standardFont(for: style.fontRole), size: size, color: style.color)
     }
 
     private func preparedTableRow(
@@ -2050,8 +2075,9 @@ private struct Layout {
         let cellLines = try (0 ..< columns).map { column in
             let cell = column < cells.count ? cells[column] : []
             let width = column < columnWidths.count ? columnWidths[column] : contentWidth / Double(columns)
+            let style = header ? style(for: .tableHeader) : style(for: .tableCell)
             return try wrappedLines(
-                flatten(cell, font: header ? .helveticaBold : .helvetica, size: fontSize),
+                flatten(cell, font: standardFont(for: style.fontRole), size: fontSize, color: style.color),
                 maxWidth: max(1, width - cellPadding * 2),
             )
         }
@@ -2160,8 +2186,16 @@ private struct Layout {
         if source.hasPrefix("http://") || source.hasPrefix("https://") {
             let element = beginStructureElement(.paragraph)
             defer { endStructureElement(element) }
+            let imageStyle = style(for: .imagePlaceholder)
             try drawWrapped(
-                [PDFTextRun(text: "[Remote image: \(alt.isEmpty ? source : alt)]", font: .helveticaOblique, size: options.baseFontSize, color: .gray)],
+                [
+                    PDFTextRun(
+                        text: "[Remote image: \(alt.isEmpty ? source : alt)]",
+                        font: standardFont(for: imageStyle.fontRole),
+                        size: fontSize(for: .imagePlaceholder),
+                        color: imageStyle.color,
+                    ),
+                ],
                 x: options.margins.left,
                 maxWidth: contentWidth,
                 lineHeight: options.baseFontSize * 1.35,
@@ -2232,11 +2266,12 @@ private struct Layout {
             case .lineBreak:
                 runs.append(PDFTextRun(text: "\n", font: font, size: size, color: color, underline: underline, strikethrough: strikethrough, linkDestination: linkDestination))
             case let .code(text):
+                let inlineCodeStyle = style(for: .inlineCode)
                 runs.append(PDFTextRun(
                     text: text,
-                    font: .courier,
-                    size: size * 0.95,
-                    color: color,
+                    font: standardFont(for: inlineCodeStyle.fontRole),
+                    size: size * inlineCodeStyle.sizeMultiplier,
+                    color: color == style(for: .body).color ? inlineCodeStyle.color : color,
                     underline: underline,
                     strikethrough: strikethrough,
                     linkDestination: linkDestination,
@@ -2264,25 +2299,36 @@ private struct Layout {
             case let .strikethrough(children):
                 runs.append(contentsOf: flatten(children, font: font, size: size, color: color, underline: underline, strikethrough: true, linkDestination: linkDestination))
             case let .link(children, destination, _):
-                runs.append(contentsOf: flatten(children, font: font, size: size, color: .link, underline: true, strikethrough: strikethrough, linkDestination: destination))
+                let linkStyle = style(for: .link)
+                runs.append(contentsOf: flatten(
+                    children,
+                    font: font,
+                    size: size,
+                    color: linkStyle.color,
+                    underline: linkStyle.underline,
+                    strikethrough: strikethrough,
+                    linkDestination: destination,
+                ))
             case let .image(alt, source, _):
+                let imageStyle = style(for: .imagePlaceholder)
                 let label = alt.isEmpty ? source : alt
                 runs.append(PDFTextRun(
                     text: "[Image: \(label)]",
-                    font: .helveticaOblique,
+                    font: standardFont(for: imageStyle.fontRole),
                     size: size,
-                    color: .gray,
+                    color: imageStyle.color,
                     underline: underline,
                     strikethrough: strikethrough,
                     linkDestination: linkDestination,
                 ))
             case let .footnoteReference(label):
                 if let footnote = footnotesByLabelKey[footnoteLabelKey(label)] {
+                    let linkStyle = style(for: .link)
                     runs.append(PDFTextRun(
                         text: "\(footnote.number)",
                         font: font,
                         size: size * 0.72,
-                        color: .link,
+                        color: linkStyle.color,
                         underline: false,
                         strikethrough: strikethrough,
                         linkDestination: "#\(footnote.definitionDestinationName)",
@@ -2327,6 +2373,7 @@ private struct Layout {
     ) throws {
         let topY = y
         let height = Double(lines.count) * lineHeight + padding * 2
+        let codeStyle = style(for: .codeBlock)
         let artifact = beginArtifactIfTagged()
         currentPage.drawRectangle(
             x: options.margins.left,
@@ -2334,7 +2381,7 @@ private struct Layout {
             width: contentWidth,
             height: height,
             stroke: nil,
-            fill: PDFColor(red: 0.95, green: 0.95, blue: 0.95),
+            fill: codeStyle.backgroundColor,
         )
         endMarkedContentIfNeeded(artifact)
 
@@ -2388,6 +2435,8 @@ private struct Layout {
         let rowHeight = Double(lineCount) * lineHeight + cellPadding * 2
         let rowBottom = y - rowHeight
         var x = options.margins.left
+        let headerStyle = style(for: .tableHeader)
+        let cellStyle = style(for: .tableCell)
 
         for column in 0 ..< cellLines.count {
             let columnWidth = column < columnWidths.count ? columnWidths[column] : 0
@@ -2397,8 +2446,8 @@ private struct Layout {
                 y: rowBottom,
                 width: columnWidth,
                 height: rowHeight,
-                stroke: .gray,
-                fill: header ? PDFColor(red: 0.93, green: 0.93, blue: 0.93) : nil,
+                stroke: header ? headerStyle.borderColor : cellStyle.borderColor,
+                fill: header ? headerStyle.backgroundColor : cellStyle.backgroundColor,
             )
             endMarkedContentIfNeeded(artifact)
 
@@ -2822,6 +2871,27 @@ private struct Layout {
         }
     }
 
+    private func style(for role: PDFOptions.ElementRole) -> PDFOptions.ElementStyle {
+        options.theme.style(for: role)
+    }
+
+    private func fontSize(for role: PDFOptions.ElementRole) -> Double {
+        options.baseFontSize * style(for: role).sizeMultiplier
+    }
+
+    private func standardFont(for role: PDFOptions.FontRole) -> StandardFont {
+        switch role {
+        case .regular:
+            .helvetica
+        case .bold:
+            .helveticaBold
+        case .italic:
+            .helveticaOblique
+        case .monospaced:
+            .courier
+        }
+    }
+
     private mutating func ensureSpace(_ height: Double) {
         if y - height < options.margins.bottom {
             startNewPage()
@@ -2830,7 +2900,25 @@ private struct Layout {
 
     private mutating func startNewPage() {
         pages.append(PDFPageCanvas())
+        drawPageBackgroundIfNeeded()
         y = pageTopY
+    }
+
+    private mutating func drawPageBackgroundIfNeeded() {
+        guard let background = options.theme.pageBackground else {
+            return
+        }
+
+        let artifact = beginArtifactIfTagged()
+        currentPage.drawRectangle(
+            x: 0,
+            y: 0,
+            width: options.pageSize.width,
+            height: options.pageSize.height,
+            stroke: nil,
+            fill: background,
+        )
+        endMarkedContentIfNeeded(artifact)
     }
 
     private mutating func keepHeadingWithNextBlock(
@@ -2933,18 +3021,7 @@ private struct Layout {
     }
 
     private func headingTopSpacing(_ level: Int) -> Double {
-        switch level {
-        case 1:
-            options.baseFontSize * 1.4
-        case 2:
-            options.baseFontSize * 1.8
-        case 3:
-            options.baseFontSize * 1.45
-        case 4:
-            options.baseFontSize * 0.95
-        default:
-            options.baseFontSize * 0.5
-        }
+        options.baseFontSize * style(for: .heading(level: level)).spacingBeforeMultiplier
     }
 
     private func headingKeepWithNextHeight(_ level: Int) -> Double {
@@ -2959,24 +3036,19 @@ private struct Layout {
     }
 
     private func headingSize(_ level: Int) -> Double {
-        switch level {
-        case 1:
-            options.baseFontSize * 2.0
-        case 2:
-            options.baseFontSize * 1.55
-        case 3:
-            options.baseFontSize * 1.3
-        default:
-            options.baseFontSize * 1.1
-        }
+        fontSize(for: .heading(level: level))
     }
 
     private var bodyLineHeight: Double {
-        options.baseFontSize * (listDepth > 0 ? 1.15 : 1.24)
+        let role: PDFOptions.ElementRole = listDepth > 0 ? .list : .paragraph
+        return fontSize(for: role) * style(for: role).lineHeightMultiplier
     }
 
     private var paragraphSpacing: Double {
-        listDepth > 0 ? 2 : 6
+        if listDepth > 0 {
+            return 2
+        }
+        return options.baseFontSize * style(for: .paragraph).spacingAfterMultiplier
     }
 
     private var codeBlockPadding: Double {
@@ -2984,7 +3056,7 @@ private struct Layout {
     }
 
     private var codeBlockFollowingGap: Double {
-        max(8, options.baseFontSize * 0.75)
+        max(8, options.baseFontSize * style(for: .codeBlock).spacingAfterMultiplier)
     }
 
     private var codeBlockTabWidth: Int {
@@ -2992,15 +3064,18 @@ private struct Layout {
     }
 
     private var listTrailingSpacing: Double {
-        listDepth > 1 ? 1 : 3
+        if listDepth > 1 {
+            return 1
+        }
+        return options.baseFontSize * style(for: .list).spacingAfterMultiplier
     }
 
     private var blockQuoteTopSpacing: Double {
-        options.baseFontSize * 0.45
+        options.baseFontSize * style(for: .blockQuote).spacingBeforeMultiplier
     }
 
     private var blockQuoteBottomSpacing: Double {
-        options.baseFontSize * 0.55
+        options.baseFontSize * style(for: .blockQuote).spacingAfterMultiplier
     }
 
     private var contentWidth: Double {

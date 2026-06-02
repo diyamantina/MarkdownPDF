@@ -238,6 +238,125 @@ struct MarkdownPDFRendererTests {
         #expect(coloredStream.contains("(42)"))
     }
 
+    @Test("Default theme preserves generated PDF bytes")
+    func defaultThemePreservesGeneratedPDFBytes() throws {
+        let markdown = """
+        # Theme Baseline
+
+        Body text with [a link](https://example.com) and `inline code`.
+
+        > Quoted text.
+
+        - [ ] Open task
+        - [x] Done task
+
+        | Name | Value |
+        |---|---:|
+        | Alpha | 42 |
+
+        ```swift
+        let value = "record" + 42
+        ```
+
+        [^n]: Footnote body.
+
+        Footnote ref[^n].
+        """
+
+        let implicitDefault = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled),
+        ).render(markdown: markdown)
+        let explicitDefault = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled, theme: .default),
+        ).render(markdown: markdown)
+
+        #expect(implicitDefault == explicitDefault)
+    }
+
+    @Test("Built-in themes render valid PDFs and preserve extraction")
+    func builtInThemesRenderValidPDFsAndPreserveExtraction() throws {
+        let markdown = """
+        # Themed Document
+
+        Body text with [a link](https://example.com) and `inline code`.
+
+        > A quote keeps contrast and spacing.
+
+        - [ ] Review open task
+        - [x] Review done task
+
+        | Name | Value |
+        |---|---:|
+        | Alpha | 42 |
+
+        ```swift
+        // theme comment
+        let value = "record" + 42
+        ```
+        """
+        let defaultData = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled),
+        ).render(markdown: markdown)
+        let defaultText = try PDFValidation.pdftotext(data: defaultData, name: "theme-default-text")
+        try #require(defaultText.exitCode == 0, "pdftotext failed for default theme:\n\(defaultText.output)")
+
+        for (name, theme) in [("dark", PDFOptions.Theme.dark), ("print", PDFOptions.Theme.print)] {
+            let data = try MarkdownPDFRenderer(
+                options: PDFOptions(codeSyntaxHighlighting: .enabled, theme: theme),
+            ).render(markdown: markdown)
+            let inspector = PDFInspector(data)
+            let qpdf = try PDFValidation.qpdfCheck(data: data, name: "theme-\(name)")
+            let text = try PDFValidation.pdftotext(data: data, name: "theme-\(name)-text")
+
+            #expect(qpdf.exitCode == 0, "qpdf --check failed for \(name):\n\(qpdf.output)")
+            try #require(text.exitCode == 0, "pdftotext failed for \(name):\n\(text.output)")
+            #expect(normalizedExtractedText(text.output) == normalizedExtractedText(defaultText.output))
+            #expect(data != defaultData)
+            #expect(inspector.streams.contains { !$0.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+
+            if name == "dark" {
+                #expect(inspector.streams.map(\.body).joined(separator: "\n").contains("0.080 0.080 0.090 rg"))
+            }
+        }
+    }
+
+    @Test("Built-in themes keep text contrast above WCAG minimum")
+    func builtInThemesKeepTextContrastAboveWCAGMinimum() {
+        for theme in PDFOptions.Theme.builtInThemes {
+            for role in PDFOptions.ElementRole.allCases {
+                let style = theme.style(for: role)
+                let background = style.backgroundColor ?? theme.pageBackground ?? theme.palette.background
+                #expect(
+                    contrastRatio(style.color, background) >= 4.5,
+                    "Low contrast for \(role): \(style.color) on \(background)",
+                )
+            }
+
+            let codeBackground = theme.style(for: .codeBlock).backgroundColor ?? theme.pageBackground ?? theme.palette.background
+            for color in codeSyntaxColors(theme.codeSyntax) {
+                #expect(contrastRatio(color, codeBackground) >= 4.5, "Low code contrast for \(color) on \(codeBackground)")
+            }
+        }
+    }
+
+    @Test("Custom code syntax theme controls token colors")
+    func customCodeSyntaxThemeControlsTokenColors() throws {
+        var theme = PDFOptions.Theme.default
+        theme.codeSyntax.keyword = PDFColor(red: 0.7, green: 0.1, blue: 0.2)
+
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(codeSyntaxHighlighting: .enabled, theme: theme),
+        ).render(markdown: """
+        ```swift
+        let value = 1
+        ```
+        """)
+        let stream = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
+
+        #expect(stream.contains("0.700 0.100 0.200 rg"))
+        #expect(!stream.contains(sourceCodeKeywordOperator))
+    }
+
     @Test("Unsupported code syntax coloring hints render plain")
     func unsupportedCodeSyntaxColoringHintsRenderPlain() throws {
         let data = try MarkdownPDFRenderer(
@@ -1137,6 +1256,40 @@ struct MarkdownPDFRendererTests {
 
     private func normalizedExtractedText(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    private func codeSyntaxColors(_ theme: PDFOptions.CodeSyntaxTheme) -> [PDFColor] {
+        [
+            theme.text,
+            theme.keyword,
+            theme.identifier,
+            theme.string,
+            theme.number,
+            theme.comment,
+            theme.operatorToken,
+            theme.punctuation,
+            theme.error,
+        ]
+    }
+
+    private func contrastRatio(_ first: PDFColor, _ second: PDFColor) -> Double {
+        let firstLuminance = relativeLuminance(first)
+        let secondLuminance = relativeLuminance(second)
+        let lighter = max(firstLuminance, secondLuminance)
+        let darker = min(firstLuminance, secondLuminance)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private func relativeLuminance(_ color: PDFColor) -> Double {
+        0.2126 * linearizedSRGB(color.red)
+            + 0.7152 * linearizedSRGB(color.green)
+            + 0.0722 * linearizedSRGB(color.blue)
+    }
+
+    private func linearizedSRGB(_ channel: Double) -> Double {
+        channel <= 0.03928
+            ? channel / 12.92
+            : pow((channel + 0.055) / 1.055, 2.4)
     }
 }
 
