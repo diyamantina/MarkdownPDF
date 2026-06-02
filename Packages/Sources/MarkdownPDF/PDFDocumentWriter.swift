@@ -8,6 +8,7 @@ struct PDFDocumentWriter {
     var title: String?
     var streamCompression: PDFOptions.StreamCompression = .disabled
     var taggedContent: PDFTaggedContent?
+    var conformance: PDFOptions.Conformance = .none
 
     func data() throws -> Data {
         var builder = Builder(streamCompression: streamCompression)
@@ -25,6 +26,7 @@ struct PDFDocumentWriter {
             )
         })
         let embeddedFontUsages = try Self.mergedEmbeddedFontUsages(from: pages)
+        try validateConformance(usedFonts: usedFonts)
         let embeddedFontResources = try Dictionary(uniqueKeysWithValues: embeddedFontUsages.map { usage in
             try (
                 usage.resource.resourceName,
@@ -91,7 +93,7 @@ struct PDFDocumentWriter {
         let names = resolvedDestinations.isEmpty
             ? nil
             : PDFNamedDestinations(destinations: resolvedDestinations).pdfDictionary
-        let metadata = PDFDocumentMetadata(title: title)
+        let metadata = PDFDocumentMetadata(title: title, conformance: conformance)
         let metadataRefs = metadata.isEmpty ? nil : builder.addMetadata(metadata)
         let taggedRefs = taggedContent.map {
             builder.addTaggedContent($0, pageReferences: pageRefs)
@@ -112,12 +114,23 @@ struct PDFDocumentWriter {
                     structTreeRoot: taggedRefs?.structTreeRoot,
                     language: taggedContent?.language,
                     marked: taggedContent != nil,
-                    displayDocumentTitle: title?.isEmpty == false || taggedContent != nil,
+                    displayDocumentTitle: title?.isEmpty == false || taggedContent != nil || conformance.requiresDocumentTitle,
                 ).pdfDictionary,
             ),
         )
 
         return builder.build(root: catalogRef, info: metadataRefs?.info)
+    }
+
+    private func validateConformance(usedFonts: [StandardFont]) throws {
+        guard conformance.isPDFUA1Enabled, !usedFonts.isEmpty else {
+            return
+        }
+
+        throw MarkdownPDFError.unembeddedBaseFontsForConformance(
+            profile: conformance.displayName,
+            fonts: usedFonts.map { $0.baseName(in: fontSet) },
+        )
     }
 
     private static func mergedEmbeddedFontUsages(from pages: [PDFPageCanvas]) throws -> [PDFEmbeddedFontUsage] {

@@ -37,8 +37,10 @@ The generic renderer currently covers:
 - Opt-in Pure Swift `/FlateDecode` compression for page content streams and
   embedded FontFile2 streams when the encoded bytes are smaller than raw bytes.
 - Opt-in tagged PDF structure output with `/MarkInfo`, `/StructTreeRoot`,
-  `/ParentTree`, page `/StructParents`, and marked-content IDs. This does not
-  claim PDF/UA or PDF/A conformance yet.
+  `/ParentTree`, page `/StructParents`, and marked-content IDs.
+- Opt-in PDF/UA-1 conformance identification through
+  `PDFOptions.Conformance.pdfUA1`, verified with veraPDF on the profile fixture.
+  PDF/A conformance is not claimed yet.
 
 The compatibility target is CommonMark plus GitHub Flavored Markdown tables and
 images. The generated PDF profile is intentionally small, typed, and documented
@@ -123,6 +125,24 @@ let options = PDFOptions(
 )
 
 let markdown = "# Tagged\n\nA PDF with a logical structure spine."
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
+Enable the veraPDF-checked PDF/UA-1 profile:
+
+```swift
+import Foundation
+import MarkdownPDF
+
+let fontData = try Data(contentsOf: URL(fileURLWithPath: "OpenFont.ttf"))
+let source = PDFOptions.EmbeddedFontSource(data: fontData)
+let options = PDFOptions(
+    embeddedFonts: .allRoles(source),
+    title: "Accessible Draft",
+    conformance: .pdfUA1,
+)
+
+let markdown = "# Tagged\n\nA PDF with embedded fonts and logical structure."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
 

@@ -17,7 +17,14 @@ jobs:
       - name: Install runner tools
         run: |
           apt-get update
-          apt-get install -y fonts-dejavu-core git mupdf-tools poppler-utils qpdf
+          apt-get install -y curl default-jre-headless fonts-dejavu-core git mupdf-tools poppler-utils qpdf unzip
+          VERAPDF_VERSION=1.30.1
+          curl -fsSL -o /tmp/verapdf-installer.zip "https://software.verapdf.org/rel/1.30/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip"
+          echo "9f03fc5da454348329f4054256351aa6c6a91683329978e8294f21fe8a5d7abc  /tmp/verapdf-installer.zip" | sha256sum -c -
+          unzip -q /tmp/verapdf-installer.zip -d /tmp/verapdf-installer
+          java -DINSTALL_PATH=/opt/verapdf -jar "/tmp/verapdf-installer/verapdf-greenfield-${VERAPDF_VERSION}/verapdf-izpack-installer-${VERAPDF_VERSION}.jar" -options-system
+          ln -sf /opt/verapdf/verapdf /usr/local/bin/verapdf
+          verapdf --version
       - name: Checkout repository
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}

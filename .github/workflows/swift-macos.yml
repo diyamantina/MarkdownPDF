@@ -30,7 +30,7 @@ jobs:
         env:
           MARKDOWNPDF_ARTIFACT_DIR: ${{ github.workspace }}/rendered-test-artifacts/macos
         run: |
-          brew install mupdf poppler qpdf swiftformat swiftlint
+          brew install mupdf poppler qpdf swiftformat swiftlint verapdf
           brew install --cask font-urw-base35
           brew install --cask font-liberation
           fc-cache -f "$HOME/Library/Fonts" || true

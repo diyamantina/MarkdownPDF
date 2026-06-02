@@ -2,9 +2,10 @@ import Foundation
 
 struct PDFDocumentMetadata {
     var title: String?
+    var conformance: PDFOptions.Conformance = .none
 
     var isEmpty: Bool {
-        cleanTitle == nil
+        cleanTitle == nil && !conformance.isEnabled
     }
 
     var infoDictionary: PDFSyntax.Dictionary {
@@ -38,14 +39,21 @@ struct PDFDocumentMetadata {
             <dc:title><rdf:Alt><rdf:li xml:lang="x-default">\(title.xmlEscaped)</rdf:li></rdf:Alt></dc:title>
             """
         } ?? ""
+        let pdfUAAttributes = conformance.isPDFUA1Enabled
+            ? " xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\""
+            : ""
+        let pdfUAIdentifier = conformance.isPDFUA1Enabled
+            ? "<pdfuaid:part>1</pdfuaid:part>"
+            : ""
 
         return """
         <?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
         <x:xmpmeta xmlns:x="adobe:ns:meta/">
         <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-        <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/">
+        <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/"\(pdfUAAttributes)>
         \(titleXML)
         <pdf:Producer>\(Self.producer.xmlEscaped)</pdf:Producer>
+        \(pdfUAIdentifier)
         </rdf:Description>
         </rdf:RDF>
         </x:xmpmeta>

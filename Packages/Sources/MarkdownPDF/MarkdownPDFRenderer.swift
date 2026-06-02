@@ -100,9 +100,23 @@ private struct Layout {
     init(options: PDFOptions, assetsBaseURL: URL?) throws {
         self.options = options
         self.assetsBaseURL = assetsBaseURL
+        try Self.validateConformance(options)
         embeddedFonts = try PDFEmbeddedFontCatalog(fonts: options.embeddedFonts)
-        taggedContentBuilder = options.taggedPDF.isEnabled ? PDFTaggedContentBuilder() : nil
+        taggedContentBuilder = options.taggedPDF.isEnabled || options.conformance.requiresTaggedPDF
+            ? PDFTaggedContentBuilder()
+            : nil
         y = options.pageSize.height - options.margins.top
+    }
+
+    private static func validateConformance(_ options: PDFOptions) throws {
+        guard options.conformance.requiresDocumentTitle else {
+            return
+        }
+
+        let title = options.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !title.isEmpty else {
+            throw MarkdownPDFError.missingConformanceTitle(profile: options.conformance.displayName)
+        }
     }
 
     mutating func render(
@@ -135,6 +149,7 @@ private struct Layout {
             title: options.title,
             streamCompression: options.streamCompression,
             taggedContent: taggedContentBuilder?.build(language: options.taggedPDF.language),
+            conformance: options.conformance,
         ).data()
     }
 

@@ -11,6 +11,7 @@ public struct PDFOptions: Equatable, Sendable {
     public var codeSyntaxHighlighting: CodeSyntaxHighlighting
     public var streamCompression: StreamCompression
     public var taggedPDF: TaggedPDF
+    public var conformance: Conformance
 
     public init(
         pageSize: PageSize = .a4,
@@ -23,6 +24,7 @@ public struct PDFOptions: Equatable, Sendable {
         codeSyntaxHighlighting: CodeSyntaxHighlighting = .disabled,
         streamCompression: StreamCompression = .disabled,
         taggedPDF: TaggedPDF = .disabled,
+        conformance: Conformance = .none,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -34,6 +36,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.codeSyntaxHighlighting = codeSyntaxHighlighting
         self.streamCompression = streamCompression
         self.taggedPDF = taggedPDF
+        self.conformance = conformance
     }
 
     public struct PageSize: Equatable, Sendable {
@@ -246,5 +249,38 @@ public struct PDFOptions: Equatable, Sendable {
 
         public static let disabled = TaggedPDF(isEnabled: false)
         public static let enabled = TaggedPDF(isEnabled: true)
+    }
+
+    /// Controls opt-in standards identification for generated PDFs.
+    ///
+    /// The default value is ``none`` and claims no conformance profile. The
+    /// PDF/UA-1 profile automatically enables tagged PDF structure and requires
+    /// a non-empty document title before rendering. PDF/A remains unclaimed
+    /// until the renderer can emit and validate the required archival profile.
+    public struct Conformance: Equatable, Sendable {
+        public var isPDFUA1Enabled: Bool
+
+        public init(pdfUA1: Bool) {
+            isPDFUA1Enabled = pdfUA1
+        }
+
+        public static let none = Conformance(pdfUA1: false)
+        public static let pdfUA1 = Conformance(pdfUA1: true)
+
+        var isEnabled: Bool {
+            isPDFUA1Enabled
+        }
+
+        var requiresTaggedPDF: Bool {
+            isPDFUA1Enabled
+        }
+
+        var requiresDocumentTitle: Bool {
+            isPDFUA1Enabled
+        }
+
+        var displayName: String {
+            isPDFUA1Enabled ? "PDF/UA-1" : "default PDF"
+        }
     }
 }

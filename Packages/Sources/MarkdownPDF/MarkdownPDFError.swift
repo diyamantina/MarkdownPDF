@@ -5,6 +5,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
     case unsupportedImage(String)
     case invalidImage(String)
     case tableOfContentsDidNotConverge(maxPasses: Int)
+    case missingConformanceTitle(profile: String)
+    case unembeddedBaseFontsForConformance(profile: String, fonts: [String])
 
     public var errorDescription: String? {
         switch self {
@@ -16,6 +18,10 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Invalid image data at \(path)."
         case let .tableOfContentsDidNotConverge(maxPasses):
             "Generated table of contents page numbers did not converge after \(maxPasses) layout passes."
+        case let .missingConformanceTitle(profile):
+            "\(profile) output requires a non-empty document title."
+        case let .unembeddedBaseFontsForConformance(profile, fonts):
+            "\(profile) output requires embedded font programs for every rendered font role. Missing roles: \(fonts.joined(separator: ", "))."
         }
     }
 
@@ -29,6 +35,10 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Replace the image with valid JPEG or PNG data."
         case .tableOfContentsDidNotConverge:
             "Reduce pagination churn around headings or render without a generated table of contents."
+        case .missingConformanceTitle:
+            "Pass PDFOptions(title:) when enabling the conformance profile."
+        case .unembeddedBaseFontsForConformance:
+            "Pass PDFOptions(embeddedFonts:) with font data for every Markdown role used by the document."
         }
     }
 }

@@ -220,6 +220,20 @@ Tagged/PDF-A output is a new behavior class and must not silently degrade.
 8. Add Matterhorn-derived Swift assertions for the software-checkable failure
    conditions; document the human-judgment conditions as out of automated scope.
 
+## Current implementation status
+
+The portable renderer now has two separate opt-in paths:
+
+- `PDFOptions.taggedPDF` emits the logical structure spine without claiming
+  standards conformance.
+- `PDFOptions.conformance == .pdfUA1` auto-enables tagged structure, requires a
+  non-empty document title, rejects PDF base-font fallback, emits `pdfuaid`
+  XMP identification, and is checked with `verapdf -f ua1 --format json`.
+
+PDF/A remains unclaimed. The remaining archival work is the PDF/A layer:
+validated sRGB ICC output intent, `pdfaid` XMP, document ID handling if needed
+by the chosen profile, and validator fixtures for `verapdf -f 2a`.
+
 ## Platform notes
 
 veraPDF ships as a cross-platform Java application and runs identically on

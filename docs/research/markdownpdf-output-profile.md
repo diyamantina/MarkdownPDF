@@ -40,11 +40,16 @@ The PDF compatibility target is a conservative PDF 1.4 file:
 - Link annotations for URI links and internal destination links.
 - Named destinations, outlines, metadata, and generated ToC when input and
   options require them.
-- Optional tagged PDF structure when `PDFOptions.taggedPDF` is enabled.
+- Optional tagged PDF structure when `PDFOptions.taggedPDF` is enabled or a
+  conformance profile requires it.
+- Optional PDF/UA-1 identification when `PDFOptions.conformance == .pdfUA1`.
 
-The profile does not claim PDF/A, PDF/UA, linearized PDF, incremental updates,
+The profile does not claim PDF/A, linearized PDF, incremental updates,
 encryption, digital signatures, object streams, xref streams, JavaScript
-actions, SVG import, or arbitrary Mermaid language support.
+actions, SVG import, or arbitrary Mermaid language support. PDF/UA-1 is claimed
+only for the opt-in `.pdfUA1` conformance path, which requires tagged structure,
+embedded font programs for rendered text, document title metadata, and a
+veraPDF witness.
 
 ## File envelope
 
@@ -97,8 +102,9 @@ The current order is:
 6. Page dictionary object for each page.
 7. Outline root and outline item objects when headings exist.
 8. Metadata `/Info` dictionary and XMP metadata stream when `PDFOptions.title`
-   is non-empty.
-9. Tagged structure objects when `PDFOptions.taggedPDF` is enabled:
+   is non-empty or `PDFOptions.conformance` requires a metadata declaration.
+9. Tagged structure objects when `PDFOptions.taggedPDF` is enabled or
+   `PDFOptions.conformance` requires tagged structure:
    `/StructTreeRoot`, `/ParentTree`, and `/StructElem` objects.
 
 The minimal one-page text PDF has five in-use objects:
@@ -124,14 +130,15 @@ Optional entries are emitted only when the corresponding feature is active:
 
 - `/Outlines` and `/PageMode /UseOutlines` when headings produce outline items.
 - `/Names << /Dests ... >>` when headings produce named destinations.
-- `/Metadata` when `PDFOptions.title` produces an XMP metadata stream.
+- `/Metadata` when `PDFOptions.title` or `PDFOptions.conformance` produces an
+  XMP metadata stream.
 - `/MarkInfo`, `/StructTreeRoot`, and `/Lang` when `PDFOptions.taggedPDF` is
-  enabled.
+  enabled or a conformance profile requires tagged structure.
 - `/ViewerPreferences << /DisplayDocTitle true >>` when title metadata exists or
-  tagged PDF structure is enabled.
+  tagged PDF structure is enabled. PDF/UA-1 also requires this entry.
 
-The catalog does not emit `/OpenAction`, JavaScript, output intents, PDF/A
-conformance declarations, or PDF/UA conformance declarations.
+The catalog does not emit `/OpenAction`, JavaScript, output intents, or PDF/A
+conformance declarations.
 
 ## Page tree and pages
 
@@ -226,7 +233,8 @@ page bounds or neighboring text.
 
 ## Tagged structure
 
-Tagged structure is opt in through `PDFOptions.taggedPDF`. The writer emits:
+Tagged structure is opt in through `PDFOptions.taggedPDF` and is automatically
+enabled by `PDFOptions.conformance == .pdfUA1`. The writer emits:
 
 - Catalog `/MarkInfo << /Marked true >>`.
 - Catalog `/Lang`, defaulting to `en-US`.
@@ -244,9 +252,13 @@ deterministic fallback description. Table header cells receive column scope.
 Decorative rules, table cell borders, code block backgrounds, and ToC leaders
 are emitted as `/Artifact` marked content.
 
-This profile is a structural spine. It does not claim PDF/UA or PDF/A
-conformance, and it does not yet emit PDF/A output intents or veraPDF
-conformance declarations.
+The structure-only path does not claim PDF/UA or PDF/A conformance. The
+PDF/UA-1 conformance path additionally requires a non-empty document title and
+embedded font programs for every rendered text role, emits `pdfuaid` XMP
+identification, and is validated with `verapdf -f ua1 --format json`.
+
+The renderer does not yet claim PDF/A conformance and does not emit PDF/A output
+intents or `pdfaid` XMP declarations.
 
 ## Tables
 
@@ -471,14 +483,16 @@ witness stack.
 
 ## Metadata
 
-When `PDFOptions.title` is non-empty, the writer emits:
+When `PDFOptions.title` is non-empty or `PDFOptions.conformance` is enabled,
+the writer emits:
 
 - Trailer `/Info` reference.
 - `/Title` and `/Producer` in the info dictionary.
 - XMP `/Metadata` stream referenced by the catalog.
 - `/ViewerPreferences << /DisplayDocTitle true >>`.
 
-`/Producer` is deterministic and currently `MarkdownPDF`.
+`/Producer` is deterministic and currently `MarkdownPDF`. The PDF/UA-1
+conformance path also writes `pdfuaid:part` with value `1` in XMP.
 
 The current profile does not emit document `/ID` values. It also does not claim
 PDF/A metadata, output intents, or conformance declarations.
@@ -529,12 +543,14 @@ Linux CI installs:
 - `qpdf`.
 - `poppler-utils`.
 - `mupdf-tools`.
+- `veraPDF`.
 
 macOS CI installs:
 
 - `qpdf`.
 - `poppler`.
 - `mupdf`.
+- `verapdf`.
 - `font-urw-base35`.
 
 macOS CI refreshes fontconfig after installing Base35 fonts so Poppler raster
@@ -553,10 +569,7 @@ The following remain future profiles or unsupported features:
 - Linearization.
 - Encryption and permission dictionaries.
 - Digital signatures.
-- PDF/UA validation and full conformance declarations.
 - PDF/A output intents, metadata, and conformance declarations.
-- Embedded fonts and font subsetting.
-- `/ToUnicode` maps.
 - Complex-script shaping and bidirectional text.
 - SVG import.
 - General chart or graph rendering beyond the documented Mermaid subset.

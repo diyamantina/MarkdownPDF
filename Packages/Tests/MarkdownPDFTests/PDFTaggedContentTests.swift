@@ -102,6 +102,62 @@ struct PDFTaggedContentTests {
         #expect(extractedText.output.contains("A paragraph with strong text."))
     }
 
+    @Test("Renderer writes a PDF/UA-1 profile when requested")
+    func rendererWritesPDFUA1ProfileWhenRequested() throws {
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "PDF UA Fixture")
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 300, height: 260),
+                margins: PDFOptions.Margins(top: 24, right: 24, bottom: 24, left: 24),
+                embeddedFonts: .allRoles(source),
+                title: "PDF UA Fixture",
+                conformance: .pdfUA1,
+            ),
+        ).render(markdown: """
+        # WIDE
+
+        WIDE WILLIAM
+        """)
+        let inspector = PDFInspector(data)
+        let xmp = inspector.streams.map(\.body).joined(separator: "\n")
+
+        try PDFValidation.writeArtifact(data, name: "pdfua-profile.pdf")
+        #expect(inspector.canonicalStructureIssues().isEmpty)
+        #expect(inspector.text.contains("/MarkInfo << /Marked true >>"))
+        #expect(inspector.text.contains("/StructTreeRoot"))
+        #expect(inspector.text.contains("/Lang (en-US)"))
+        #expect(inspector.text.contains("/ViewerPreferences << /DisplayDocTitle true >>"))
+        #expect(xmp.contains("xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\""))
+        #expect(xmp.contains("<pdfuaid:part>1</pdfuaid:part>"))
+
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "pdfua-profile-qpdf")
+        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let veraPDF = try PDFValidation.veraPDF(data: data, name: "pdfua-profile-verapdf", flavour: "ua1")
+        try #require(veraPDF.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDF.output)")
+        #expect(veraPDF.output.contains("\"compliant\" : true"))
+    }
+
+    @Test("PDF/UA-1 profile requires a document title")
+    func pdfUA1ProfileRequiresDocumentTitle() throws {
+        let renderer = MarkdownPDFRenderer(options: PDFOptions(conformance: .pdfUA1))
+
+        #expect(throws: MarkdownPDFError.missingConformanceTitle(profile: "PDF/UA-1")) {
+            try renderer.render(markdown: "# Missing title")
+        }
+    }
+
+    @Test("PDF/UA-1 profile rejects base font fallback")
+    func pdfUA1ProfileRejectsBaseFontFallback() throws {
+        let renderer = MarkdownPDFRenderer(options: PDFOptions(title: "Missing Fonts", conformance: .pdfUA1))
+
+        #expect(
+            throws: MarkdownPDFError.unembeddedBaseFontsForConformance(profile: "PDF/UA-1", fonts: ["Helvetica"]),
+        ) {
+            try renderer.render(markdown: "Plain text")
+        }
+    }
+
     @Test("Renderer tags lists tables figures and artifacts")
     func rendererTagsListsTablesFiguresAndArtifacts() throws {
         let directory = try TestImageAssets.directoryWithChartPNG(named: "chart.png")
