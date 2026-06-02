@@ -452,7 +452,7 @@ flowchart TD
     H2H["#106<br/>Syntax coloring study<br/>Done"]
     H2I["#118<br/>Roadmap colors<br/>Done"]
     H2J["#119<br/>Crazy markdown fixtures<br/>Done"]
-    H2K["#120<br/>Portable syntax coloring<br/>Active"]
+    H2K["#120<br/>Portable syntax coloring<br/>Review"]
     H2L["#122<br/>CJK + diacritics<br/>Next"]
     H2M["#123<br/>RTL manuscript<br/>Todo"]
     H3["#100<br/>Named page sizes<br/>Todo"]
@@ -468,8 +468,9 @@ flowchart TD
     classDef next fill:#fff8e1,stroke:#f9a825,color:#111;
     classDef todo fill:#eef3ff,stroke:#3367d6,color:#111;
     class H0,H1 done;
-    class H2,H2K active;
+    class H2 active;
     class H2A,H2B,H2C,H2D,H2E,H2F,H2G,H2H,H2I,H2J done;
+    class H2K review;
     class H2L next;
     class H2M,H3 todo;
 ```
