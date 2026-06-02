@@ -603,7 +603,7 @@ private struct Layout {
         let bodyX = options.margins.left + labelWidth
         let bodyWidth = max(1, contentWidth - labelWidth)
         let blocks = footnote.blocks.isEmpty ? [.paragraph([])] : footnote.blocks
-        let firstRuns = flatten(
+        let firstRuns = try flatten(
             footnoteInlines(for: blocks[0]),
             font: standardFont(for: footnoteStyle.fontRole),
             size: size,
@@ -832,7 +832,7 @@ private struct Layout {
 
         do {
             let parsed = try MarkdownMathParser().parse(math.source)
-            let layout = mathLayout(for: style)
+            let layout = try mathLayout(for: style)
             let box = try layout.layout(parsed.root, size: size, displayStyle: true)
             let totalHeight = topSpacing + box.height + box.depth + bottomSpacing
             ensureSpace(totalHeight)
@@ -844,6 +844,8 @@ private struct Layout {
             defer { currentPage.endMarkedContent() }
             try drawMathBox(box, x: x, baselineY: baselineY)
             y = baselineY - box.depth - bottomSpacing
+        } catch let error as MarkdownPDFError {
+            throw error
         } catch {
             let fallback = math.delimitedSource
             let runs = [
@@ -2104,14 +2106,14 @@ private struct Layout {
         cellPadding: Double,
         fontSize: Double,
     ) throws -> TableColumnMetrics {
-        let headerRuns = tableRuns(
+        let headerRuns = try tableRuns(
             table.headers,
             column: column,
             style: style(for: .tableHeader),
             size: fontSize,
         )
-        let bodyRuns = table.rows.map {
-            tableRuns($0, column: column, style: style(for: .tableCell), size: fontSize)
+        let bodyRuns = try table.rows.map {
+            try tableRuns($0, column: column, style: style(for: .tableCell), size: fontSize)
         }
         let allRuns = [headerRuns] + bodyRuns
         let contentWidths = try allRuns.map { try textWidth($0) }
@@ -2138,11 +2140,11 @@ private struct Layout {
         column: Int,
         style: PDFOptions.ElementStyle,
         size: Double,
-    ) -> [PDFTextRun] {
+    ) throws -> [PDFTextRun] {
         guard column < cells.count else {
             return []
         }
-        return flatten(cells[column], font: standardFont(for: style.fontRole), size: size, color: style.color)
+        return try flatten(cells[column], font: standardFont(for: style.fontRole), size: size, color: style.color)
     }
 
     private func preparedTableRow(
@@ -2335,7 +2337,7 @@ private struct Layout {
         underline: Bool = false,
         strikethrough: Bool = false,
         linkDestination: String? = nil,
-    ) -> [PDFTextRun] {
+    ) throws -> [PDFTextRun] {
         var runs: [PDFTextRun] = []
 
         for inline in inlines {
@@ -2358,7 +2360,7 @@ private struct Layout {
                     linkDestination: linkDestination,
                 ))
             case let .inlineMath(math):
-                runs.append(contentsOf: inlineMathRuns(
+                try runs.append(contentsOf: inlineMathRuns(
                     math,
                     size: size,
                     inheritedColor: color,
@@ -2367,7 +2369,7 @@ private struct Layout {
                     linkDestination: linkDestination,
                 ))
             case let .emphasis(children):
-                runs.append(contentsOf: flatten(
+                try runs.append(contentsOf: flatten(
                     children,
                     font: .helveticaOblique,
                     size: size,
@@ -2377,7 +2379,7 @@ private struct Layout {
                     linkDestination: linkDestination,
                 ))
             case let .strong(children):
-                runs.append(contentsOf: flatten(
+                try runs.append(contentsOf: flatten(
                     children,
                     font: .helveticaBold,
                     size: size,
@@ -2387,10 +2389,10 @@ private struct Layout {
                     linkDestination: linkDestination,
                 ))
             case let .strikethrough(children):
-                runs.append(contentsOf: flatten(children, font: font, size: size, color: color, underline: underline, strikethrough: true, linkDestination: linkDestination))
+                try runs.append(contentsOf: flatten(children, font: font, size: size, color: color, underline: underline, strikethrough: true, linkDestination: linkDestination))
             case let .link(children, destination, _):
                 let linkStyle = style(for: .link)
-                runs.append(contentsOf: flatten(
+                try runs.append(contentsOf: flatten(
                     children,
                     font: font,
                     size: size,
@@ -2449,7 +2451,8 @@ private struct Layout {
         underline: Bool,
         strikethrough: Bool,
         linkDestination: String?,
-    ) -> [PDFTextRun] {
+    ) throws -> [PDFTextRun] {
+        try requireEmbeddedMathFont(for: style(for: .inlineMath))
         do {
             let parsed = try MarkdownMathParser().parse(math.source)
             return inlineMathRuns(
@@ -2460,6 +2463,8 @@ private struct Layout {
                 strikethrough: strikethrough,
                 linkDestination: linkDestination,
             )
+        } catch let error as MarkdownPDFError {
+            throw error
         } catch {
             return [inlineMathTextRun(
                 math.delimitedSource,
@@ -3114,14 +3119,37 @@ private struct Layout {
         }
     }
 
-    private func mathLayout(for style: PDFOptions.ElementStyle) -> MarkdownMathLayout {
+    private func mathLayout(for style: PDFOptions.ElementStyle) throws -> MarkdownMathLayout {
         let font = standardFont(for: style.fontRole)
-        return MarkdownMathLayout(
+        return try MarkdownMathLayout(
             font: font,
             color: style.color,
             measureText: textWidth,
-            metrics: embeddedFonts.entry(for: font)?.mathMetrics ?? .default,
+            metrics: mathMetrics(for: style),
         )
+    }
+
+    private func mathMetrics(for style: PDFOptions.ElementStyle) throws -> MarkdownMathLayoutMetrics {
+        let font = standardFont(for: style.fontRole)
+        if let metrics = embeddedFonts.entry(for: font)?.mathMetrics {
+            return metrics
+        }
+        try requireEmbeddedMathFont(for: style)
+        return .default
+    }
+
+    private func requireEmbeddedMathFont(for style: PDFOptions.ElementStyle) throws {
+        guard options.mathTypesetting.requiresEmbeddedMathFont else {
+            return
+        }
+
+        let font = standardFont(for: style.fontRole)
+        let entry = embeddedFonts.entry(for: font)
+        guard entry?.mathMetrics != nil else {
+            throw MarkdownPDFError.missingEmbeddedMathFont(
+                font: entry?.resource.baseName ?? font.baseName(in: options.fontSet),
+            )
+        }
     }
 
     private func style(for role: PDFOptions.ElementRole) -> PDFOptions.ElementStyle {

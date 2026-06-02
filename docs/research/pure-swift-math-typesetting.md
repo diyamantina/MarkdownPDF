@@ -28,20 +28,24 @@ extended-shape coverage, math kerns, variants, glyph constructions, and glyph
 assembly parts. The reader validates subtable offsets, coverage counts, and
 glyph IDs with synthetic font fixtures so the public repo still commits no font
 binaries. MATH parsing remains opt in because existing embedded-font rendering
-can subset fonts before math metrics are needed. The renderer does not yet
-consume those MATH metrics, does not assemble stretchy glyph variants, and does
-not require or bundle an embedded math font. Those remain the next
-implementation gates before claiming a production math font profile. Current
-rendering intentionally uses ASCII-safe names for Greek commands so the
-base-font path remains extractable and Linux-buildable.
+can subset fonts before math metrics are needed. Display math now consumes MATH
+constants from the styled embedded font role when they are present. The default
+math mode still allows base-font fallback for compatibility, while
+`PDFOptions.MathTypesetting.fontBacked` requires the styled math role to use an
+embedded OpenType font with a `MATH` table. The renderer still does not assemble
+stretchy glyph variants. Inline math still uses the text-run path and only
+validates the font-backed profile, so full font-driven inline boxes remain a
+future implementation gate. Current fallback rendering intentionally uses
+ASCII-safe names for Greek commands so the base-font path remains extractable
+and Linux-buildable.
 
 The math layout engine now has an internal metrics bridge that can consume scaled
 OpenType `MATH` constants when they are explicitly supplied. The default metrics
 preserve the current base-font geometry. This remains a staging step toward
 font-driven Appendix-G layout rather than a production math font claim.
 
-Display math now asks the embedded-font catalog to parse OpenType `MATH` tables
-only when math typesetting is enabled, and only display layout consumes those
+Display math asks the embedded-font catalog to parse OpenType `MATH` tables only
+when math typesetting is enabled, and only display layout consumes those
 metrics. Inline math still uses text-run linearization, stretchy variants and
 assembly are not used, and malformed optional `MATH` data is still ignored when
 math parsing is disabled.
@@ -243,7 +247,9 @@ Features that cannot meet this bar stay unsupported and visible.
    radicals) producing geometry, no PDF yet. The internal MATH-constant metrics
    bridge for fractions, scripts, radicals, and display limits is implemented,
    and display math now consumes those metrics from embedded fonts when math
-   typesetting is enabled. Full font-driven box construction remains separate.
+   typesetting is enabled. The strict font-backed profile now rejects math
+   rendering without an embedded OpenType `MATH` table. Full font-driven inline
+   box construction remains separate.
 4. #131d Big operators with limits, stretchy delimiters via variants/assembly.
 5. #131e PDF emission (text + rule rectangles) reusing the embedded-font path.
 6. #131f Text linearization + `ToUnicode` for extraction.

@@ -7,6 +7,7 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
     case tableOfContentsDidNotConverge(maxPasses: Int)
     case missingConformanceTitle(profile: String)
     case unembeddedBaseFontsForConformance(profile: String, fonts: [String])
+    case missingEmbeddedMathFont(font: String)
 
     public var errorDescription: String? {
         switch self {
@@ -22,6 +23,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "\(profile) output requires a non-empty document title."
         case let .unembeddedBaseFontsForConformance(profile, fonts):
             "\(profile) output requires embedded font programs for every rendered font role. Missing roles: \(fonts.joined(separator: ", "))."
+        case let .missingEmbeddedMathFont(font):
+            "Math typesetting requires an embedded OpenType MATH font for \(font)."
         }
     }
 
@@ -39,6 +42,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Pass PDFOptions(title:) when enabling the conformance profile."
         case .unembeddedBaseFontsForConformance:
             "Pass PDFOptions(embeddedFonts:) with font data for every Markdown role used by the document."
+        case .missingEmbeddedMathFont:
+            "Pass PDFOptions(embeddedFonts:) with TrueType math-font data that contains an OpenType MATH table, or use PDFOptions.MathTypesetting.enabled for fallback rendering."
         }
     }
 }

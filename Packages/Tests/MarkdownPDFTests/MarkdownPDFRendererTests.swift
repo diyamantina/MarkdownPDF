@@ -807,6 +807,66 @@ struct MarkdownPDFRendererTests {
         #expect(mathRule.y != defaultRule.y)
     }
 
+    @Test("Font-backed math profile requires an embedded MATH table")
+    func fontBackedMathProfileRequiresEmbeddedMathTable() throws {
+        #expect(throws: MarkdownPDFError.missingEmbeddedMathFont(font: "Helvetica")) {
+            _ = try MarkdownPDFRenderer(
+                options: PDFOptions(mathTypesetting: .fontBacked),
+            ).render(markdown: "Inline $x^2$ must not silently use base fonts.")
+        }
+
+        let fontData = SyntheticTrueTypeFont.data(
+            glyphProfile: .latinWitness,
+            includeGlyphOutlines: true,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Public Regular")
+
+        #expect(throws: MarkdownPDFError.missingEmbeddedMathFont(font: "Public-Regular")) {
+            _ = try MarkdownPDFRenderer(
+                options: PDFOptions(
+                    embeddedFonts: .allRoles(source),
+                    mathTypesetting: .fontBacked,
+                ),
+            ).render(markdown: """
+            $$
+            \\frac{A}{B}
+            $$
+            """)
+        }
+    }
+
+    @Test("Font-backed math profile renders with embedded MATH table")
+    func fontBackedMathProfileRendersWithEmbeddedMathTable() throws {
+        let fontData = SyntheticTrueTypeFont.data(
+            glyphProfile: .latinWitness,
+            includeGlyphOutlines: true,
+            includeMATHTable: true,
+        )
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "Public Math")
+        let data = try MarkdownPDFRenderer(
+            options: PDFOptions(
+                pageSize: PDFOptions.PageSize(width: 260, height: 180),
+                margins: PDFOptions.Margins(top: 24, right: 24, bottom: 24, left: 24),
+                embeddedFonts: .allRoles(source),
+                mathTypesetting: .fontBacked,
+            ),
+        ).render(markdown: """
+        INLINE $X^A$ MATH
+
+        $$
+        \\frac{A}{B}
+        $$
+        """)
+        let inspector = PDFInspector(data)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "font-backed-math-profile")
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(inspector.text.contains("/EF1"))
+        #expect(inspector.text.contains("/FontFile2"))
+        #expect(inspector.text.contains("/ActualText (frac\\(A, B\\))"))
+        #expect(inspector.streams.map(\.body).joined(separator: "\n").contains("/EF1"))
+    }
+
     @Test("Embedded font API rejects fonts that forbid embedding")
     func embeddedFontAPIRejectsFontsThatForbidEmbedding() throws {
         let fontData = SyntheticTrueTypeFont.data(fsType: 0x0002)
@@ -1394,7 +1454,10 @@ struct MarkdownPDFRendererTests {
             : pow((channel + 0.055) / 1.055, 2.4)
     }
 
-    private func displayMathFractionRule(includeMATHTable: Bool) throws -> (y: Double, height: Double) {
+    private func displayMathFractionRule(
+        includeMATHTable: Bool,
+        mathTypesetting: PDFOptions.MathTypesetting = .enabled,
+    ) throws -> (y: Double, height: Double) {
         let fontData = SyntheticTrueTypeFont.data(
             glyphProfile: .latinWitness,
             includeGlyphOutlines: true,
@@ -1406,7 +1469,7 @@ struct MarkdownPDFRendererTests {
                 pageSize: PDFOptions.PageSize(width: 260, height: 180),
                 margins: PDFOptions.Margins(top: 24, right: 24, bottom: 24, left: 24),
                 embeddedFonts: .allRoles(source),
-                mathTypesetting: .enabled,
+                mathTypesetting: mathTypesetting,
             ),
         ).render(markdown: """
         $$

@@ -226,15 +226,29 @@ public struct PDFOptions: Equatable, Sendable {
     /// TeX-subset parser. Supported inline formulas render as positioned PDF
     /// text, supported display formulas add rule rectangles for fractions and
     /// radicals, and unsupported input renders its original source visibly.
+    /// Use ``fontBacked`` to require the styled math role to use an embedded
+    /// OpenType font with a `MATH` table instead of the base-font fallback.
     public struct MathTypesetting: Equatable, Sendable {
-        public var isEnabled: Bool
+        public enum FontRequirement: Equatable, Sendable {
+            case fallbackAllowed
+            case embeddedMathFont
+        }
 
-        public init(isEnabled: Bool) {
+        public var isEnabled: Bool
+        public var fontRequirement: FontRequirement
+
+        public init(isEnabled: Bool, fontRequirement: FontRequirement = .fallbackAllowed) {
             self.isEnabled = isEnabled
+            self.fontRequirement = fontRequirement
+        }
+
+        public var requiresEmbeddedMathFont: Bool {
+            isEnabled && fontRequirement == .embeddedMathFont
         }
 
         public static let disabled = MathTypesetting(isEnabled: false)
         public static let enabled = MathTypesetting(isEnabled: true)
+        public static let fontBacked = MathTypesetting(isEnabled: true, fontRequirement: .embeddedMathFont)
     }
 
     /// A complete document theme resolved by the portable renderer.
