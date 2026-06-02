@@ -492,6 +492,30 @@ struct FixtureTests {
         #expect(inspector.streamLengthsMatch())
     }
 
+    @Test("CJK corpus renders validly and uses the portable fallback without a CJK font")
+    func cjkCorpusRendersWithPortableFallback() throws {
+        let data = try MarkdownPDFRenderer().render(markdown: fixture(named: "cjk-corpus.md"))
+        try PDFValidation.writeArtifact(data, name: "cjk-corpus.pdf")
+        let inspector = PDFInspector(data)
+        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "cjk-corpus")
+        let textResult = try PDFValidation.pdftotext(data: data, name: "cjk-corpus-text")
+        let extracted = normalizedExtractedText(textResult.output)
+
+        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        // ASCII headings and romaji survive extraction.
+        #expect(extracted.contains("CJK corpus"))
+        #expect(extracted.contains("Hiragana"))
+        #expect(extracted.contains("Katakana"))
+        #expect(extracted.contains("nihon"))
+        #expect(extracted.contains("hiragana"))
+        // CJK scalars use the portable substitution rather than passing through raw.
+        #expect(!extracted.contains("你好"))
+        #expect(!extracted.contains("ひらがな"))
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+    }
+
     private func demoCVFixture() throws -> String {
         try fixture(named: "democv.md")
     }
