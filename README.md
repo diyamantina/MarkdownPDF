@@ -373,9 +373,10 @@ swiftlint --config .swiftlint.yml
   internal and external links, nested quotes, lists, wide tables, reused local
   images, remote image fallback, raw HTML fallback, code blocks, Mermaid drawing,
   and unsupported Mermaid fallback.
-- Issue [#97](https://github.com/mihaelamj/MarkdownPDF/issues/97) is the current
-  A4 and external manuscript witness pass. It adds sustained manuscript prose,
-  A4 page-size assertions, tables, local and remote figures, supported Mermaid
+- Issue [#97](https://github.com/mihaelamj/MarkdownPDF/issues/97), landed by
+  PR [#98](https://github.com/mihaelamj/MarkdownPDF/pull/98), completed the A4
+  and external manuscript witness pass. It adds sustained manuscript prose, A4
+  page-size assertions, tables, local and remote figures, supported Mermaid
   drawing, unsupported Mermaid fallback, a complete patent fixture, Formidabble
   source-style manuscript coverage, an App Intents framework manuscript, an
   optimized WWDC transcript witness path, a full WWDC source bundle for explicit
