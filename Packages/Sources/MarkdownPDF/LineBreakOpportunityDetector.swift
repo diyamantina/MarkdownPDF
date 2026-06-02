@@ -167,7 +167,10 @@ struct LineBreakOpportunityDetector {
              0xAC00 ... 0xD7AF,
              0xF900 ... 0xFAFF,
              0x20000 ... 0x2EBEF,
-             0x30000 ... 0x3134F:
+             0x2EBF0 ... 0x2EE5D,
+             0x2F800 ... 0x2FA1F,
+             0x30000 ... 0x3134F,
+             0x31350 ... 0x323AF:
             true
         default:
             false

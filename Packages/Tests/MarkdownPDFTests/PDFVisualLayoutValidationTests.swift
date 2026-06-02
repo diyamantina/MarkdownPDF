@@ -664,8 +664,17 @@ struct PDFVisualLayoutValidationTests {
         let pageCount = inspector.pageCount
 
         #expect(pageCount >= 2)
+        #expect(inspector.hasValidXrefOffsets())
+        #expect(inspector.streamLengthsMatch())
+        #expect(inspector.text.contains("/Subtype /Type0"))
         #expect(inspector.text.contains("/Subtype /CIDFontType2"))
+        #expect(inspector.text.contains("/FontFile2"))
         #expect(inspector.text.contains("/ToUnicode"))
+        #expect(inspector.text.contains("/CIDToGIDMap "))
+        #expect(
+            inspector.canonicalStructureIssues().isEmpty,
+            "CJK and diacritics canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
+        )
         try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
         try PDFValidation.writeArtifact(data, name: "cjk-diacritics-manuscript.pdf")
 
@@ -680,6 +689,7 @@ struct PDFVisualLayoutValidationTests {
         #expect(normalizedText.contains("Latin text"))
         #expect(normalizedText.contains("1."))
         #expect(compactText.contains("漢字語漢字語"))
+        #expect(compactText.contains("e\u{0301}"))
         #expect(compactText.contains("漢\u{0301}字語"))
         #expect(try compactText.unicodeScalars.contains(#require(UnicodeScalar(0x0301))))
 

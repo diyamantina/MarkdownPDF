@@ -52,6 +52,9 @@ struct LineBreakOpportunityDetectorTests {
         ])
         #expect(detector.segments(in: "かなカナ") == ["か", "な", "カ", "ナ"])
         #expect(detector.segments(in: "한글") == ["한", "글"])
+        #expect(detector.segments(in: "\u{2EBF0}\u{2EBF1}") == ["\u{2EBF0}", "\u{2EBF1}"])
+        #expect(detector.segments(in: "\u{2F800}\u{2F801}") == ["\u{2F800}", "\u{2F801}"])
+        #expect(detector.segments(in: "\u{31350}\u{31351}") == ["\u{31350}", "\u{31351}"])
     }
 
     @Test("Protects CJK opening and closing punctuation boundaries")
