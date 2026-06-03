@@ -57,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Move the full study-only source snapshot corpus (33 third-party projects) out
+  of `researchcode/` into the private companion repository `MarkdownPDFResearch`,
+  keeping only a small high-signal subset (`pydyf`, `unicode-linebreak`,
+  `unicode-bidi`, `libdeflate`, `zlib`) locally. This shrinks the public
+  repository and keeps it classified as Swift.
 - Model PDF object registration, xref tables, trailers, and file envelopes as
   typed Swift structures.
 - Model the PDF catalog, flat page tree, and page dictionaries as typed Swift

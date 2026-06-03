@@ -15,9 +15,23 @@ Source snapshots help answer concrete design questions:
 - Which ideas depend on platform APIs, native libraries, or toolchains that this
   package must not depend on.
 
+## Where the snapshots live
+
+The full set of study-only source snapshots (33 projects) lives in the private
+companion repository
+[mihaelamj/MarkdownPDFResearch](https://github.com/mihaelamj/MarkdownPDFResearch),
+which keeps this public repository small and correctly classified as Swift. Only
+a small, high-signal subset is retained locally under `researchcode/` (currently
+`pydyf`, `unicode-linebreak`, `unicode-bidi`, `libdeflate`, and `zlib`).
+
+Citations elsewhere in these research notes that reference a
+`researchcode/<project>/...` path not present in the local subset resolve to the
+same relative path inside the private `MarkdownPDFResearch` repository.
+
 ## Repository boundary
 
-- Source snapshots, when present, live under `researchcode/`.
+- Source snapshots live under `researchcode/` (local subset) or in the private
+  `MarkdownPDFResearch` repository (full set).
 - Snapshots are not Swift package targets.
 - Product source and tests must not import, compile, shell out to, or link
   snapshot code.

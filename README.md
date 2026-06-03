@@ -502,8 +502,8 @@ flowchart TD
     H5["#194<br/>Fix embedded /W width scaling<br/>Done"]
     H6["#195<br/>Full witness battery on font fixtures<br/>Done"]
     H7["#197<br/>Tolerate tiny math glyphs<br/>Done"]
-    H8["#198<br/>Diverse multilingual showcase corpus<br/>Review"]
-    H9["#199<br/>Showcase across popular page formats<br/>Review"]
+    H8["#198<br/>Diverse multilingual showcase corpus<br/>Done"]
+    H9["#199<br/>Showcase across popular page formats<br/>Done"]
     H10["#200<br/>Expand line height for tall inline math<br/>Next"]
 
     H0 --> H1
@@ -535,8 +535,8 @@ flowchart TD
     class H5 done;
     class H6 done;
     class H7 done;
-    class H8 review;
-    class H9 review;
+    class H8 done;
+    class H9 done;
     class H10 next;
 ```
 
