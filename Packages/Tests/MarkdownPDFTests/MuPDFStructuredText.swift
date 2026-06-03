@@ -157,7 +157,13 @@ struct MuPDFStructuredText {
         tolerance: Double,
         issues: inout [String],
     ) {
-        if glyph.box.height <= 0
+        // A glyph with zero height but positive width is a thin sliver: MuPDF
+        // reports this for legitimately tiny math sub/superscripts, which still
+        // paint at the correct size. Only a clearly negative (flipped) height
+        // signals a corrupt quad. Zero or negative width stays a real defect
+        // (text would pile up), except for ToUnicode-expansion continuations
+        // that share a sibling glyph's position. See #197.
+        if glyph.box.height < -tolerance
             || (glyph.box.width <= 0 && !isToUnicodeExpansionContinuation(
                 glyph,
                 previousGlyph: previousGlyph,

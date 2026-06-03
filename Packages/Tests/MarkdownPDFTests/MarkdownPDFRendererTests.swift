@@ -1661,7 +1661,7 @@ private let sourceCodeNumberOperator = "0.340 0.180 0.550 rg"
 private let sourceCodeCommentOperator = "0.280 0.380 0.280 rg"
 private let sourceCodeOperatorOperator = "0.180 0.220 0.260 rg"
 
-private enum OpenTrueTypeFontFixture {
+enum OpenTrueTypeFontFixture {
     static var isAvailable: Bool {
         configuredPath != nil || installedURL != nil
     }

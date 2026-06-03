@@ -80,3 +80,5 @@
 # directory next to the executable. The file is per-developer state.
 Packages/db.sqlite
 Packages/db.sqlite-*
+
+.claude/

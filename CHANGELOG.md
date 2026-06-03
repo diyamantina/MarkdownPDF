@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed DejaVu Sans smoke-test path instead of committed font binaries.
 - Opt-in portable syntax coloring for supported fenced code block language
   hints, with extraction, geometry, and raster witnesses.
+- Diverse multilingual showcase corpus combining prose, TeX math, native charts,
+  Mermaid diagrams, and mixed-script tables, including a large multi-chapter
+  handbook, rendered with embedded fonts under the full visual witness battery
+  and across popular page formats (US Letter, Legal, Tabloid, A3, A5).
 
 ### Fixed
 
@@ -47,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   geometry, MuPDF character quads, and a Poppler-vs-MuPDF raster comparison) on
   embedded-font fixtures so width and metric scaling regressions fail the build
   instead of passing extraction-only checks.
+- Stop the MuPDF character-quad witness from flagging legitimately tiny math
+  sub/superscripts (zero-height, positive-width slivers) as non-positive size;
+  only a clearly negative (flipped) height is now a defect.
 
 ### Changed
 
