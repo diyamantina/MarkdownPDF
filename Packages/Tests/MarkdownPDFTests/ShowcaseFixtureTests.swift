@@ -29,9 +29,21 @@ struct ShowcaseFixtureTests {
         try assertEmbeddedFontVisualWitness(
             data,
             name: "showcase-\(base)",
-            expectedSubstrings: [],
+            expectedSubstrings: Self.expectedSubstrings[fixtureName] ?? [base],
             minWords: 20,
         )
+    }
+
+    /// Guards against a silent zero-case pass: if the fixture glob breaks (wrong
+    /// path, bad working directory), the parameterized test above would run no
+    /// cases and report success. This asserts the corpus is actually present.
+    @Test
+    func showcaseCorpusIsDiscovered() {
+        #expect(
+            Self.fixtureNames.count >= 8,
+            "Expected at least 8 showcase fixtures, found \(Self.fixtureNames.count): \(Self.fixtureNames)",
+        )
+        #expect(Self.fixtureNames.contains("08-grand-handbook.md"))
     }
 
     struct PageFormat: CustomStringConvertible {
@@ -92,6 +104,20 @@ struct ShowcaseFixtureTests {
             .map(\.lastPathComponent)
             .sorted()
     }()
+
+    /// Representative tokens per fixture (multilingual where possible) so the
+    /// witness asserts the real content round-tripped through the embedded font,
+    /// not merely that some words extracted.
+    static let expectedSubstrings: [String: [String]] = [
+        "01-combined-showcase.md": ["café", "Привет", "Καλημέρα"],
+        "02-scientific-article.md": ["café", "Привет", "Καλημέρα"],
+        "03-multilingual-gazette.md": ["Zürich", "Привет", "Καλημέρα"],
+        "04-math-handbook.md": ["Légende", "Подпись", "Euler"],
+        "05-charts-dashboard.md": ["Tableau", "Панель"],
+        "06-engineering-rfc.md": ["Terminology", "FontDescriptor"],
+        "07-changelog-and-readme.md": ["Changelog", "café", "Привет"],
+        "08-grand-handbook.md": ["café", "Привет", "Καλημέρα"],
+    ]
 
     static let pageFormats: [PageFormat] = [
         PageFormat(name: "us-letter", size: .letter),
