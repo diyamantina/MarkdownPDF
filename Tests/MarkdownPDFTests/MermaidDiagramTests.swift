@@ -25,7 +25,44 @@ struct MermaidDiagramTests {
             MermaidDiagram.Edge(source: "Parse", target: "Layout", label: nil),
             MermaidDiagram.Edge(source: "Layout", target: "PDF", label: nil),
         ])
-        #expect(diagram.layers()?.map { $0.map(\.id) } == [["Input"], ["Parse"], ["Layout"], ["PDF"]])
+        #expect(diagram.layers().map { $0.map(\.id) } == [["Input"], ["Parse"], ["Layout"], ["PDF"]])
+    }
+
+    @Test("Parses dashed edges, plain and labeled")
+    func parsesDashedEdges() {
+        let result = MermaidDiagram.parse("""
+        flowchart TD
+            A[Source] -.-> B[Target]
+            B -.->|feedback| A
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        #expect(diagram.edges == [
+            MermaidDiagram.Edge(source: "A", target: "B", label: nil, dashed: true),
+            MermaidDiagram.Edge(source: "B", target: "A", label: "feedback", dashed: true),
+        ])
+    }
+
+    @Test("Lays out cyclic flowcharts by breaking back-edges instead of failing")
+    func laysOutCycles() {
+        let result = MermaidDiagram.parse("""
+        flowchart TD
+            A[First] --> B[Second]
+            B --> A
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        let layers = diagram.layers()
+        #expect(layers.flatMap { $0.map(\.id) }.sorted() == ["A", "B"])
+        #expect(layers.allSatisfy { !$0.isEmpty })
     }
 
     @Test("Parses graph aliases, quoted labels, and edge labels")

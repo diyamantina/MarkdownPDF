@@ -35,6 +35,7 @@ struct PDFContentStream {
         case setFillColor(PDFColor)
         case setStrokeColor(PDFColor)
         case setLineWidth(Double)
+        case setDash(lengths: [Double], phase: Double)
         case moveTo(x: Double, y: Double)
         case lineTo(x: Double, y: Double)
         case curveTo(x1: Double, y1: Double, x2: Double, y2: Double, x3: Double, y3: Double)
@@ -79,6 +80,8 @@ struct PDFContentStream {
                 "\(pdfNumber(color.red)) \(pdfNumber(color.green)) \(pdfNumber(color.blue)) RG"
             case let .setLineWidth(width):
                 "\(pdfNumber(width)) w"
+            case let .setDash(lengths, phase):
+                "[\(lengths.map { pdfNumber($0) }.joined(separator: " "))] \(pdfNumber(phase)) d"
             case let .moveTo(x, y):
                 "\(pdfNumber(x)) \(pdfNumber(y)) m"
             case let .lineTo(x, y):

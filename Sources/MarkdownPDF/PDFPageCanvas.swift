@@ -138,14 +138,22 @@ final class PDFPageCanvas {
         y2: Double,
         width: Double,
         color: PDFColor = .black,
+        dashed: Bool = false,
     ) {
         setStrokeColor(color)
-        contentStream.append([
-            .setLineWidth(width),
+        var operations: [PDFContentStream.Operator] = [.setLineWidth(width)]
+        if dashed {
+            operations.append(.setDash(lengths: [2.4, 1.8], phase: 0))
+        }
+        operations.append(contentsOf: [
             .moveTo(x: x1, y: y1),
             .lineTo(x: x2, y: y2),
             .stroke,
         ])
+        if dashed {
+            operations.append(.setDash(lengths: [], phase: 0))
+        }
+        contentStream.append(operations)
     }
 
     func drawPolyline(

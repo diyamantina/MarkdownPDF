@@ -10,7 +10,7 @@ struct MermaidDiagram: Equatable {
         return parser.parse()
     }
 
-    func layers() -> [[Node]]? {
+    func layers() -> [[Node]] {
         var indegree = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, 0) })
         var outgoing: [String: [String]] = [:]
         for edge in edges {
@@ -19,24 +19,43 @@ struct MermaidDiagram: Equatable {
         }
 
         var queue = nodes.filter { indegree[$0.id] == 0 }.map(\.id)
-        var processed: [String] = []
+        var processedNodes = Set<String>()
         var levels = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, 0) })
 
-        while !queue.isEmpty {
-            let id = queue.removeFirst()
-            processed.append(id)
+        while processedNodes.count < nodes.count {
+            while !queue.isEmpty {
+                let id = queue.removeFirst()
+                processedNodes.insert(id)
 
-            for target in outgoing[id, default: []] {
-                levels[target] = max(levels[target, default: 0], levels[id, default: 0] + 1)
-                indegree[target, default: 0] -= 1
-                if indegree[target] == 0 {
-                    queue.append(target)
+                // Only forward edges (to a not-yet-processed node) inform layering and
+                // release successors. A back-edge to an already-processed node is left for
+                // drawing but does not bump levels, so cycles produce no empty layers.
+                for target in outgoing[id, default: []] where !processedNodes.contains(target) {
+                    levels[target] = max(levels[target, default: 0], levels[id, default: 0] + 1)
+                    indegree[target, default: 0] -= 1
+                    if indegree[target] == 0 {
+                        queue.append(target)
+                    }
                 }
             }
-        }
 
-        guard processed.count == nodes.count else {
-            return nil
+            if processedNodes.count < nodes.count {
+                // Cyclic input: release the unprocessed node with the fewest remaining
+                // incoming edges, which breaks a back-edge so layering can proceed. The
+                // back-edge itself is still drawn later, so cycles render rather than fail.
+                guard let next = nodes
+                    .filter({ !processedNodes.contains($0.id) })
+                    .min(by: { lhs, rhs in
+                        let left = indegree[lhs.id] ?? 0
+                        let right = indegree[rhs.id] ?? 0
+                        return left != right ? left < right : lhs.id < rhs.id
+                    })
+                else {
+                    break
+                }
+                indegree[next.id] = 0
+                queue.append(next.id)
+            }
         }
 
         let maxLevel = levels.values.max() ?? 0
@@ -99,6 +118,7 @@ struct MermaidDiagram: Equatable {
         var source: String
         var target: String
         var label: String?
+        var dashed: Bool = false
     }
 
     private struct SourceLine {
@@ -206,8 +226,33 @@ struct MermaidDiagram: Equatable {
                 )
             }
 
-            if line.contains("---") || line.contains("-.") || line.contains("==>") {
-                return .failure("only solid `-->` flowchart edges are supported")
+            if let range = line.range(of: "-.->|") {
+                let sourceText = String(line[..<range.lowerBound])
+                let remainder = line[range.upperBound...]
+                guard let labelEnd = remainder.firstIndex(of: "|") else {
+                    return .failure("edge label is missing its closing `|`")
+                }
+                let label = String(remainder[..<labelEnd]).trimmingCharacters(in: .whitespaces)
+                let targetText = String(remainder[remainder.index(after: labelEnd)...])
+                return parseEdge(
+                    sourceText: sourceText,
+                    targetText: targetText,
+                    label: label.isEmpty ? nil : label,
+                    dashed: true,
+                )
+            }
+
+            if let range = line.range(of: "-.->") {
+                return parseEdge(
+                    sourceText: String(line[..<range.lowerBound]),
+                    targetText: String(line[range.upperBound...]),
+                    label: nil,
+                    dashed: true,
+                )
+            }
+
+            if line.contains("---") || line.contains("==>") {
+                return .failure("only solid `-->` and dashed `-.->` flowchart edges are supported")
             }
 
             return nil
@@ -217,6 +262,7 @@ struct MermaidDiagram: Equatable {
             sourceText: String,
             targetText: String,
             label: String?,
+            dashed: Bool = false,
         ) -> Outcome<Edge> {
             switch parseEndpoint(sourceText) {
             case let .success(source):
@@ -234,7 +280,7 @@ struct MermaidDiagram: Equatable {
                     case let .failure(reason):
                         return .failure(reason)
                     }
-                    return .success(Edge(source: source.id, target: target.id, label: label))
+                    return .success(Edge(source: source.id, target: target.id, label: label, dashed: dashed))
                 case let .failure(reason):
                     return .failure("invalid edge target: \(reason)")
                 }

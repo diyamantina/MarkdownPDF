@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native charts now truncate an over-wide series or category label with an
+  ellipsis instead of failing the whole chart, so descriptive labels render in
+  the PDF rather than dropping to visible source.
+- Mermaid flowcharts now render dashed edges (`-.->`, both plain and labeled)
+  as dashed lines.
+- Mermaid flowcharts now lay out cyclic graphs by breaking back-edges, so a
+  flowchart with a cycle renders instead of falling back to source.
+
 ### Changed
 
 - License changed from MIT to AGPL-3.0. MarkdownPDF is now dual licensed:

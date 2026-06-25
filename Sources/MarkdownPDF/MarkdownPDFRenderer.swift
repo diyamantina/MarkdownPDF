@@ -1074,16 +1074,10 @@ private struct Layout {
             guard !series.name.isEmpty else {
                 return .fallback("series names must not be empty")
             }
-            guard try textWidth(PDFTextRun(text: series.name, font: .helvetica, size: chartLabelSize)) <= 92 else {
-                return .fallback("series label `\(series.name)` is too wide for the chart legend")
-            }
         }
         for label in chart.categories {
             guard !label.isEmpty else {
                 return .fallback("category labels must not be empty")
-            }
-            guard try textWidth(PDFTextRun(text: label, font: .helvetica, size: chartLabelSize)) <= 80 else {
-                return .fallback("category label `\(label)` is too wide for the portable chart profile")
             }
         }
 
@@ -1450,7 +1444,8 @@ private struct Layout {
 
     private mutating func drawCategoricalXAxis(categories: [String], plotFrame: ChartFrame) throws {
         let bandWidth = plotFrame.width / Double(categories.count)
-        for (index, category) in categories.enumerated() {
+        for (index, rawCategory) in categories.enumerated() {
+            let category = try truncatedChartLabel(rawCategory, maxWidth: min(80, bandWidth - 4))
             try drawChartText(
                 category,
                 x: plotFrame.left + Double(index) * bandWidth + bandWidth / 2,
@@ -1500,7 +1495,8 @@ private struct Layout {
         var textCursor = textX
         var legendText = ""
 
-        for (index, label) in labels.enumerated() {
+        for (index, rawLabel) in labels.enumerated() {
+            let label = try truncatedChartLabel(rawLabel, maxWidth: 92)
             let color = chartPalette[index % chartPalette.count]
             currentPage.drawRectangle(x: textCursor - 14, y: y - 7, width: 10, height: 8, stroke: nil, fill: color)
             let labelWidth = try chartTextWidth(label)
@@ -1616,14 +1612,32 @@ private struct Layout {
         try textWidth(PDFTextRun(text: text, font: .helvetica, size: chartLabelSize))
     }
 
+    /// A version of `text` that fits within `maxWidth` at the chart label size, trimming
+    /// characters and appending an ellipsis when needed. Used so an over-long legend or
+    /// category label degrades gracefully instead of forcing the whole chart to fall back
+    /// to source.
+    private func truncatedChartLabel(_ text: String, maxWidth: Double) throws -> String {
+        if try chartTextWidth(text) <= maxWidth {
+            return text
+        }
+        let ellipsis = "\u{2026}"
+        var characters = Array(text)
+        while !characters.isEmpty {
+            characters.removeLast()
+            let candidate = String(characters).trimmingCharacters(in: .whitespaces) + ellipsis
+            if try chartTextWidth(candidate) <= maxWidth {
+                return candidate
+            }
+        }
+        return ellipsis
+    }
+
     private func widestChartLabelWidth(_ labels: [String]) throws -> Double {
         try labels.map { try chartTextWidth($0) }.max() ?? 0
     }
 
     private func mermaidRenderPlan(for diagram: MermaidDiagram) throws -> MermaidRenderPlanResult {
-        guard let layers = diagram.layers() else {
-            return .fallback("flowchart cycles are not supported")
-        }
+        let layers = diagram.layers()
 
         switch try measureMermaidNodes(diagram.nodes) {
         case let .fallback(reason):
@@ -1857,7 +1871,7 @@ private struct Layout {
         let targetFrame = target.frame(topY: topY)
         let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
 
-        drawArrow(from: endpoints.start, to: endpoints.end)
+        drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed)
         if let label = edge.label {
             try drawMermaidEdgeLabel(label, start: endpoints.start, end: endpoints.end)
         }
@@ -1895,7 +1909,7 @@ private struct Layout {
         )
     }
 
-    private mutating func drawArrow(from start: MermaidPoint, to end: MermaidPoint) {
+    private mutating func drawArrow(from start: MermaidPoint, to end: MermaidPoint, dashed: Bool = false) {
         currentPage.drawLine(
             x1: start.x,
             y1: start.y,
@@ -1903,6 +1917,7 @@ private struct Layout {
             y2: end.y,
             width: 0.8,
             color: PDFColor(red: 0.25, green: 0.31, blue: 0.38),
+            dashed: dashed,
         )
 
         let dx = end.x - start.x
