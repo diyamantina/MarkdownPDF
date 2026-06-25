@@ -53,7 +53,7 @@ glyphs. Each page is validated by a Poppler + MuPDF witness battery.
   <tr>
     <td valign="top">
       <img src="Docs/images/diagram.png" alt="Mermaid flowchart rendered to PDF" width="100%"><br>
-      <sub><b>Diagrams</b>: a portable Mermaid flowchart subset drawn with native PDF shapes and text, beside a table and a task list.</sub>
+      <sub><b>Diagrams</b>: a portable Mermaid flowchart subset, including dashed edges and cyclic graphs, drawn with native PDF shapes and text, beside a table and a task list.</sub>
     </td>
     <td valign="top">
       <img src="Docs/images/code.png" alt="Code blocks and tables" width="100%"><br>
