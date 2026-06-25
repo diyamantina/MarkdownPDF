@@ -1638,26 +1638,41 @@ private struct Layout {
 
     private func mermaidRenderPlan(for diagram: MermaidDiagram) throws -> MermaidRenderPlanResult {
         let layers = diagram.layers()
+        let minimumScale = 0.55
+        var scale = 1.0
 
-        switch try measureMermaidNodes(diagram.nodes) {
-        case let .fallback(reason):
-            return .fallback(reason)
-        case let .measurements(measurements):
-            if diagram.direction.isVertical {
-                return try verticalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
-            } else {
-                return try horizontalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
+        while true {
+            let result: MermaidRenderPlanResult
+            switch try measureMermaidNodes(diagram.nodes, scale: scale) {
+            case let .fallback(reason):
+                return .fallback(reason)
+            case let .measurements(measurements):
+                result = diagram.direction.isVertical
+                    ? try verticalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
+                    : try horizontalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
             }
+
+            // A diagram that overflows the page width is uniformly shrunk (smaller
+            // font and boxes) and re-planned until it fits, rather than falling back
+            // to source. Only width overflow retries; other fallbacks pass through.
+            if case let .fallback(reason) = result,
+               reason.contains("wider than the content area"),
+               scale > minimumScale
+            {
+                scale = max(minimumScale, scale * 0.85)
+                continue
+            }
+            return result
         }
     }
 
-    private func measureMermaidNodes(_ nodes: [MermaidDiagram.Node]) throws -> MermaidMeasurementResult {
-        let fontSize = options.baseFontSize * 0.88
+    private func measureMermaidNodes(_ nodes: [MermaidDiagram.Node], scale: Double = 1) throws -> MermaidMeasurementResult {
+        let fontSize = options.baseFontSize * 0.88 * scale
         let lineHeight = fontSize * 1.18
-        let horizontalPadding = 10.0
-        let verticalPadding = 7.0
+        let horizontalPadding = 10.0 * scale
+        let verticalPadding = 7.0 * scale
         let maxNodeWidth = max(48, min(180, contentWidth - 20))
-        let minNodeWidth = min(96, maxNodeWidth)
+        let minNodeWidth = min(96 * scale, maxNodeWidth)
         let labelWidthLimit = max(24, maxNodeWidth - horizontalPadding * 2)
         var measurements: [String: MermaidNodeMeasurement] = [:]
 
@@ -1676,7 +1691,7 @@ private struct Layout {
                 id: node.id,
                 labelLines: labelLines,
                 width: max(minNodeWidth, widestLine + horizontalPadding * 2),
-                height: max(34, Double(labelLines.count) * lineHeight + verticalPadding * 2),
+                height: max(34 * scale, Double(labelLines.count) * lineHeight + verticalPadding * 2),
                 fontSize: fontSize,
                 lineHeight: lineHeight,
                 verticalPadding: verticalPadding,

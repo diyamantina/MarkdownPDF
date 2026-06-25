@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-26
+
+### Added
+
+- Flowcharts that are wider than the page content area are now uniformly scaled
+  down (smaller font and boxes) until they fit, instead of falling back to source.
+  A wide left-to-right chain of nodes renders as a shrunk diagram rather than a
+  code block. Diagrams that already fit are unchanged.
+
 ## [0.5.0] - 2026-06-25
 
 ### Added
