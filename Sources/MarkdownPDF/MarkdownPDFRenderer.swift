@@ -1,0 +1,3709 @@
+import Foundation
+import MathTypeset
+
+public struct MarkdownPDFRenderer: Sendable {
+    public var options: PDFOptions
+
+    public init(options: PDFOptions = PDFOptions()) {
+        self.options = options
+    }
+
+    public func render(
+        markdown: String,
+        assetsBaseURL: URL? = nil,
+    ) throws -> Data {
+        let document = MarkdownParser(
+            options: MarkdownParser.Options(mathTypesetting: options.mathTypesetting.isEnabled),
+        ).parse(markdown)
+        if options.tableOfContents.isEnabled {
+            return try renderWithTableOfContents(document, assetsBaseURL: assetsBaseURL)
+        }
+
+        return try renderDocument(document, assetsBaseURL: assetsBaseURL).pdfData()
+    }
+
+    private func renderDocument(
+        _ document: MarkdownDocument,
+        assetsBaseURL: URL?,
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+    ) throws -> Layout {
+        var layout = try Layout(options: options, assetsBaseURL: assetsBaseURL)
+        try layout.render(document, tableOfContentsEntries: tableOfContentsEntries)
+        return layout
+    }
+
+    private func renderWithTableOfContents(
+        _ document: MarkdownDocument,
+        assetsBaseURL: URL?,
+    ) throws -> Data {
+        let maximumPasses = 6
+        var entries = try renderDocument(document, assetsBaseURL: assetsBaseURL)
+            .tableOfContentsEntries(maximumDepth: options.tableOfContents.maximumDepth)
+        guard !entries.isEmpty else {
+            return try renderDocument(document, assetsBaseURL: assetsBaseURL).pdfData()
+        }
+
+        for _ in 0 ..< maximumPasses {
+            let layout = try renderDocument(
+                document,
+                assetsBaseURL: assetsBaseURL,
+                tableOfContentsEntries: entries,
+            )
+            let nextEntries = layout.tableOfContentsEntries(maximumDepth: options.tableOfContents.maximumDepth)
+            if nextEntries == entries {
+                return try layout.pdfData()
+            }
+            entries = nextEntries
+        }
+
+        throw MarkdownPDFError.tableOfContentsDidNotConverge(maxPasses: maximumPasses)
+    }
+}
+
+private struct TableOfContentsEntry: Equatable {
+    var destinationName: String
+    var title: String
+    var level: Int
+    var pageNumber: Int
+}
+
+private struct ResolvedFootnote {
+    var labelKey: String
+    var number: Int
+    var definitionDestinationName: String
+    var referenceDestinationName: String
+    var blocks: [MarkdownBlock]
+}
+
+private struct ResolvedFootnoteDocument {
+    var bodyBlocks: [MarkdownBlock]
+    var footnotes: [ResolvedFootnote]
+    var footnotesByLabelKey: [String: ResolvedFootnote]
+}
+
+private struct FootnoteResolver {
+    func resolve(_ document: MarkdownDocument) -> ResolvedFootnoteDocument {
+        let definitions = collectDefinitions(in: document.blocks)
+        let bodyBlocks = stripFootnoteDefinitions(from: document.blocks)
+        var orderedKeys: [String] = []
+        var seen = Set<String>()
+        for block in bodyBlocks {
+            collectReferences(in: block, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+        }
+
+        let footnotes = orderedKeys.enumerated().compactMap { index, key -> ResolvedFootnote? in
+            guard let blocks = definitions[key] else {
+                return nil
+            }
+            let number = index + 1
+            return ResolvedFootnote(
+                labelKey: key,
+                number: number,
+                definitionDestinationName: "fn-\(number)",
+                referenceDestinationName: "fnref-\(number)",
+                blocks: blocks,
+            )
+        }
+        let footnotesByLabelKey = Dictionary(uniqueKeysWithValues: footnotes.map { ($0.labelKey, $0) })
+        return ResolvedFootnoteDocument(
+            bodyBlocks: bodyBlocks,
+            footnotes: footnotes,
+            footnotesByLabelKey: footnotesByLabelKey,
+        )
+    }
+
+    private func collectDefinitions(in blocks: [MarkdownBlock]) -> [String: [MarkdownBlock]] {
+        var definitions: [String: [MarkdownBlock]] = [:]
+        for block in blocks {
+            collectDefinitions(in: block, into: &definitions)
+        }
+        return definitions
+    }
+
+    private func collectDefinitions(
+        in block: MarkdownBlock,
+        into definitions: inout [String: [MarkdownBlock]],
+    ) {
+        switch block {
+        case let .footnoteDefinition(label, blocks):
+            definitions[footnoteLabelKey(label)] = definitions[footnoteLabelKey(label)] ?? blocks
+        case let .blockQuote(blocks):
+            for block in blocks {
+                collectDefinitions(in: block, into: &definitions)
+            }
+        case let .unorderedList(items), let .orderedList(_, items):
+            for item in items.flatMap(\.blocks) {
+                collectDefinitions(in: item, into: &definitions)
+            }
+        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .html:
+            break
+        }
+    }
+
+    private func stripFootnoteDefinitions(from blocks: [MarkdownBlock]) -> [MarkdownBlock] {
+        blocks.compactMap(stripFootnoteDefinitions)
+    }
+
+    private func stripFootnoteDefinitions(from block: MarkdownBlock) -> MarkdownBlock? {
+        switch block {
+        case .footnoteDefinition:
+            return nil
+        case let .blockQuote(blocks):
+            let stripped = stripFootnoteDefinitions(from: blocks)
+            return stripped.isEmpty ? nil : .blockQuote(stripped)
+        case let .unorderedList(items):
+            return .unorderedList(items.map { item in
+                MarkdownBlock.ListItem(
+                    blocks: stripFootnoteDefinitions(from: item.blocks),
+                    checkbox: item.checkbox,
+                )
+            })
+        case let .orderedList(start, items):
+            return .orderedList(
+                start: start,
+                items: items.map { item in
+                    MarkdownBlock.ListItem(
+                        blocks: stripFootnoteDefinitions(from: item.blocks),
+                        checkbox: item.checkbox,
+                    )
+                },
+            )
+        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .html:
+            return block
+        }
+    }
+
+    private func collectReferences(
+        in block: MarkdownBlock,
+        definitions: [String: [MarkdownBlock]],
+        seen: inout Set<String>,
+        orderedKeys: inout [String],
+    ) {
+        switch block {
+        case let .heading(_, content), let .paragraph(content):
+            collectReferences(in: content, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+        case let .blockQuote(blocks):
+            for block in blocks {
+                collectReferences(in: block, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            }
+        case let .unorderedList(items), let .orderedList(_, items):
+            for item in items.flatMap(\.blocks) {
+                collectReferences(in: item, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            }
+        case let .table(table):
+            for item in table.headers + table.rows.flatMap(\.self) {
+                collectReferences(in: item, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            }
+        case .codeBlock, .displayMath, .thematicBreak, .html, .footnoteDefinition:
+            break
+        }
+    }
+
+    private func collectReferences(
+        in inlines: [MarkdownInline],
+        definitions: [String: [MarkdownBlock]],
+        seen: inout Set<String>,
+        orderedKeys: inout [String],
+    ) {
+        for inline in inlines {
+            switch inline {
+            case let .footnoteReference(label):
+                let key = footnoteLabelKey(label)
+                if definitions[key] != nil, seen.insert(key).inserted {
+                    orderedKeys.append(key)
+                }
+            case let .emphasis(children), let .strong(children), let .strikethrough(children):
+                collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            case let .link(children, _, _):
+                collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            case .text, .softBreak, .lineBreak, .code, .inlineMath, .image:
+                break
+            }
+        }
+    }
+}
+
+private func footnoteLabelKey(_ label: String) -> String {
+    label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+}
+
+private struct TableColumnMetrics {
+    var minimumWidth: Double
+    var preferredWidth: Double
+}
+
+private struct TablePreparedRow {
+    var cellLines: [[[PDFTextRun]]]
+}
+
+private struct BidiLine {
+    var visualRuns: [BidiPositionedRun]
+}
+
+private struct BidiPositionedRun {
+    var sourceTextRun: PDFTextRun
+    var displayText: String
+    var x: Double
+    var sourceScalarOffset: Int
+}
+
+private struct Layout {
+    var options: PDFOptions
+    var assetsBaseURL: URL?
+    var pages: [PDFPageCanvas] = [PDFPageCanvas()]
+    var images: [PDFImage] = []
+    var imageCache: [String: PDFImage] = [:]
+    var headingNames = PDFHeadingDestinationName()
+    var embeddedFonts: PDFEmbeddedFontCatalog
+    var taggedContentBuilder: PDFTaggedContentBuilder?
+    var markedContentDepth = 0
+    var y: Double
+    var listDepth = 0
+    var footnotesByLabelKey: [String: ResolvedFootnote] = [:]
+    var registeredNamedDestinations = Set<String>()
+
+    init(options: PDFOptions, assetsBaseURL: URL?) throws {
+        self.options = options
+        self.assetsBaseURL = assetsBaseURL
+        try Self.validateConformance(options)
+        embeddedFonts = try PDFEmbeddedFontCatalog(
+            fonts: options.embeddedFonts,
+            parseMathTables: options.mathTypesetting.isEnabled,
+        )
+        taggedContentBuilder = options.taggedPDF.isEnabled || options.conformance.requiresTaggedPDF
+            ? PDFTaggedContentBuilder()
+            : nil
+        y = options.pageSize.height - options.margins.top
+        drawPageBackgroundIfNeeded()
+    }
+
+    private static func validateConformance(_ options: PDFOptions) throws {
+        guard options.conformance.requiresDocumentTitle else {
+            return
+        }
+
+        let title = options.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !title.isEmpty else {
+            throw MarkdownPDFError.missingConformanceTitle(profile: options.conformance.displayName)
+        }
+    }
+
+    mutating func render(
+        _ document: MarkdownDocument,
+        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+    ) throws {
+        let resolvedFootnotes = FootnoteResolver().resolve(document)
+        let bodyDocument = MarkdownDocument(blocks: resolvedFootnotes.bodyBlocks)
+        footnotesByLabelKey = resolvedFootnotes.footnotesByLabelKey
+        let tableOfContentsInsertionIndex = tableOfContentsEntries.map {
+            $0.isEmpty ? nil : self.tableOfContentsInsertionIndex(for: bodyDocument)
+        } ?? nil
+
+        if tableOfContentsInsertionIndex == 0, let tableOfContentsEntries {
+            try renderTableOfContents(tableOfContentsEntries)
+        }
+
+        for (index, block) in bodyDocument.blocks.enumerated() {
+            keepHeadingWithNextBlock(block, isLast: index == bodyDocument.blocks.count - 1)
+            try render(block)
+            if tableOfContentsInsertionIndex == index + 1, let tableOfContentsEntries {
+                try renderTableOfContents(tableOfContentsEntries)
+            }
+        }
+
+        try renderFootnoteSection(resolvedFootnotes.footnotes)
+    }
+
+    func pdfData() throws -> Data {
+        try PDFDocumentWriter(
+            pageSize: options.pageSize,
+            fontSet: options.fontSet,
+            pages: pages,
+            images: images,
+            title: options.title,
+            streamCompression: options.streamCompression,
+            taggedContent: taggedContentBuilder?.build(language: options.taggedPDF.language),
+            conformance: options.conformance,
+        ).data()
+    }
+
+    func tableOfContentsEntries(maximumDepth: Int) -> [TableOfContentsEntry] {
+        pages.enumerated().flatMap { pageIndex, page in
+            page.headingDestinations.compactMap { destination in
+                guard destination.level <= maximumDepth else {
+                    return nil
+                }
+
+                return TableOfContentsEntry(
+                    destinationName: destination.name,
+                    title: destination.title,
+                    level: destination.level,
+                    pageNumber: pageIndex + 1,
+                )
+            }
+        }
+    }
+
+    private mutating func render(_ block: MarkdownBlock) throws {
+        switch block {
+        case let .heading(level, content):
+            let element = beginStructureElement(.heading(level: level))
+            defer { endStructureElement(element) }
+            let style = style(for: .heading(level: level))
+            let size = headingSize(level)
+            let topSpacing = headingTopSpacing(level)
+            ensureSpace(size * 1.8 + topSpacing)
+            addHeadingTopSpacing(topSpacing)
+            addHeadingDestination(level: level, content: content, y: y + size * 0.4)
+            try drawWrapped(
+                flatten(content, font: standardFont(for: style.fontRole), size: size, color: style.color),
+                x: options.margins.left,
+                maxWidth: contentWidth,
+                lineHeight: size * style.lineHeightMultiplier,
+            )
+            y -= size * style.spacingAfterMultiplier
+        case let .paragraph(content):
+            if try renderStandaloneImage(content) {
+                y -= 12
+            } else {
+                let element = beginStructureElement(.paragraph)
+                defer { endStructureElement(element) }
+                let role: PDFOptions.ElementRole = listDepth > 0 ? .list : .paragraph
+                let style = style(for: role)
+                try drawWrapped(
+                    flatten(content, font: standardFont(for: style.fontRole), size: fontSize(for: role), color: style.color),
+                    x: options.margins.left,
+                    maxWidth: contentWidth,
+                    lineHeight: bodyLineHeight,
+                )
+                y -= paragraphSpacing
+            }
+        case let .blockQuote(blocks):
+            let element = beginStructureElement(.blockQuote)
+            defer { endStructureElement(element) }
+            ensureSpace(24)
+            let savedLeft = options.margins.left
+            options.margins.left += 14
+            y -= blockQuoteTopSpacing
+            for nested in blocks {
+                try render(nested)
+            }
+            y -= blockQuoteBottomSpacing
+            options.margins.left = savedLeft
+        case let .unorderedList(items):
+            try renderList(items: items, start: nil)
+        case let .orderedList(start, items):
+            try renderList(items: items, start: start)
+        case let .codeBlock(info, code):
+            if isMermaidCodeBlock(info) {
+                try renderMermaidBlock(code)
+            } else if isChartCodeBlock(info) {
+                try renderChartFenceBlock(code)
+            } else {
+                try renderCodeBlock(code, info: info)
+            }
+        case let .displayMath(math):
+            try renderDisplayMath(math)
+        case let .table(table):
+            try renderTable(table)
+        case .thematicBreak:
+            ensureSpace(18)
+            let artifact = beginArtifactIfTagged()
+            defer { endMarkedContentIfNeeded(artifact) }
+            currentPage.drawLine(
+                x1: options.margins.left,
+                y1: y,
+                x2: options.pageSize.width - options.margins.right,
+                y2: y,
+                width: 0.75,
+                color: style(for: .thematicBreak).borderColor ?? style(for: .thematicBreak).color,
+            )
+            y -= 18
+        case let .html(html):
+            let element = beginStructureElement(.paragraph)
+            defer { endStructureElement(element) }
+            let style = style(for: .html)
+            try drawWrapped(
+                [PDFTextRun(text: html, font: standardFont(for: style.fontRole), size: fontSize(for: .html), color: style.color)],
+                x: options.margins.left,
+                maxWidth: contentWidth,
+                lineHeight: fontSize(for: .html) * style.lineHeightMultiplier,
+            )
+            y -= options.baseFontSize * style.spacingAfterMultiplier
+        case .footnoteDefinition:
+            break
+        }
+    }
+
+    private func tableOfContentsInsertionIndex(for document: MarkdownDocument) -> Int {
+        guard let first = document.blocks.first,
+              case .heading(level: 1, _) = first
+        else {
+            return 0
+        }
+
+        return 1
+    }
+
+    private mutating func renderTableOfContents(_ entries: [TableOfContentsEntry]) throws {
+        let tocElement = beginStructureElement(.tableOfContents)
+        defer { endStructureElement(tocElement) }
+
+        let titleSize = options.baseFontSize * 1.55
+        let entrySize = options.baseFontSize * 0.95
+        let lineHeight = entrySize * 1.35
+        let titleStyle = style(for: .heading2)
+        let widestPageNumber = try entries
+            .map { try textWidth(PDFTextRun(text: "\($0.pageNumber)", font: .helvetica, size: entrySize)) }
+            .max() ?? 0
+        let pageColumnWidth = max(28, widestPageNumber + 8)
+        let title = options.tableOfContents.title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        ensureSpace(titleSize * 2.2 + lineHeight)
+        let titleElement = beginStructureElement(.paragraph)
+        try drawRuns(
+            [
+                PDFTextRun(
+                    text: title.isEmpty ? "Table of Contents" : title,
+                    font: standardFont(for: titleStyle.fontRole),
+                    size: titleSize,
+                    color: titleStyle.color,
+                ),
+            ],
+            x: options.margins.left,
+            y: y,
+        )
+        endStructureElement(titleElement)
+        y -= titleSize * 1.45
+
+        for entry in entries {
+            try renderTableOfContentsEntry(
+                entry,
+                entrySize: entrySize,
+                lineHeight: lineHeight,
+                pageColumnWidth: pageColumnWidth,
+            )
+        }
+
+        y -= options.baseFontSize * 0.9
+    }
+
+    private mutating func renderTableOfContentsEntry(
+        _ entry: TableOfContentsEntry,
+        entrySize: Double,
+        lineHeight: Double,
+        pageColumnWidth: Double,
+    ) throws {
+        let itemElement = beginStructureElement(.tableOfContentsItem)
+        defer { endStructureElement(itemElement) }
+
+        let indent = Double(max(0, entry.level - 1)) * 14
+        let x = options.margins.left + indent
+        let pageText = "\(entry.pageNumber)"
+        let bodyStyle = style(for: .body)
+        let linkStyle = style(for: .link)
+        let pageRun = PDFTextRun(text: pageText, font: standardFont(for: bodyStyle.fontRole), size: entrySize, color: bodyStyle.color)
+        let pageRunWidth = try textWidth(pageRun)
+        let pageX = options.pageSize.width - options.margins.right - pageRunWidth
+        let titleWidth = max(36, contentWidth - indent - pageColumnWidth - 10)
+        let titleLines = try wrappedLines(
+            [
+                PDFTextRun(
+                    text: entry.title,
+                    font: standardFont(for: bodyStyle.fontRole),
+                    size: entrySize,
+                    color: linkStyle.color,
+                    linkDestination: "#\(entry.destinationName)",
+                ),
+            ],
+            maxWidth: titleWidth,
+        )
+
+        ensureSpace(Double(titleLines.count) * lineHeight)
+        for (index, line) in titleLines.enumerated() {
+            try drawRuns(line, x: x, y: y)
+            if index == titleLines.count - 1 {
+                let lineWidth = try textWidth(line)
+                drawTableOfContentsLeader(from: x + lineWidth + 5, to: pageX - 5, y: y + entrySize * 0.3)
+                try currentPage.drawTextRun(
+                    pageRun,
+                    x: pageX,
+                    y: y,
+                    fontSet: options.fontSet,
+                    embeddedFonts: embeddedFonts,
+                )
+            }
+            y -= lineHeight
+        }
+    }
+
+    private mutating func drawTableOfContentsLeader(from startX: Double, to endX: Double, y: Double) {
+        guard endX - startX > 12 else {
+            return
+        }
+
+        let artifact = beginArtifactIfTagged()
+        defer { endMarkedContentIfNeeded(artifact) }
+        currentPage.drawLine(
+            x1: startX,
+            y1: y,
+            x2: endX,
+            y2: y,
+            width: 0.25,
+            color: options.theme == .default
+                ? PDFColor(red: 0.72, green: 0.72, blue: 0.72)
+                : style(for: .thematicBreak).borderColor ?? PDFColor(red: 0.72, green: 0.72, blue: 0.72),
+        )
+    }
+
+    private mutating func renderFootnoteSection(_ footnotes: [ResolvedFootnote]) throws {
+        guard !footnotes.isEmpty else {
+            return
+        }
+
+        let footnoteStyle = style(for: .footnote)
+        let titleSize = options.baseFontSize * 0.95
+        let titleLineHeight = titleSize * 1.35
+        ensureSpace(titleLineHeight * 3)
+        if y < pageTopY - 1 {
+            y -= options.baseFontSize * 0.5
+        }
+
+        let artifact = beginArtifactIfTagged()
+        currentPage.drawLine(
+            x1: options.margins.left,
+            y1: y,
+            x2: options.margins.left + min(contentWidth, 120),
+            y2: y,
+            width: 0.5,
+            color: footnoteStyle.borderColor ?? footnoteStyle.color,
+        )
+        endMarkedContentIfNeeded(artifact)
+        y -= titleLineHeight
+
+        let titleElement = beginStructureElement(.paragraph)
+        try drawRuns(
+            [PDFTextRun(text: "Footnotes", font: .helveticaBold, size: titleSize, color: footnoteStyle.color)],
+            x: options.margins.left,
+            y: y,
+        )
+        endStructureElement(titleElement)
+        y -= titleLineHeight
+
+        for footnote in footnotes {
+            try renderFootnote(footnote)
+        }
+    }
+
+    private mutating func renderFootnote(_ footnote: ResolvedFootnote) throws {
+        let footnoteStyle = style(for: .footnote)
+        let linkStyle = style(for: .link)
+        let size = fontSize(for: .footnote)
+        let lineHeight = size * footnoteStyle.lineHeightMultiplier
+        let labelWidth = max(22, size * 2.2)
+        let bodyX = options.margins.left + labelWidth
+        let bodyWidth = max(1, contentWidth - labelWidth)
+        let blocks = footnote.blocks.isEmpty ? [.paragraph([])] : footnote.blocks
+        let firstRuns = try flatten(
+            footnoteInlines(for: blocks[0]),
+            font: standardFont(for: footnoteStyle.fontRole),
+            size: size,
+            color: footnoteStyle.color,
+        )
+        let firstLines = try wrappedLines(firstRuns, maxWidth: bodyWidth)
+
+        ensureSpace(lineHeight)
+        addNamedDestination(footnote.definitionDestinationName, x: options.margins.left, y: y + size)
+        let element = beginStructureElement(.paragraph)
+        try drawRuns(
+            [
+                PDFTextRun(
+                    text: "\(footnote.number).",
+                    font: standardFont(for: footnoteStyle.fontRole),
+                    size: size,
+                    color: linkStyle.color,
+                    underline: linkStyle.underline,
+                    linkDestination: "#\(footnote.referenceDestinationName)",
+                ),
+            ],
+            x: options.margins.left,
+            y: y,
+            applyBidi: false,
+        )
+        if let firstLine = firstLines.first {
+            try drawRuns(firstLine, x: bodyX, y: y, maxWidth: bodyWidth)
+        }
+        y -= lineHeight
+
+        for line in firstLines.dropFirst() {
+            ensureSpace(lineHeight)
+            try drawRuns(line, x: bodyX, y: y, maxWidth: bodyWidth)
+            y -= lineHeight
+        }
+        endStructureElement(element)
+
+        for block in blocks.dropFirst() {
+            try renderFootnoteBlock(block, x: bodyX, maxWidth: bodyWidth, size: size, lineHeight: lineHeight)
+        }
+        y -= max(2, size * footnoteStyle.spacingAfterMultiplier)
+    }
+
+    private mutating func renderFootnoteBlock(
+        _ block: MarkdownBlock,
+        x: Double,
+        maxWidth: Double,
+        size: Double,
+        lineHeight: Double,
+    ) throws {
+        let element = beginStructureElement(.paragraph)
+        defer { endStructureElement(element) }
+        let footnoteStyle = style(for: .footnote)
+        try drawWrapped(
+            flatten(footnoteInlines(for: block), font: standardFont(for: footnoteStyle.fontRole), size: size, color: footnoteStyle.color),
+            x: x,
+            maxWidth: maxWidth,
+            lineHeight: lineHeight,
+        )
+    }
+
+    private func footnoteInlines(for block: MarkdownBlock) -> [MarkdownInline] {
+        switch block {
+        case let .heading(_, content), let .paragraph(content):
+            content
+        case let .codeBlock(_, code):
+            [.code(code)]
+        case let .displayMath(math):
+            [.inlineMath(MarkdownMath(source: math.source, mode: .inline))]
+        case let .html(html):
+            [.text(html)]
+        case let .blockQuote(blocks):
+            [.text(blocks.map(plainText).joined(separator: " "))]
+        case let .unorderedList(items), let .orderedList(_, items):
+            [.text(items.flatMap(\.blocks).map(plainText).joined(separator: " "))]
+        case let .table(table):
+            [.text((table.headers + table.rows.flatMap(\.self)).map { plainText($0) }.joined(separator: " "))]
+        case .thematicBreak, .footnoteDefinition:
+            []
+        }
+    }
+
+    private mutating func renderList(
+        items: [MarkdownBlock.ListItem],
+        start: Int?,
+    ) throws {
+        let listElement = beginStructureElement(
+            .list,
+            attributes: PDFTaggedContent.Attributes(
+                listNumbering: start == nil ? .unordered : .ordered,
+            ),
+        )
+        defer { endStructureElement(listElement) }
+
+        var number = start ?? 0
+        listDepth += 1
+        defer { listDepth -= 1 }
+        for item in items {
+            let itemElement = beginStructureElement(.listItem)
+            ensureSpace(bodyLineHeight)
+            if start != nil {
+                let labelElement = beginStructureElement(.listLabel)
+                let markerStyle = style(for: .listMarker)
+                try drawRuns(
+                    [
+                        PDFTextRun(
+                            text: "\(number).",
+                            font: standardFont(for: markerStyle.fontRole),
+                            size: fontSize(for: .listMarker),
+                            color: markerStyle.color,
+                        ),
+                    ],
+                    x: options.margins.left,
+                    y: y,
+                    applyBidi: false,
+                )
+                endStructureElement(labelElement)
+                number += 1
+            } else if let checkbox = item.checkbox {
+                let labelElement = beginStructureElement(.listLabel)
+                drawTaskCheckbox(checkbox, x: options.margins.left, baselineY: y)
+                endStructureElement(labelElement)
+            }
+            let savedLeft = options.margins.left
+            options.margins.left += 24
+            let bodyElement = beginStructureElement(.listBody)
+            for block in item.blocks {
+                try render(block)
+            }
+            endStructureElement(bodyElement)
+            options.margins.left = savedLeft
+            endStructureElement(itemElement)
+        }
+        y -= listTrailingSpacing
+    }
+
+    private mutating func drawTaskCheckbox(
+        _ checkbox: MarkdownBlock.ListItem.Checkbox,
+        x: Double,
+        baselineY: Double,
+    ) {
+        let size = max(7, options.baseFontSize * 0.72)
+        let boxX = x + max(0, (16 - size) / 2)
+        let boxY = baselineY - size * 0.2
+        let markerColor = style(for: .listMarker).color
+        let marked = beginMarkedContentForCurrentElement()
+        currentPage.drawRectangle(
+            x: boxX,
+            y: boxY,
+            width: size,
+            height: size,
+            stroke: markerColor,
+            fill: nil,
+        )
+
+        if checkbox == .checked {
+            currentPage.drawPolyline(
+                points: [
+                    PDFPageCanvas.Point(x: boxX + size * 0.2, y: boxY + size * 0.48),
+                    PDFPageCanvas.Point(x: boxX + size * 0.43, y: boxY + size * 0.22),
+                    PDFPageCanvas.Point(x: boxX + size * 0.82, y: boxY + size * 0.78),
+                ],
+                width: 1.0,
+                color: markerColor,
+            )
+        }
+        endMarkedContentIfNeeded(marked)
+    }
+
+    private mutating func renderCodeBlock(_ code: String, info: String? = nil) throws {
+        let codeElement = beginStructureElement(.code)
+        defer { endStructureElement(codeElement) }
+
+        let codeStyle = style(for: .codeBlock)
+        let size = fontSize(for: .codeBlock)
+        let lineHeight = size * codeStyle.lineHeightMultiplier
+        let padding = codeBlockPadding
+        let codeAreaWidth = max(1, contentWidth - padding * 2)
+        var syntaxHighlighter = syntaxHighlighter(for: info)
+        let sourceLines = code.split(separator: "\n", omittingEmptySubsequences: false)
+        let lines = try sourceLines
+            .map { line in
+                let displayText = expandCodeTabs(String(line))
+                return try wrappedLines(
+                    codeLineRuns(
+                        displayText,
+                        size: size,
+                        syntaxHighlighter: &syntaxHighlighter,
+                    ),
+                    maxWidth: codeAreaWidth,
+                )
+            }
+            .flatMap(\.self)
+        let drawableLines = lines.isEmpty ? [[]] : lines
+        var lineOffset = 0
+
+        while lineOffset < drawableLines.count {
+            ensureSpace(lineHeight + padding * 2)
+            let lineCount = min(
+                drawableLines.count - lineOffset,
+                codeBlockLineCapacity(lineHeight: lineHeight, padding: padding),
+            )
+            try renderCodeBlockFragment(
+                Array(drawableLines[lineOffset ..< lineOffset + lineCount]),
+                size: size,
+                lineHeight: lineHeight,
+                padding: padding,
+            )
+            lineOffset += lineCount
+            if lineOffset < drawableLines.count {
+                startNewPage()
+            }
+        }
+
+        y -= codeBlockFollowingGap
+    }
+
+    private mutating func renderDisplayMath(_ math: MarkdownMath) throws {
+        let mathElement = beginStructureElement(.paragraph)
+        defer { endStructureElement(mathElement) }
+
+        let style = style(for: .displayMath)
+        let size = fontSize(for: .displayMath)
+        let topSpacing = options.baseFontSize * style.spacingBeforeMultiplier
+        let bottomSpacing = options.baseFontSize * style.spacingAfterMultiplier
+
+        do {
+            let parsed = try MathParser().parse(math.source)
+            let layout = try mathLayout(for: style)
+            let box = try layout.layout(parsed.root, size: size, displayStyle: true)
+            let totalHeight = topSpacing + box.height + box.depth + bottomSpacing
+            ensureSpace(totalHeight)
+            y -= topSpacing
+            let baselineY = y - box.height
+            let x = options.margins.left + max(0, (contentWidth - box.width) / 2)
+
+            currentPage.beginActualText(parsed.linearizedText)
+            defer { currentPage.endMarkedContent() }
+            try drawMathBox(box, x: x, baselineY: baselineY)
+            y = baselineY - box.depth - bottomSpacing
+        } catch let error as MarkdownPDFError {
+            throw error
+        } catch {
+            let fallback = math.delimitedSource
+            let runs = [
+                PDFTextRun(
+                    text: fallback,
+                    font: standardFont(for: style.fontRole),
+                    size: size,
+                    color: style.color,
+                ),
+            ]
+            let lineHeight = size * style.lineHeightMultiplier
+            ensureSpace(topSpacing + lineHeight + bottomSpacing)
+            y -= topSpacing
+            try drawWrapped(runs, x: options.margins.left, maxWidth: contentWidth, lineHeight: lineHeight)
+            y -= bottomSpacing
+        }
+    }
+
+    private mutating func drawMathBox(
+        _ box: MathBox,
+        x: Double,
+        baselineY: Double,
+    ) throws {
+        let marked = beginMarkedContentForCurrentElement()
+        defer { endMarkedContentIfNeeded(marked) }
+
+        for element in box.elements {
+            switch element {
+            case let .text(run, offsetX, offsetY):
+                try currentPage.drawTextRun(
+                    PDFTextRun(run),
+                    x: x + offsetX,
+                    y: baselineY + offsetY,
+                    fontSet: options.fontSet,
+                    embeddedFonts: embeddedFonts,
+                )
+            case let .rule(offsetX, offsetY, width, height, color):
+                currentPage.drawRectangle(
+                    x: x + offsetX,
+                    y: baselineY + offsetY,
+                    width: width,
+                    height: height,
+                    stroke: nil,
+                    fill: color.pdfColor,
+                )
+            case let .line(x1, y1, x2, y2, thickness, color):
+                currentPage.drawLine(
+                    x1: x + x1,
+                    y1: baselineY + y1,
+                    x2: x + x2,
+                    y2: baselineY + y2,
+                    width: thickness,
+                    color: color.pdfColor,
+                )
+            }
+        }
+    }
+
+    private func syntaxHighlighter(for info: String?) -> SourceCodeSyntaxHighlighter? {
+        guard options.codeSyntaxHighlighting.isEnabled,
+              let language = SourceCodeLanguage(hint: info)
+        else {
+            return nil
+        }
+
+        return SourceCodeSyntaxHighlighter(language: language)
+    }
+
+    private func codeLineRuns(
+        _ line: String,
+        size: Double,
+        syntaxHighlighter: inout SourceCodeSyntaxHighlighter?,
+    ) -> [PDFTextRun] {
+        guard var highlighter = syntaxHighlighter else {
+            let codeStyle = style(for: .codeBlock)
+            return [PDFTextRun(text: line, font: standardFont(for: codeStyle.fontRole), size: size, color: codeStyle.color)]
+        }
+
+        let tokens = highlighter.tokens(for: line)
+        syntaxHighlighter = highlighter
+        let codeStyle = style(for: .codeBlock)
+        return tokens.map { token in
+            PDFTextRun(
+                text: token.text,
+                font: standardFont(for: codeStyle.fontRole),
+                size: size,
+                color: color(for: token.kind),
+            )
+        }
+    }
+
+    private func color(for tokenKind: SourceCodeTokenKind) -> PDFColor {
+        options.theme.codeSyntax.color(for: tokenKind)
+    }
+
+    private func isMermaidCodeBlock(_ info: String?) -> Bool {
+        codeBlockLanguage(info) == "mermaid"
+    }
+
+    private func isChartCodeBlock(_ info: String?) -> Bool {
+        codeBlockLanguage(info) == "chart"
+    }
+
+    private func codeBlockLanguage(_ info: String?) -> String? {
+        guard let language = info?
+            .split(whereSeparator: \.isWhitespace)
+            .first?
+            .lowercased()
+        else {
+            return nil
+        }
+
+        return language
+    }
+
+    private mutating func renderMermaidBlock(_ code: String) throws {
+        if ChartBlock.isMermaidPieCandidate(code) {
+            switch ChartBlock.parseMermaidPie(code) {
+            case let .chart(chart):
+                try renderChart(chart, sourceCode: code, fallbackPrefix: "Unsupported Mermaid chart")
+            case let .unsupported(reason):
+                try renderUnsupportedMermaid(reason: "unsupported Mermaid pie chart: \(reason)", code: code)
+            }
+            return
+        }
+
+        switch MermaidDiagram.parse(code) {
+        case let .diagram(diagram):
+            switch try mermaidRenderPlan(for: diagram) {
+            case let .plan(plan):
+                ensureSpace(plan.height + 12)
+                let figureElement = beginStructureElement(
+                    .figure,
+                    attributes: PDFTaggedContent.Attributes(alternateDescription: "Mermaid diagram"),
+                )
+                let marked = beginMarkedContentForCurrentElement()
+                try drawMermaidPlan(plan)
+                endMarkedContentIfNeeded(marked)
+                endStructureElement(figureElement)
+                y -= plan.height + 12
+            case let .fallback(reason):
+                try renderUnsupportedMermaid(reason: reason, code: code)
+            }
+        case let .unsupported(reason):
+            try renderUnsupportedMermaid(reason: reason, code: code)
+        }
+    }
+
+    private mutating func renderUnsupportedMermaid(reason: String, code: String) throws {
+        try renderCodeBlock("Unsupported Mermaid diagram: \(reason)\n\(code)")
+    }
+
+    private mutating func renderChartFenceBlock(_ code: String) throws {
+        switch ChartBlock.parseChartFence(code) {
+        case let .chart(chart):
+            try renderChart(chart, sourceCode: code, fallbackPrefix: "Unsupported chart")
+        case let .unsupported(reason):
+            try renderCodeBlock("Unsupported chart: \(reason)\n\(code)")
+        }
+    }
+
+    private mutating func renderChart(
+        _ chart: ChartBlock,
+        sourceCode: String,
+        fallbackPrefix: String,
+    ) throws {
+        switch try chartRenderPlan(for: chart) {
+        case let .plan(plan):
+            ensureSpace(plan.height + 12)
+            switch try chartRenderPlan(for: chart) {
+            case let .plan(positionedPlan):
+                let figureElement = beginStructureElement(
+                    .figure,
+                    attributes: PDFTaggedContent.Attributes(
+                        alternateDescription: chartAlternateDescription(positionedPlan.chart),
+                    ),
+                )
+                let marked = beginMarkedContentForCurrentElement()
+                try drawChartPlan(positionedPlan)
+                endMarkedContentIfNeeded(marked)
+                endStructureElement(figureElement)
+                y -= positionedPlan.height + 12
+            case let .fallback(reason):
+                try renderCodeBlock("\(fallbackPrefix): \(reason)\n\(sourceCode)")
+            }
+        case let .fallback(reason):
+            try renderCodeBlock("\(fallbackPrefix): \(reason)\n\(sourceCode)")
+        }
+    }
+
+    private func chartAlternateDescription(_ chart: ChartBlock) -> String {
+        if let title = chart.title, !title.isEmpty {
+            return title
+        }
+        return switch chart.kind {
+        case .pie:
+            "Pie chart"
+        case .bar:
+            "Bar chart"
+        case .line:
+            "Line chart"
+        case .scatter:
+            "Scatter chart"
+        }
+    }
+
+    private func chartRenderPlan(for chart: ChartBlock) throws -> ChartRenderPlanResult {
+        guard contentWidth >= 180 else {
+            return .fallback("content area is too narrow for native chart rendering")
+        }
+
+        let height = min(contentHeight, max(190, min(260, contentWidth * 0.55)))
+        guard height >= 170 else {
+            return .fallback("content area is too short for native chart rendering")
+        }
+        guard chart.series.count <= chartPalette.count else {
+            return .fallback("too many series for the portable chart palette")
+        }
+        if let title = chart.title,
+           try textWidth(PDFTextRun(text: title, font: .helveticaBold, size: chartTitleSize)) > contentWidth - 16
+        {
+            return .fallback("chart title is wider than the content area")
+        }
+        for series in chart.series {
+            guard !series.name.isEmpty else {
+                return .fallback("series names must not be empty")
+            }
+        }
+        for label in chart.categories {
+            guard !label.isEmpty else {
+                return .fallback("category labels must not be empty")
+            }
+        }
+
+        switch chart.kind {
+        case .pie:
+            return try pieChartRenderPlan(for: chart, height: height)
+        case .bar, .line, .scatter:
+            return try cartesianChartRenderPlan(for: chart, height: height)
+        }
+    }
+
+    private func pieChartRenderPlan(for chart: ChartBlock, height: Double) throws -> ChartRenderPlanResult {
+        guard let series = chart.series.first, !series.points.isEmpty else {
+            return .fallback("pie chart has no slices")
+        }
+        let titleHeight = chart.title == nil ? 8.0 : 26.0
+        let legendWidth = try max(92, min(150, widestChartLabelWidth(chart.categories) + 24))
+        let plotWidth = contentWidth - legendWidth - 18
+        let radius = min(plotWidth / 2 - 8, (height - titleHeight - 18) / 2)
+        guard radius >= 42 else {
+            return .fallback("pie chart leaves too little room for slices and legend")
+        }
+
+        return .plan(ChartRenderPlan(
+            chart: chart,
+            height: height,
+            plotFrame: nil,
+            xTicks: [],
+            yTicks: [],
+            xDomain: (0, 0),
+            yDomain: (0, 0),
+            pieRadius: radius,
+            legendWidth: legendWidth,
+        ))
+    }
+
+    private func cartesianChartRenderPlan(for chart: ChartBlock, height: Double) throws -> ChartRenderPlanResult {
+        let allPoints = chart.series.flatMap(\.points)
+        guard !allPoints.isEmpty else {
+            return .fallback("chart has no data points")
+        }
+
+        let yValues = allPoints.map(\.y) + (chart.kind == .bar ? [0] : [])
+        let yTicks = niceChartTicks(min: yValues.min() ?? 0, max: yValues.max() ?? 1, targetCount: 5)
+        guard let yFirst = yTicks.first, let yLast = yTicks.last, yLast > yFirst else {
+            return .fallback("chart y axis could not be scaled")
+        }
+        let yLabelWidth = try max(34, yTicks.map { try chartTextWidth(formatChartNumber($0)) }.max() ?? 34)
+        let leftAxisWidth = min(max(38, yLabelWidth + 10), 68)
+        let titleHeight = chart.title == nil ? 8.0 : 26.0
+        let legendHeight = 30.0
+        let bottomAxisHeight = chart.xLabel == nil ? 34.0 : 48.0
+        let plotFrame = ChartFrame(
+            left: options.margins.left + leftAxisWidth,
+            top: y - titleHeight - legendHeight,
+            width: contentWidth - leftAxisWidth - 12,
+            height: height - titleHeight - legendHeight - bottomAxisHeight,
+        )
+        guard plotFrame.width >= 96, plotFrame.height >= 72 else {
+            return .fallback("chart plot area is too small")
+        }
+
+        let xTicks: [Double]
+        let xDomain: (min: Double, max: Double)
+        switch chart.kind {
+        case .bar:
+            guard !chart.categories.isEmpty else {
+                return .fallback("bar charts require categories")
+            }
+            let bandWidth = plotFrame.width / Double(chart.categories.count)
+            for category in chart.categories {
+                if try chartTextWidth(category) > bandWidth * 0.92 {
+                    return .fallback("category label `\(category)` would overlap adjacent labels")
+                }
+            }
+            xTicks = chart.series[0].points.map(\.x)
+            xDomain = (0, Double(max(0, chart.categories.count - 1)))
+        case .line:
+            let values = allPoints.map(\.x)
+            xDomain = expandedDomain(min: values.min() ?? 0, max: values.max() ?? 1)
+            xTicks = chart.categories.isEmpty ? niceChartTicks(min: xDomain.min, max: xDomain.max, targetCount: 5) : chart.series[0].points.map(\.x)
+            if !chart.categories.isEmpty {
+                let bandWidth = plotFrame.width / Double(chart.categories.count)
+                for category in chart.categories where try chartTextWidth(category) > bandWidth * 0.92 {
+                    return .fallback("category label `\(category)` would overlap adjacent labels")
+                }
+            }
+        case .scatter:
+            let values = allPoints.map(\.x)
+            let domain = expandedDomain(min: values.min() ?? 0, max: values.max() ?? 1)
+            xTicks = niceChartTicks(min: domain.min, max: domain.max, targetCount: 5)
+            xDomain = (xTicks.first ?? domain.min, xTicks.last ?? domain.max)
+            if let reason = try chartTickOverlapReason(ticks: xTicks, domain: xDomain, plotFrame: plotFrame) {
+                return .fallback(reason)
+            }
+        case .pie:
+            xTicks = []
+            xDomain = (0, 0)
+        }
+
+        return .plan(ChartRenderPlan(
+            chart: chart,
+            height: height,
+            plotFrame: plotFrame,
+            xTicks: xTicks,
+            yTicks: yTicks,
+            xDomain: xDomain,
+            yDomain: (yFirst, yLast),
+            pieRadius: nil,
+            legendWidth: nil,
+        ))
+    }
+
+    private func chartTickOverlapReason(
+        ticks: [Double],
+        domain: (min: Double, max: Double),
+        plotFrame: ChartFrame,
+    ) throws -> String? {
+        guard ticks.count > 1, domain.max > domain.min else {
+            return nil
+        }
+        let positions = ticks.map { plotFrame.left + ($0 - domain.min) / (domain.max - domain.min) * plotFrame.width }
+        let widths = try ticks.map { try chartTextWidth(formatChartNumber($0)) }
+        for index in 1 ..< ticks.count {
+            let previousRight = positions[index - 1] + widths[index - 1] / 2
+            let currentLeft = positions[index] - widths[index] / 2
+            if currentLeft < previousRight + 4 {
+                return "x axis tick labels would overlap"
+            }
+        }
+        return nil
+    }
+
+    private mutating func drawChartPlan(_ plan: ChartRenderPlan) throws {
+        let topY = y
+        currentPage.drawRectangle(
+            x: options.margins.left - 4,
+            y: topY - plan.height,
+            width: contentWidth + 8,
+            height: plan.height,
+            stroke: PDFColor(red: 0.72, green: 0.76, blue: 0.80),
+            fill: PDFColor(red: 0.98, green: 0.985, blue: 0.99),
+        )
+
+        if let title = plan.chart.title {
+            try drawChartText(
+                title,
+                x: options.margins.left + contentWidth / 2,
+                y: topY - 17,
+                font: .helveticaBold,
+                size: chartTitleSize,
+                alignment: .center,
+            )
+        }
+
+        switch plan.chart.kind {
+        case .pie:
+            try drawPieChart(plan, topY: topY)
+        case .bar:
+            try drawBarChart(plan, topY: topY)
+        case .line:
+            try drawLineChart(plan, topY: topY)
+        case .scatter:
+            try drawScatterChart(plan, topY: topY)
+        }
+    }
+
+    private mutating func drawPieChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let radius = plan.pieRadius,
+              let legendWidth = plan.legendWidth,
+              let series = plan.chart.series.first
+        else {
+            return
+        }
+
+        let titleHeight = plan.chart.title == nil ? 8.0 : 26.0
+        let centerX = options.margins.left + radius + 14
+        let centerY = topY - titleHeight - (plan.height - titleHeight) / 2
+        let total = series.points.reduce(0) { $0 + $1.y }
+        var angle = Double.pi / 2
+
+        for (index, point) in series.points.enumerated() {
+            let sweep = -Double.pi * 2 * point.y / total
+            let nextAngle = angle + sweep
+            currentPage.drawPieSlice(
+                centerX: centerX,
+                centerY: centerY,
+                radius: radius,
+                startAngle: angle,
+                endAngle: nextAngle,
+                fill: chartPalette[index % chartPalette.count],
+            )
+            angle = nextAngle
+        }
+
+        let legendX = options.margins.left + contentWidth - legendWidth + 4
+        var legendY = topY - titleHeight - 16
+        for (index, point) in series.points.enumerated() {
+            let color = chartPalette[index % chartPalette.count]
+            currentPage.drawRectangle(x: legendX, y: legendY - 8, width: 9, height: 9, stroke: nil, fill: color)
+            try drawChartText(
+                "\(point.label ?? "") \(formatChartNumber(point.y))",
+                x: legendX + 14,
+                y: legendY - 7,
+                size: chartLabelSize,
+            )
+            legendY -= 15
+        }
+    }
+
+    private mutating func drawBarChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let plotFrame = plan.plotFrame else {
+            return
+        }
+        try drawCartesianBase(plan, plotFrame: plotFrame, topY: topY)
+
+        let baselineY = chartY(0, domain: plan.yDomain, frame: plotFrame)
+        let bandWidth = plotFrame.width / Double(plan.chart.categories.count)
+        let groupWidth = bandWidth * 0.68
+        let barWidth = max(2, groupWidth / Double(plan.chart.series.count))
+
+        for (seriesIndex, series) in plan.chart.series.enumerated() {
+            let color = chartPalette[seriesIndex % chartPalette.count]
+            for (pointIndex, point) in series.points.enumerated() {
+                let x = plotFrame.left
+                    + Double(pointIndex) * bandWidth
+                    + (bandWidth - groupWidth) / 2
+                    + Double(seriesIndex) * barWidth
+                let valueY = chartY(point.y, domain: plan.yDomain, frame: plotFrame)
+                let y = min(baselineY, valueY)
+                currentPage.drawRectangle(
+                    x: x,
+                    y: y,
+                    width: max(1.5, barWidth - 1),
+                    height: max(0.8, abs(valueY - baselineY)),
+                    stroke: nil,
+                    fill: color,
+                )
+            }
+        }
+
+        try drawCategoricalXAxis(categories: plan.chart.categories, plotFrame: plotFrame)
+        try drawChartLegend(plan.chart.series.map(\.name), topY: topY)
+    }
+
+    private mutating func drawLineChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let plotFrame = plan.plotFrame else {
+            return
+        }
+        try drawCartesianBase(plan, plotFrame: plotFrame, topY: topY)
+
+        for (seriesIndex, series) in plan.chart.series.enumerated() {
+            let color = chartPalette[seriesIndex % chartPalette.count]
+            let points = series.points.map {
+                PDFPageCanvas.Point(
+                    x: chartX($0.x, domain: plan.xDomain, frame: plotFrame),
+                    y: chartY($0.y, domain: plan.yDomain, frame: plotFrame),
+                )
+            }
+            currentPage.drawPolyline(points: points, width: 1.2, color: color)
+            for point in points {
+                currentPage.drawCircle(x: point.x, y: point.y, radius: 2.5, stroke: .white, fill: color)
+            }
+        }
+
+        if plan.chart.categories.isEmpty {
+            try drawNumericXAxis(ticks: plan.xTicks, domain: plan.xDomain, plotFrame: plotFrame)
+        } else {
+            try drawCategoricalXAxis(categories: plan.chart.categories, plotFrame: plotFrame)
+        }
+        try drawChartLegend(plan.chart.series.map(\.name), topY: topY)
+    }
+
+    private mutating func drawScatterChart(_ plan: ChartRenderPlan, topY: Double) throws {
+        guard let plotFrame = plan.plotFrame else {
+            return
+        }
+        try drawCartesianBase(plan, plotFrame: plotFrame, topY: topY)
+
+        for (seriesIndex, series) in plan.chart.series.enumerated() {
+            let color = chartPalette[seriesIndex % chartPalette.count]
+            for point in series.points {
+                let marker = PDFPageCanvas.Point(
+                    x: chartX(point.x, domain: plan.xDomain, frame: plotFrame),
+                    y: chartY(point.y, domain: plan.yDomain, frame: plotFrame),
+                )
+                if seriesIndex % 3 == 2 {
+                    currentPage.drawPolygon(
+                        points: [
+                            PDFPageCanvas.Point(x: marker.x, y: marker.y + 3.2),
+                            PDFPageCanvas.Point(x: marker.x - 3.2, y: marker.y - 2.8),
+                            PDFPageCanvas.Point(x: marker.x + 3.2, y: marker.y - 2.8),
+                        ],
+                        stroke: .white,
+                        fill: color,
+                    )
+                } else if seriesIndex % 3 == 1 {
+                    currentPage.drawRectangle(
+                        x: marker.x - 2.8,
+                        y: marker.y - 2.8,
+                        width: 5.6,
+                        height: 5.6,
+                        stroke: .white,
+                        fill: color,
+                    )
+                } else {
+                    currentPage.drawCircle(x: marker.x, y: marker.y, radius: 3, stroke: .white, fill: color)
+                }
+            }
+        }
+
+        try drawNumericXAxis(ticks: plan.xTicks, domain: plan.xDomain, plotFrame: plotFrame)
+        try drawChartLegend(plan.chart.series.map(\.name), topY: topY)
+    }
+
+    private mutating func drawCartesianBase(
+        _ plan: ChartRenderPlan,
+        plotFrame: ChartFrame,
+        topY _: Double,
+    ) throws {
+        for tick in plan.yTicks {
+            let tickY = chartY(tick, domain: plan.yDomain, frame: plotFrame)
+            currentPage.drawLine(
+                x1: plotFrame.left,
+                y1: tickY,
+                x2: plotFrame.right,
+                y2: tickY,
+                width: 0.25,
+                color: PDFColor(red: 0.84, green: 0.86, blue: 0.88),
+            )
+            try drawChartText(
+                formatChartNumber(tick),
+                x: plotFrame.left - 6,
+                y: tickY - chartLabelSize * 0.35,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .right,
+            )
+        }
+
+        currentPage.drawLine(x1: plotFrame.left, y1: plotFrame.bottom, x2: plotFrame.left, y2: plotFrame.top, width: 0.65)
+        currentPage.drawLine(x1: plotFrame.left, y1: plotFrame.bottom, x2: plotFrame.right, y2: plotFrame.bottom, width: 0.65)
+
+        if let yLabel = plan.chart.yLabel {
+            try drawChartText(
+                yLabel,
+                x: plotFrame.left,
+                y: plotFrame.top - chartLabelSize - 5,
+                size: chartLabelSize,
+                color: .gray,
+            )
+        }
+        if let xLabel = plan.chart.xLabel {
+            try drawChartText(
+                xLabel,
+                x: plotFrame.left + plotFrame.width / 2,
+                y: plotFrame.bottom - 36,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .center,
+            )
+        }
+    }
+
+    private mutating func drawCategoricalXAxis(categories: [String], plotFrame: ChartFrame) throws {
+        let bandWidth = plotFrame.width / Double(categories.count)
+        for (index, rawCategory) in categories.enumerated() {
+            let category = try truncatedChartLabel(rawCategory, maxWidth: min(80, bandWidth - 4))
+            try drawChartText(
+                category,
+                x: plotFrame.left + Double(index) * bandWidth + bandWidth / 2,
+                y: plotFrame.bottom - 13,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .center,
+            )
+        }
+    }
+
+    private mutating func drawNumericXAxis(
+        ticks: [Double],
+        domain: (min: Double, max: Double),
+        plotFrame: ChartFrame,
+    ) throws {
+        for tick in ticks {
+            let tickX = chartX(tick, domain: domain, frame: plotFrame)
+            currentPage.drawLine(
+                x1: tickX,
+                y1: plotFrame.bottom,
+                x2: tickX,
+                y2: plotFrame.top,
+                width: 0.2,
+                color: PDFColor(red: 0.88, green: 0.89, blue: 0.91),
+            )
+            try drawChartText(
+                formatChartNumber(tick),
+                x: tickX,
+                y: plotFrame.bottom - 13,
+                size: chartLabelSize,
+                color: .gray,
+                alignment: .center,
+            )
+        }
+    }
+
+    private mutating func drawChartLegend(_ labels: [String], topY: Double) throws {
+        guard !labels.isEmpty else {
+            return
+        }
+
+        let y = topY - (labels.count > 1 ? 39 : 33)
+        let textX = options.margins.left + 18
+        let spacer = "   "
+        let spacerWidth = try chartTextWidth(spacer)
+        var textCursor = textX
+        var legendText = ""
+
+        for (index, rawLabel) in labels.enumerated() {
+            let label = try truncatedChartLabel(rawLabel, maxWidth: 92)
+            let color = chartPalette[index % chartPalette.count]
+            currentPage.drawRectangle(x: textCursor - 14, y: y - 7, width: 10, height: 8, stroke: nil, fill: color)
+            let labelWidth = try chartTextWidth(label)
+            textCursor += labelWidth
+            legendText += label
+            if index < labels.count - 1 {
+                textCursor += spacerWidth
+                legendText += spacer
+            }
+        }
+        try drawChartText(legendText, x: textX, y: y - 6, size: chartLabelSize)
+    }
+
+    private mutating func drawChartText(
+        _ text: String,
+        x: Double,
+        y: Double,
+        font: StandardFont = .helvetica,
+        size: Double? = nil,
+        color: PDFColor = .black,
+        alignment: ChartTextAlignment = .left,
+    ) throws {
+        let run = PDFTextRun(text: text, font: font, size: size ?? chartLabelSize, color: color)
+        let width = try textWidth(run)
+        let drawX = switch alignment {
+        case .left:
+            x
+        case .center:
+            x - width / 2
+        case .right:
+            x - width
+        }
+        try currentPage.drawTextRun(run, x: drawX, y: y, fontSet: options.fontSet, embeddedFonts: embeddedFonts)
+    }
+
+    private func chartX(_ value: Double, domain: (min: Double, max: Double), frame: ChartFrame) -> Double {
+        guard domain.max > domain.min else {
+            return frame.left
+        }
+        return frame.left + (value - domain.min) / (domain.max - domain.min) * frame.width
+    }
+
+    private func chartY(_ value: Double, domain: (min: Double, max: Double), frame: ChartFrame) -> Double {
+        guard domain.max > domain.min else {
+            return frame.bottom
+        }
+        return frame.bottom + (value - domain.min) / (domain.max - domain.min) * frame.height
+    }
+
+    private func niceChartTicks(min rawMin: Double, max rawMax: Double, targetCount: Int) -> [Double] {
+        let domain = expandedDomain(min: rawMin, max: rawMax)
+        let span = niceChartNumber(domain.max - domain.min, round: false)
+        let step = niceChartNumber(span / Double(max(1, targetCount - 1)), round: true)
+        let graphMin = floor(domain.min / step) * step
+        let graphMax = ceil(domain.max / step) * step
+        var ticks: [Double] = []
+        var value = graphMin
+        while value <= graphMax + step * 0.5, ticks.count < 20 {
+            ticks.append(value)
+            value += step
+        }
+        return ticks
+    }
+
+    private func niceChartNumber(_ value: Double, round: Bool) -> Double {
+        guard value > 0 else {
+            return 1
+        }
+        let exponent = floor(log10(value))
+        let fraction = value / pow(10, exponent)
+        let niceFraction: Double = if round {
+            if fraction < 1.5 {
+                1
+            } else if fraction < 3 {
+                2
+            } else if fraction < 7 {
+                5
+            } else {
+                10
+            }
+        } else if fraction <= 1 {
+            1
+        } else if fraction <= 2 {
+            2
+        } else if fraction <= 5 {
+            5
+        } else {
+            10
+        }
+        return niceFraction * pow(10, exponent)
+    }
+
+    private func expandedDomain(min rawMin: Double, max rawMax: Double) -> (min: Double, max: Double) {
+        if rawMax > rawMin {
+            return (rawMin, rawMax)
+        }
+        let padding = max(1, abs(rawMin) * 0.1)
+        return (rawMin - padding, rawMax + padding)
+    }
+
+    private func formatChartNumber(_ value: Double) -> String {
+        if abs(value.rounded() - value) < 0.0001 {
+            return "\(Int(value.rounded()))"
+        }
+        let absValue = abs(value)
+        if absValue >= 10 {
+            return String(format: "%.1f", value)
+        }
+        return String(format: "%.2f", value)
+    }
+
+    private func chartTextWidth(_ text: String) throws -> Double {
+        try textWidth(PDFTextRun(text: text, font: .helvetica, size: chartLabelSize))
+    }
+
+    /// A version of `text` that fits within `maxWidth` at the chart label size, trimming
+    /// characters and appending an ellipsis when needed. Used so an over-long legend or
+    /// category label degrades gracefully instead of forcing the whole chart to fall back
+    /// to source.
+    private func truncatedChartLabel(_ text: String, maxWidth: Double) throws -> String {
+        if try chartTextWidth(text) <= maxWidth {
+            return text
+        }
+        let ellipsis = "\u{2026}"
+        var characters = Array(text)
+        while !characters.isEmpty {
+            characters.removeLast()
+            let candidate = String(characters).trimmingCharacters(in: .whitespaces) + ellipsis
+            if try chartTextWidth(candidate) <= maxWidth {
+                return candidate
+            }
+        }
+        return ellipsis
+    }
+
+    private func widestChartLabelWidth(_ labels: [String]) throws -> Double {
+        try labels.map { try chartTextWidth($0) }.max() ?? 0
+    }
+
+    private func mermaidRenderPlan(for diagram: MermaidDiagram) throws -> MermaidRenderPlanResult {
+        let layers = diagram.layers()
+        let minimumScale = 0.55
+        var scale = 1.0
+
+        while true {
+            let result: MermaidRenderPlanResult
+            switch try measureMermaidNodes(diagram.nodes, scale: scale) {
+            case let .fallback(reason):
+                return .fallback(reason)
+            case let .measurements(measurements):
+                result = diagram.direction.isVertical
+                    ? try verticalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
+                    : try horizontalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
+            }
+
+            // A diagram that overflows the page width is uniformly shrunk (smaller
+            // font and boxes) and re-planned until it fits, rather than falling back
+            // to source. Only width overflow retries; other fallbacks pass through.
+            if case let .fallback(reason) = result,
+               reason.contains("wider than the content area"),
+               scale > minimumScale
+            {
+                scale = max(minimumScale, scale * 0.85)
+                continue
+            }
+            return result
+        }
+    }
+
+    private func measureMermaidNodes(_ nodes: [MermaidDiagram.Node], scale: Double = 1) throws -> MermaidMeasurementResult {
+        let fontSize = options.baseFontSize * 0.88 * scale
+        let lineHeight = fontSize * 1.18
+        let horizontalPadding = 10.0 * scale
+        let verticalPadding = 7.0 * scale
+        let maxNodeWidth = max(48, min(180, contentWidth - 20))
+        let minNodeWidth = min(96 * scale, maxNodeWidth)
+        let labelWidthLimit = max(24, maxNodeWidth - horizontalPadding * 2)
+        var measurements: [String: MermaidNodeMeasurement] = [:]
+
+        for node in nodes {
+            let run = PDFTextRun(text: node.label, font: .helvetica, size: fontSize)
+            let labelLines = try wrappedLines([run], maxWidth: labelWidthLimit)
+            let lineWidths = try labelLines.map { line in
+                try textWidth(line)
+            }
+            let widestLine = lineWidths.max() ?? 0
+            guard widestLine <= labelWidthLimit + 0.1 else {
+                return .fallback("node label `\(node.label)` is wider than the diagram node limit")
+            }
+
+            measurements[node.id] = MermaidNodeMeasurement(
+                id: node.id,
+                labelLines: labelLines,
+                width: max(minNodeWidth, widestLine + horizontalPadding * 2),
+                height: max(34 * scale, Double(labelLines.count) * lineHeight + verticalPadding * 2),
+                fontSize: fontSize,
+                lineHeight: lineHeight,
+                verticalPadding: verticalPadding,
+            )
+        }
+
+        return .measurements(measurements)
+    }
+
+    private func verticalMermaidRenderPlan(
+        layers: [[MermaidDiagram.Node]],
+        measurements: [String: MermaidNodeMeasurement],
+        edges: [MermaidDiagram.Edge],
+    ) throws -> MermaidRenderPlanResult {
+        let outerPadding = 8.0
+        let rowSpacing = 36.0
+        let preferredColumnSpacing = 24.0
+        let minimumColumnSpacing = 12.0
+        var boxes: [MermaidNodeBox] = []
+        var offset = outerPadding
+
+        for layer in layers {
+            let layerMeasurements = layer.compactMap { measurements[$0.id] }
+            let rowHeight = layerMeasurements.map(\.height).max() ?? 0
+            var spacing = layerMeasurements.count > 1 ? preferredColumnSpacing : 0
+            var rowWidth = layerMeasurements.reduce(0) { $0 + $1.width } + Double(max(0, layerMeasurements.count - 1)) * spacing
+            if rowWidth > contentWidth {
+                spacing = layerMeasurements.count > 1 ? minimumColumnSpacing : 0
+                rowWidth = layerMeasurements.reduce(0) { $0 + $1.width } + Double(max(0, layerMeasurements.count - 1)) * spacing
+            }
+            guard rowWidth <= contentWidth + 0.1 else {
+                return .fallback("diagram row is wider than the content area")
+            }
+
+            var x = options.margins.left + (contentWidth - rowWidth) / 2
+            for measurement in layerMeasurements {
+                boxes.append(MermaidNodeBox(
+                    measurement: measurement,
+                    x: x,
+                    topOffset: offset + (rowHeight - measurement.height) / 2,
+                ))
+                x += measurement.width + spacing
+            }
+            offset += rowHeight + rowSpacing
+        }
+
+        let height = max(outerPadding * 2, offset - rowSpacing + outerPadding)
+        guard height <= contentHeight else {
+            return .fallback("diagram is taller than one page")
+        }
+        if let reason = try mermaidEdgeLabelFallbackReason(
+            boxes: boxes,
+            edges: edges,
+            planHeight: height,
+        ) {
+            return .fallback(reason)
+        }
+
+        return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: edges))
+    }
+
+    private func horizontalMermaidRenderPlan(
+        layers: [[MermaidDiagram.Node]],
+        measurements: [String: MermaidNodeMeasurement],
+        edges: [MermaidDiagram.Edge],
+    ) throws -> MermaidRenderPlanResult {
+        let outerPadding = 8.0
+        let columnSpacing = 34.0
+        let compactColumnSpacing = 18.0
+        let nodeSpacing = 20.0
+        let layerMeasurements = layers.map { layer in
+            layer.compactMap { measurements[$0.id] }
+        }
+        let columnWidths = layerMeasurements.map { $0.map(\.width).max() ?? 0 }
+        let columnHeights = layerMeasurements.map { column in
+            column.reduce(0) { $0 + $1.height } + Double(max(0, column.count - 1)) * nodeSpacing
+        }
+
+        var spacing = columnSpacing
+        var totalWidth = columnWidths.reduce(0, +) + Double(max(0, columnWidths.count - 1)) * spacing
+        if totalWidth > contentWidth {
+            spacing = compactColumnSpacing
+            totalWidth = columnWidths.reduce(0, +) + Double(max(0, columnWidths.count - 1)) * spacing
+        }
+        guard totalWidth <= contentWidth + 0.1 else {
+            return .fallback("diagram columns are wider than the content area")
+        }
+
+        let innerHeight = columnHeights.max() ?? 0
+        let height = innerHeight + outerPadding * 2
+        guard height <= contentHeight else {
+            return .fallback("diagram is taller than one page")
+        }
+
+        var boxes: [MermaidNodeBox] = []
+        var x = options.margins.left + (contentWidth - totalWidth) / 2
+        for columnIndex in layerMeasurements.indices {
+            var topOffset = outerPadding + (innerHeight - columnHeights[columnIndex]) / 2
+            for measurement in layerMeasurements[columnIndex] {
+                boxes.append(MermaidNodeBox(
+                    measurement: measurement,
+                    x: x + (columnWidths[columnIndex] - measurement.width) / 2,
+                    topOffset: topOffset,
+                ))
+                topOffset += measurement.height + nodeSpacing
+            }
+            x += columnWidths[columnIndex] + spacing
+        }
+
+        if let reason = try mermaidEdgeLabelFallbackReason(
+            boxes: boxes,
+            edges: edges,
+            planHeight: height,
+        ) {
+            return .fallback(reason)
+        }
+
+        return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: edges))
+    }
+
+    private func mermaidEdgeLabelFallbackReason(
+        boxes: [MermaidNodeBox],
+        edges: [MermaidDiagram.Edge],
+        planHeight: Double,
+    ) throws -> String? {
+        let contentFrame = MermaidFrame(
+            left: options.margins.left,
+            top: 0,
+            width: contentWidth,
+            height: planHeight,
+        )
+        let boxesByID = Dictionary(uniqueKeysWithValues: boxes.map { ($0.id, $0) })
+        let nodeFrames = boxes.map { $0.frame(topY: 0).expanded(by: 2) }
+
+        for edge in edges {
+            guard let label = edge.label,
+                  let source = boxesByID[edge.source],
+                  let target = boxesByID[edge.target]
+            else {
+                continue
+            }
+
+            let sourceFrame = source.frame(topY: 0)
+            let targetFrame = target.frame(topY: 0)
+            let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
+            let labelFrame = try mermaidEdgeLabelFrame(label, start: endpoints.start, end: endpoints.end)
+
+            guard contentFrame.contains(labelFrame) else {
+                return "edge label `\(label)` does not fit inside the diagram content area"
+            }
+            if nodeFrames.contains(where: { labelFrame.intersects($0) }) {
+                return "edge label `\(label)` collides with a diagram node"
+            }
+        }
+
+        return nil
+    }
+
+    private mutating func drawMermaidPlan(_ plan: MermaidRenderPlan) throws {
+        let topY = y
+        currentPage.drawRectangle(
+            x: options.margins.left - 4,
+            y: topY - plan.height,
+            width: contentWidth + 8,
+            height: plan.height,
+            stroke: PDFColor(red: 0.72, green: 0.78, blue: 0.84),
+            fill: PDFColor(red: 0.97, green: 0.98, blue: 0.99),
+        )
+
+        let boxesByID = Dictionary(uniqueKeysWithValues: plan.boxes.map { ($0.id, $0) })
+        for edge in plan.edges {
+            guard let source = boxesByID[edge.source],
+                  let target = boxesByID[edge.target]
+            else {
+                continue
+            }
+            try drawMermaidEdge(edge, source: source, target: target, topY: topY)
+        }
+
+        for box in plan.boxes {
+            try drawMermaidNode(box, topY: topY)
+        }
+    }
+
+    private mutating func drawMermaidEdge(
+        _ edge: MermaidDiagram.Edge,
+        source: MermaidNodeBox,
+        target: MermaidNodeBox,
+        topY: Double,
+    ) throws {
+        let sourceFrame = source.frame(topY: topY)
+        let targetFrame = target.frame(topY: topY)
+        let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
+
+        drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed)
+        if let label = edge.label {
+            try drawMermaidEdgeLabel(label, start: endpoints.start, end: endpoints.end)
+        }
+    }
+
+    private func mermaidEdgeEndpoints(
+        source: MermaidFrame,
+        target: MermaidFrame,
+    ) -> (start: MermaidPoint, end: MermaidPoint) {
+        let horizontalDistance = abs(target.centerX - source.centerX)
+        let verticalDistance = abs(target.centerY - source.centerY)
+
+        if horizontalDistance > verticalDistance {
+            if target.centerX >= source.centerX {
+                return (
+                    MermaidPoint(x: source.right, y: source.centerY),
+                    MermaidPoint(x: target.left, y: target.centerY),
+                )
+            }
+            return (
+                MermaidPoint(x: source.left, y: source.centerY),
+                MermaidPoint(x: target.right, y: target.centerY),
+            )
+        }
+
+        if target.centerY <= source.centerY {
+            return (
+                MermaidPoint(x: source.centerX, y: source.bottom),
+                MermaidPoint(x: target.centerX, y: target.top),
+            )
+        }
+        return (
+            MermaidPoint(x: source.centerX, y: source.top),
+            MermaidPoint(x: target.centerX, y: target.bottom),
+        )
+    }
+
+    private mutating func drawArrow(from start: MermaidPoint, to end: MermaidPoint, dashed: Bool = false) {
+        currentPage.drawLine(
+            x1: start.x,
+            y1: start.y,
+            x2: end.x,
+            y2: end.y,
+            width: 0.8,
+            color: PDFColor(red: 0.25, green: 0.31, blue: 0.38),
+            dashed: dashed,
+        )
+
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = sqrt(dx * dx + dy * dy)
+        guard length > 0.1 else {
+            return
+        }
+
+        let angle = atan2(dy, dx)
+        let arrowLength = 6.0
+        let spread = 0.48
+        let first = MermaidPoint(
+            x: end.x - arrowLength * cos(angle - spread),
+            y: end.y - arrowLength * sin(angle - spread),
+        )
+        let second = MermaidPoint(
+            x: end.x - arrowLength * cos(angle + spread),
+            y: end.y - arrowLength * sin(angle + spread),
+        )
+
+        currentPage.drawLine(x1: end.x, y1: end.y, x2: first.x, y2: first.y, width: 0.8, color: PDFColor(red: 0.25, green: 0.31, blue: 0.38))
+        currentPage.drawLine(x1: end.x, y1: end.y, x2: second.x, y2: second.y, width: 0.8, color: PDFColor(red: 0.25, green: 0.31, blue: 0.38))
+    }
+
+    private mutating func drawMermaidEdgeLabel(
+        _ label: String,
+        start: MermaidPoint,
+        end: MermaidPoint,
+    ) throws {
+        let run = mermaidEdgeLabelRun(label)
+        let frame = try mermaidEdgeLabelFrame(label, start: start, end: end)
+        currentPage.drawRectangle(
+            x: frame.left,
+            y: frame.bottom,
+            width: frame.width,
+            height: frame.height,
+            stroke: nil,
+            fill: PDFColor(red: 0.97, green: 0.98, blue: 0.99),
+        )
+        try currentPage.drawTextRun(
+            run,
+            x: frame.left + 3,
+            y: frame.bottom + 3,
+            fontSet: options.fontSet,
+            embeddedFonts: embeddedFonts,
+        )
+    }
+
+    private func mermaidEdgeLabelFrame(
+        _ label: String,
+        start: MermaidPoint,
+        end: MermaidPoint,
+    ) throws -> MermaidFrame {
+        let run = mermaidEdgeLabelRun(label)
+        let width = try textWidth(run)
+        let height = run.size + 4
+        return MermaidFrame(
+            left: (start.x + end.x) / 2 - width / 2 - 3,
+            top: (start.y + end.y) / 2 + height / 2,
+            width: width + 6,
+            height: height,
+        )
+    }
+
+    private func mermaidEdgeLabelRun(_ label: String) -> PDFTextRun {
+        PDFTextRun(
+            text: label,
+            font: .helveticaOblique,
+            size: options.baseFontSize * 0.72,
+            color: .gray,
+        )
+    }
+
+    private mutating func drawMermaidNode(_ box: MermaidNodeBox, topY: Double) throws {
+        let frame = box.frame(topY: topY)
+        currentPage.drawRectangle(
+            x: frame.left,
+            y: frame.bottom,
+            width: box.width,
+            height: box.height,
+            stroke: PDFColor(red: 0.18, green: 0.31, blue: 0.48),
+            fill: PDFColor(red: 0.90, green: 0.94, blue: 0.98),
+        )
+
+        var textY = frame.top - box.verticalPadding - box.fontSize
+        for line in box.labelLines {
+            let lineWidth = try textWidth(line)
+            try drawRuns(line, x: frame.left + (box.width - lineWidth) / 2, y: textY)
+            textY -= box.lineHeight
+        }
+    }
+
+    private mutating func renderTable(_ table: MarkdownBlock.Table) throws {
+        let tableElement = beginStructureElement(.table)
+        defer { endStructureElement(tableElement) }
+
+        let cellPadding = 4.0
+        let cellStyle = style(for: .tableCell)
+        let fontSize = fontSize(for: .tableCell)
+        let lineHeight = fontSize * cellStyle.lineHeightMultiplier
+        let columns = tableColumnCount(table)
+        let columnWidths = try measuredTableColumnWidths(
+            table,
+            columns: columns,
+            cellPadding: cellPadding,
+            fontSize: fontSize,
+        )
+        let header = try preparedTableRow(
+            cells: table.headers,
+            columns: columns,
+            columnWidths: columnWidths,
+            cellPadding: cellPadding,
+            fontSize: fontSize,
+            header: true,
+        )
+
+        try renderPreparedTableRow(
+            header,
+            alignments: table.alignments,
+            columnWidths: columnWidths,
+            cellPadding: cellPadding,
+            fontSize: fontSize,
+            lineHeight: lineHeight,
+            header: true,
+            repeatedHeader: nil,
+        )
+
+        for row in table.rows {
+            let preparedRow = try preparedTableRow(
+                cells: row,
+                columns: columns,
+                columnWidths: columnWidths,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+                header: false,
+            )
+            try renderPreparedTableRow(
+                preparedRow,
+                alignments: table.alignments,
+                columnWidths: columnWidths,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+                lineHeight: lineHeight,
+                header: false,
+                repeatedHeader: header,
+            )
+        }
+
+        y -= 12
+    }
+
+    private func tableColumnCount(_ table: MarkdownBlock.Table) -> Int {
+        let counts = [table.headers.count, table.alignments.count] + table.rows.map(\.count)
+        return max(1, counts.max() ?? 1)
+    }
+
+    private func measuredTableColumnWidths(
+        _ table: MarkdownBlock.Table,
+        columns: Int,
+        cellPadding: Double,
+        fontSize: Double,
+    ) throws -> [Double] {
+        let minimumColumnWidth = min(36, contentWidth / Double(columns))
+        let maximumColumnWidth = columns == 1 ? contentWidth : contentWidth * 0.65
+        let metrics = try (0 ..< columns).map { column in
+            try tableColumnMetrics(
+                table,
+                column: column,
+                columns: columns,
+                minimumWidth: minimumColumnWidth,
+                maximumWidth: maximumColumnWidth,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+            )
+        }
+        let preferredWidths = metrics.map(\.preferredWidth)
+        let minimumWidths = metrics.map(\.minimumWidth)
+        let preferredTotal = preferredWidths.reduce(0, +)
+
+        if preferredTotal <= contentWidth {
+            let slack = contentWidth - preferredTotal
+            return preferredWidths.map { $0 + slack / Double(columns) }
+        }
+
+        let minimumTotal = minimumWidths.reduce(0, +)
+        guard minimumTotal < contentWidth else {
+            return Array(repeating: contentWidth / Double(columns), count: columns)
+        }
+
+        let shrinkableTotal = zip(preferredWidths, minimumWidths)
+            .map { $0 - $1 }
+            .reduce(0, +)
+        guard shrinkableTotal > 0 else {
+            return Array(repeating: contentWidth / Double(columns), count: columns)
+        }
+
+        let overflow = preferredTotal - contentWidth
+        return zip(preferredWidths, minimumWidths).map { preferred, minimum in
+            let shrinkable = preferred - minimum
+            return preferred - overflow * (shrinkable / shrinkableTotal)
+        }
+    }
+
+    private func tableColumnMetrics(
+        _ table: MarkdownBlock.Table,
+        column: Int,
+        columns: Int,
+        minimumWidth: Double,
+        maximumWidth: Double,
+        cellPadding: Double,
+        fontSize: Double,
+    ) throws -> TableColumnMetrics {
+        let headerRuns = try tableRuns(
+            table.headers,
+            column: column,
+            style: style(for: .tableHeader),
+            size: fontSize,
+        )
+        let bodyRuns = try table.rows.map {
+            try tableRuns($0, column: column, style: style(for: .tableCell), size: fontSize)
+        }
+        let allRuns = [headerRuns] + bodyRuns
+        let contentWidths = try allRuns.map { try textWidth($0) }
+        let tokenWidths = try allRuns
+            .flatMap(tokenize)
+            .filter { $0.text != "\n" }
+            .map { try textWidth($0) }
+        let preferredContentWidth = contentWidths.max() ?? 0
+        let widestTokenWidth = tokenWidths.max() ?? 0
+        let paddedPreferredWidth = preferredContentWidth + cellPadding * 2
+        let paddedTokenWidth = widestTokenWidth + cellPadding * 2
+        let preferredWidth = min(maximumWidth, max(minimumWidth, paddedPreferredWidth))
+        let tokenFloor = min(maximumWidth, max(minimumWidth, paddedTokenWidth))
+        let fairFloor = max(minimumWidth, min(tokenFloor, contentWidth / Double(columns)))
+
+        return TableColumnMetrics(
+            minimumWidth: fairFloor,
+            preferredWidth: max(preferredWidth, fairFloor),
+        )
+    }
+
+    private func tableRuns(
+        _ cells: [[MarkdownInline]],
+        column: Int,
+        style: PDFOptions.ElementStyle,
+        size: Double,
+    ) throws -> [PDFTextRun] {
+        guard column < cells.count else {
+            return []
+        }
+        return try flatten(cells[column], font: standardFont(for: style.fontRole), size: size, color: style.color)
+    }
+
+    private func preparedTableRow(
+        cells: [[MarkdownInline]],
+        columns: Int,
+        columnWidths: [Double],
+        cellPadding: Double,
+        fontSize: Double,
+        header: Bool,
+    ) throws -> TablePreparedRow {
+        let cellLines = try (0 ..< columns).map { column in
+            let cell = column < cells.count ? cells[column] : []
+            let width = column < columnWidths.count ? columnWidths[column] : contentWidth / Double(columns)
+            let style = header ? style(for: .tableHeader) : style(for: .tableCell)
+            return try wrappedLines(
+                flatten(cell, font: standardFont(for: style.fontRole), size: fontSize, color: style.color),
+                maxWidth: max(1, width - cellPadding * 2),
+            )
+        }
+        return TablePreparedRow(cellLines: cellLines)
+    }
+
+    private mutating func renderPreparedTableRow(
+        _ row: TablePreparedRow,
+        alignments: [MarkdownBlock.Alignment],
+        columnWidths: [Double],
+        cellPadding: Double,
+        fontSize: Double,
+        lineHeight: Double,
+        header: Bool,
+        repeatedHeader: TablePreparedRow?,
+    ) throws {
+        let cellLines = row.cellLines
+        let maxLines = max(1, cellLines.map(\.count).max() ?? 1)
+        var lineOffset = 0
+
+        while lineOffset < maxLines {
+            try ensureTableRowFragmentSpace(
+                lineHeight + cellPadding * 2,
+                header: repeatedHeader,
+                alignments: alignments,
+                columnWidths: columnWidths,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+                lineHeight: lineHeight,
+            )
+            let lineCount = min(
+                maxLines - lineOffset,
+                tableRowLineCapacity(lineHeight: lineHeight, cellPadding: cellPadding),
+            )
+            try renderTableRowFragment(
+                cellLines: cellLines,
+                alignments: alignments,
+                columnWidths: columnWidths,
+                cellPadding: cellPadding,
+                fontSize: fontSize,
+                lineHeight: lineHeight,
+                header: header,
+                lineOffset: lineOffset,
+                lineCount: lineCount,
+            )
+            lineOffset += lineCount
+            if lineOffset < maxLines {
+                startNewPage()
+                if let repeatedHeader {
+                    try renderPreparedTableRow(
+                        repeatedHeader,
+                        alignments: alignments,
+                        columnWidths: columnWidths,
+                        cellPadding: cellPadding,
+                        fontSize: fontSize,
+                        lineHeight: lineHeight,
+                        header: true,
+                        repeatedHeader: nil,
+                    )
+                }
+            }
+        }
+    }
+
+    private mutating func ensureTableRowFragmentSpace(
+        _ height: Double,
+        header: TablePreparedRow?,
+        alignments: [MarkdownBlock.Alignment],
+        columnWidths: [Double],
+        cellPadding: Double,
+        fontSize: Double,
+        lineHeight: Double,
+    ) throws {
+        guard y - height < options.margins.bottom else {
+            return
+        }
+
+        startNewPage()
+        guard let header else {
+            return
+        }
+
+        try renderPreparedTableRow(
+            header,
+            alignments: alignments,
+            columnWidths: columnWidths,
+            cellPadding: cellPadding,
+            fontSize: fontSize,
+            lineHeight: lineHeight,
+            header: true,
+            repeatedHeader: nil,
+        )
+
+        if y - height < options.margins.bottom {
+            startNewPage()
+        }
+    }
+
+    private mutating func renderStandaloneImage(_ content: [MarkdownInline]) throws -> Bool {
+        guard content.count == 1,
+              case let .image(alt, source, _) = content[0]
+        else {
+            return false
+        }
+
+        if source.hasPrefix("http://") || source.hasPrefix("https://") {
+            try drawImagePlaceholder(text: "[Remote image: \(alt.isEmpty ? source : alt)]")
+            return true
+        }
+
+        let image: PDFImage
+        do {
+            image = try loadImage(source: source)
+        } catch {
+            // An image we cannot resolve or decode (a missing file, a
+            // site-absolute path with no matching asset root, or an unsupported
+            // format such as SVG) must not fail the whole document. Degrade to a
+            // visible placeholder, the same way a remote image does, and keep
+            // rendering. See issue #211.
+            try drawImagePlaceholder(text: "[Image: \(alt.isEmpty ? source : alt)]")
+            return true
+        }
+
+        let maxWidth = contentWidth
+        let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
+        let widthScale = maxWidth / Double(image.width)
+        let heightScale = maxHeight / Double(image.height)
+        let scale = min(1, widthScale, heightScale)
+        let drawWidth = Double(image.width) * scale
+        let drawHeight = Double(image.height) * scale
+
+        ensureSpace(drawHeight)
+        let figureElement = beginStructureElement(
+            .figure,
+            attributes: PDFTaggedContent.Attributes(
+                alternateDescription: alt.isEmpty ? source : alt,
+            ),
+        )
+        let marked = beginMarkedContentForCurrentElement()
+        currentPage.drawImage(
+            name: image.name,
+            x: options.margins.left,
+            y: y - drawHeight,
+            width: drawWidth,
+            height: drawHeight,
+        )
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figureElement)
+        y -= drawHeight
+        return true
+    }
+
+    private mutating func drawImagePlaceholder(text: String) throws {
+        let element = beginStructureElement(.paragraph)
+        defer { endStructureElement(element) }
+        let imageStyle = style(for: .imagePlaceholder)
+        try drawWrapped(
+            [
+                PDFTextRun(
+                    text: text,
+                    font: standardFont(for: imageStyle.fontRole),
+                    size: fontSize(for: .imagePlaceholder),
+                    color: imageStyle.color,
+                ),
+            ],
+            x: options.margins.left,
+            maxWidth: contentWidth,
+            lineHeight: options.baseFontSize * 1.35,
+        )
+    }
+
+    private mutating func loadImage(source: String) throws -> PDFImage {
+        if let image = imageCache[source] {
+            return image
+        }
+
+        let name = "Im\(images.count + 1)"
+        let image = try PDFImage.load(source: source, baseURL: assetsBaseURL, name: name)
+        images.append(image)
+        imageCache[source] = image
+        return image
+    }
+
+    private func flatten(
+        _ inlines: [MarkdownInline],
+        font: StandardFont,
+        size: Double,
+        color: PDFColor = .black,
+        underline: Bool = false,
+        strikethrough: Bool = false,
+        linkDestination: String? = nil,
+    ) throws -> [PDFTextRun] {
+        var runs: [PDFTextRun] = []
+
+        for inline in inlines {
+            switch inline {
+            case let .text(text):
+                runs.append(PDFTextRun(text: text, font: font, size: size, color: color, underline: underline, strikethrough: strikethrough, linkDestination: linkDestination))
+            case .softBreak:
+                runs.append(PDFTextRun(text: " ", font: font, size: size, color: color, underline: underline, strikethrough: strikethrough, linkDestination: linkDestination))
+            case .lineBreak:
+                runs.append(PDFTextRun(text: "\n", font: font, size: size, color: color, underline: underline, strikethrough: strikethrough, linkDestination: linkDestination))
+            case let .code(text):
+                let inlineCodeStyle = style(for: .inlineCode)
+                runs.append(PDFTextRun(
+                    text: text,
+                    font: standardFont(for: inlineCodeStyle.fontRole),
+                    size: size * inlineCodeStyle.sizeMultiplier,
+                    color: color == style(for: .body).color ? inlineCodeStyle.color : color,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ))
+            case let .inlineMath(math):
+                try runs.append(contentsOf: inlineMathRuns(
+                    math,
+                    size: size,
+                    inheritedColor: color,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ))
+            case let .emphasis(children):
+                try runs.append(contentsOf: flatten(
+                    children,
+                    font: .helveticaOblique,
+                    size: size,
+                    color: color,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ))
+            case let .strong(children):
+                try runs.append(contentsOf: flatten(
+                    children,
+                    font: .helveticaBold,
+                    size: size,
+                    color: color,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ))
+            case let .strikethrough(children):
+                try runs.append(contentsOf: flatten(children, font: font, size: size, color: color, underline: underline, strikethrough: true, linkDestination: linkDestination))
+            case let .link(children, destination, _):
+                let linkStyle = style(for: .link)
+                try runs.append(contentsOf: flatten(
+                    children,
+                    font: font,
+                    size: size,
+                    color: linkStyle.color,
+                    underline: linkStyle.underline,
+                    strikethrough: strikethrough,
+                    linkDestination: destination,
+                ))
+            case let .image(alt, source, _):
+                let imageStyle = style(for: .imagePlaceholder)
+                let label = alt.isEmpty ? source : alt
+                runs.append(PDFTextRun(
+                    text: "[Image: \(label)]",
+                    font: standardFont(for: imageStyle.fontRole),
+                    size: size,
+                    color: imageStyle.color,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ))
+            case let .footnoteReference(label):
+                if let footnote = footnotesByLabelKey[footnoteLabelKey(label)] {
+                    let linkStyle = style(for: .link)
+                    runs.append(PDFTextRun(
+                        text: "\(footnote.number)",
+                        font: font,
+                        size: size * 0.72,
+                        color: linkStyle.color,
+                        underline: false,
+                        strikethrough: strikethrough,
+                        linkDestination: "#\(footnote.definitionDestinationName)",
+                        baselineOffset: size * 0.38,
+                        namedDestination: footnote.referenceDestinationName,
+                    ))
+                } else {
+                    runs.append(PDFTextRun(
+                        text: "[^\(label)]",
+                        font: font,
+                        size: size,
+                        color: color,
+                        underline: underline,
+                        strikethrough: strikethrough,
+                        linkDestination: linkDestination,
+                    ))
+                }
+            }
+        }
+
+        return runs
+    }
+
+    private func inlineMathRuns(
+        _ math: MarkdownMath,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) throws -> [PDFTextRun] {
+        try requireEmbeddedMathFont(for: style(for: .inlineMath))
+        do {
+            let parsed = try MathParser().parse(math.source)
+            return inlineMathRuns(
+                for: parsed.root,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )
+        } catch let error as MarkdownPDFError {
+            throw error
+        } catch {
+            return [inlineMathTextRun(
+                math.delimitedSource,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        }
+    }
+
+    private func inlineMathRuns(
+        for node: MathNode,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) -> [PDFTextRun] {
+        switch node {
+        case let .sequence(children):
+            return children.flatMap {
+                inlineMathRuns(
+                    for: $0,
+                    size: size,
+                    inheritedColor: inheritedColor,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                )
+            }
+        case let .text(text):
+            return [inlineMathTextRun(
+                text,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case let .symbol(display, linearized, _):
+            // Draw the Unicode glyph when the active font covers it, else the
+            // ASCII transliteration (matching `.unicodeWhereCovered` on the box
+            // path). The base-14 portable profile covers no math glyphs.
+            let font = standardFont(for: style(for: .inlineMath).fontRole)
+            let text = embeddedFonts.covers(display, font: font) ? display : linearized
+            return [inlineMathTextRun(
+                text,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case .fraction, .radical, .space:
+            if let run = inlineMathBoxRun(
+                for: node,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            ) {
+                return [run]
+            }
+            return [inlineMathTextRun(
+                MathLinearizer().linearize(node),
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case .accent, .matrix, .scaledDelimiter:
+            return [inlineMathTextRun(
+                MathLinearizer().linearize(node),
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )]
+        case let .scripts(base, subscriptNode, superscriptNode):
+            let scriptSize = size * 0.68
+            var runs = inlineMathRuns(
+                for: base,
+                size: size,
+                inheritedColor: inheritedColor,
+                underline: underline,
+                strikethrough: strikethrough,
+                linkDestination: linkDestination,
+            )
+            if let subscriptNode {
+                runs += inlineMathRuns(
+                    for: subscriptNode,
+                    size: scriptSize,
+                    inheritedColor: inheritedColor,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ).map { run in
+                    PDFTextRun(
+                        text: run.text,
+                        font: run.font,
+                        size: run.size,
+                        color: run.color,
+                        underline: run.underline,
+                        strikethrough: run.strikethrough,
+                        linkDestination: run.linkDestination,
+                        baselineOffset: run.baselineOffset - size * 0.22,
+                        inlineMathBox: run.inlineMathBox,
+                    )
+                }
+            }
+            if let superscriptNode {
+                runs += inlineMathRuns(
+                    for: superscriptNode,
+                    size: scriptSize,
+                    inheritedColor: inheritedColor,
+                    underline: underline,
+                    strikethrough: strikethrough,
+                    linkDestination: linkDestination,
+                ).map { run in
+                    PDFTextRun(
+                        text: run.text,
+                        font: run.font,
+                        size: run.size,
+                        color: run.color,
+                        underline: run.underline,
+                        strikethrough: run.strikethrough,
+                        linkDestination: run.linkDestination,
+                        baselineOffset: run.baselineOffset + size * 0.38,
+                        inlineMathBox: run.inlineMathBox,
+                    )
+                }
+            }
+            return runs
+        }
+    }
+
+    private func inlineMathTextRun(
+        _ text: String,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) -> PDFTextRun {
+        let mathStyle = style(for: .inlineMath)
+        return PDFTextRun(
+            text: text,
+            font: standardFont(for: mathStyle.fontRole),
+            size: size * mathStyle.sizeMultiplier,
+            color: inheritedColor == style(for: .body).color ? mathStyle.color : inheritedColor,
+            underline: underline,
+            strikethrough: strikethrough,
+            linkDestination: linkDestination,
+        )
+    }
+
+    /// Lays a fraction or radical out as a typeset inline box. Returns nil when
+    /// the math layout cannot be built (for example when a font-backed math
+    /// profile lacks an embedded math table), so the caller can fall back to the
+    /// readable linearization.
+    private func inlineMathBoxRun(
+        for node: MathNode,
+        size: Double,
+        inheritedColor: PDFColor,
+        underline: Bool,
+        strikethrough: Bool,
+        linkDestination: String?,
+    ) -> PDFTextRun? {
+        let mathStyle = style(for: .inlineMath)
+        let boxSize = size * mathStyle.sizeMultiplier
+        guard let layout = try? mathLayout(for: mathStyle),
+              let box = try? layout.layout(node, size: boxSize, displayStyle: false),
+              box.width > 0
+        else {
+            return nil
+        }
+        return PDFTextRun(
+            text: MathLinearizer().linearize(node),
+            font: standardFont(for: mathStyle.fontRole),
+            size: boxSize,
+            color: inheritedColor == style(for: .body).color ? mathStyle.color : inheritedColor,
+            underline: underline,
+            strikethrough: strikethrough,
+            linkDestination: linkDestination,
+            inlineMathBox: box,
+        )
+    }
+
+    private mutating func drawWrapped(
+        _ runs: [PDFTextRun],
+        x: Double,
+        maxWidth: Double,
+        lineHeight: Double,
+    ) throws {
+        for line in try wrappedLines(runs, maxWidth: maxWidth) {
+            ensureSpace(lineHeight)
+            try drawRuns(line, x: x, y: y, maxWidth: maxWidth)
+            y -= lineHeight
+        }
+    }
+
+    private mutating func renderCodeBlockFragment(
+        _ lines: [[PDFTextRun]],
+        size: Double,
+        lineHeight: Double,
+        padding: Double,
+    ) throws {
+        let topY = y
+        let height = Double(lines.count) * lineHeight + padding * 2
+        let codeStyle = style(for: .codeBlock)
+        let artifact = beginArtifactIfTagged()
+        currentPage.drawRectangle(
+            x: options.margins.left,
+            y: topY - height,
+            width: contentWidth,
+            height: height,
+            stroke: nil,
+            fill: codeStyle.backgroundColor,
+        )
+        endMarkedContentIfNeeded(artifact)
+
+        var lineY = topY - padding - size
+        for line in lines {
+            try drawRuns(line, x: options.margins.left + padding, y: lineY, applyBidi: false)
+            lineY -= lineHeight
+        }
+        y = topY - height
+    }
+
+    private func codeBlockLineCapacity(
+        lineHeight: Double,
+        padding: Double,
+    ) -> Int {
+        max(1, Int(floor((availablePageHeight - padding * 2) / lineHeight)))
+    }
+
+    private func expandCodeTabs(_ line: String) -> String {
+        var expanded = ""
+        var column = 0
+
+        for character in line {
+            if character == "\t" {
+                let spaces = codeBlockTabWidth - column % codeBlockTabWidth
+                expanded += String(repeating: " ", count: spaces)
+                column += spaces
+            } else {
+                expanded.append(character)
+                column += 1
+            }
+        }
+
+        return expanded
+    }
+
+    private mutating func renderTableRowFragment(
+        cellLines: [[[PDFTextRun]]],
+        alignments: [MarkdownBlock.Alignment],
+        columnWidths: [Double],
+        cellPadding: Double,
+        fontSize: Double,
+        lineHeight: Double,
+        header: Bool,
+        lineOffset: Int,
+        lineCount: Int,
+    ) throws {
+        let rowElement = beginStructureElement(.tableRow)
+        defer { endStructureElement(rowElement) }
+
+        let rowHeight = Double(lineCount) * lineHeight + cellPadding * 2
+        let rowBottom = y - rowHeight
+        var x = options.margins.left
+        let headerStyle = style(for: .tableHeader)
+        let cellStyle = style(for: .tableCell)
+
+        for column in 0 ..< cellLines.count {
+            let columnWidth = column < columnWidths.count ? columnWidths[column] : 0
+            let artifact = beginArtifactIfTagged()
+            currentPage.drawRectangle(
+                x: x,
+                y: rowBottom,
+                width: columnWidth,
+                height: rowHeight,
+                stroke: header ? headerStyle.borderColor : cellStyle.borderColor,
+                fill: header ? headerStyle.backgroundColor : cellStyle.backgroundColor,
+            )
+            endMarkedContentIfNeeded(artifact)
+
+            let visibleLines = cellLines[column].dropFirst(lineOffset).prefix(lineCount)
+            let cellElement = beginStructureElement(
+                header ? .tableHeader : .tableCell,
+                attributes: header ? PDFTaggedContent.Attributes(tableHeaderScope: .column) : PDFTaggedContent.Attributes(),
+            )
+            var lineY = y - cellPadding - fontSize
+            for line in visibleLines {
+                let width = try textWidth(Array(line))
+                let alignment = column < alignments.count ? alignments[column] : .leading
+                let textX = switch alignment {
+                case .leading:
+                    x + cellPadding
+                case .center:
+                    x + (columnWidth - width) / 2
+                case .trailing:
+                    x + columnWidth - cellPadding - width
+                }
+                let drawWidth = alignment == .leading ? max(0, columnWidth - cellPadding * 2) : nil
+                try drawRuns(Array(line), x: textX, y: lineY, maxWidth: drawWidth)
+                lineY -= lineHeight
+            }
+            endStructureElement(cellElement)
+            x += columnWidth
+        }
+        y = rowBottom
+    }
+
+    private func tableRowLineCapacity(
+        lineHeight: Double,
+        cellPadding: Double,
+    ) -> Int {
+        max(1, Int(floor((availablePageHeight - cellPadding * 2) / lineHeight)))
+    }
+
+    private func wrappedLines(
+        _ runs: [PDFTextRun],
+        maxWidth: Double,
+    ) throws -> [[PDFTextRun]] {
+        let tokens = tokenize(runs)
+        var lines: [[PDFTextRun]] = []
+        var current: [PDFTextRun] = []
+        var currentWidth = 0.0
+
+        for token in try tokens.flatMap({ try splitOversizedToken($0, maxWidth: maxWidth) }) {
+            if token.text == "\n" {
+                lines.append(current)
+                current = []
+                currentWidth = 0
+                continue
+            }
+
+            let width = try textWidth(token)
+            if currentWidth + width > maxWidth, !current.isEmpty {
+                lines.append(current)
+                current = [token]
+                currentWidth = width
+            } else {
+                current.append(token)
+                currentWidth += width
+            }
+        }
+
+        if !current.isEmpty || lines.isEmpty {
+            lines.append(current)
+        }
+
+        return lines
+    }
+
+    private func splitOversizedToken(
+        _ token: PDFTextRun,
+        maxWidth: Double,
+    ) throws -> [PDFTextRun] {
+        guard token.text != "\n",
+              token.inlineMathBox == nil,
+              maxWidth > 0,
+              try textWidth(token) > maxWidth
+        else {
+            return [token]
+        }
+
+        var parts: [PDFTextRun] = []
+        var buffer = ""
+        for character in token.text {
+            let candidate = buffer + String(character)
+            if !buffer.isEmpty,
+               try textWidth(token.withText(candidate)) > maxWidth
+            {
+                parts.append(token.withText(buffer))
+                buffer = String(character)
+            } else {
+                buffer = candidate
+            }
+        }
+
+        if !buffer.isEmpty {
+            parts.append(token.withText(buffer))
+        }
+        return parts
+    }
+
+    private func tokenize(_ runs: [PDFTextRun]) -> [PDFTextRun] {
+        var tokens: [PDFTextRun] = []
+        let lineBreaker = LineBreakOpportunityDetector()
+
+        for run in runs {
+            // An inline math box is an atomic, indivisible token: it must not be
+            // split into word segments, which would drop its laid-out box.
+            if run.inlineMathBox != nil {
+                tokens.append(run)
+                continue
+            }
+            for segment in lineBreaker.segments(in: run.text) where !segment.isEmpty {
+                tokens.append(run.withText(segment))
+            }
+        }
+
+        return tokens
+    }
+
+    private mutating func beginStructureElement(
+        _ role: PDFTaggedContent.Role,
+        attributes: PDFTaggedContent.Attributes = PDFTaggedContent.Attributes(),
+    ) -> Int? {
+        guard var builder = taggedContentBuilder else {
+            return nil
+        }
+        let id = builder.beginElement(role: role, attributes: attributes)
+        taggedContentBuilder = builder
+        return id
+    }
+
+    private mutating func endStructureElement(_ id: Int?) {
+        guard let id, var builder = taggedContentBuilder else {
+            return
+        }
+        builder.endElement(id)
+        taggedContentBuilder = builder
+    }
+
+    private mutating func beginMarkedContentForCurrentElement() -> Bool {
+        guard markedContentDepth == 0,
+              var builder = taggedContentBuilder,
+              let mark = builder.markCurrentElement(onPage: currentPageIndex)
+        else {
+            return false
+        }
+
+        taggedContentBuilder = builder
+        markedContentDepth += 1
+        currentPage.beginMarkedContent(tag: PDFSyntax.Name(mark.role.rawValue), mcid: mark.mcid)
+        return true
+    }
+
+    private mutating func endMarkedContentIfNeeded(_ didBegin: Bool) {
+        guard didBegin else {
+            return
+        }
+        currentPage.endMarkedContent()
+        markedContentDepth = max(0, markedContentDepth - 1)
+    }
+
+    private mutating func beginArtifactIfTagged() -> Bool {
+        guard markedContentDepth == 0, taggedContentBuilder != nil else {
+            return false
+        }
+        markedContentDepth += 1
+        currentPage.beginArtifact()
+        return true
+    }
+
+    private mutating func drawRuns(
+        _ runs: [PDFTextRun],
+        x: Double,
+        y: Double,
+        maxWidth: Double? = nil,
+        applyBidi: Bool = true,
+    ) throws {
+        guard !runs.isEmpty else {
+            return
+        }
+
+        let marked = beginMarkedContentForCurrentElement()
+        defer { endMarkedContentIfNeeded(marked) }
+
+        if applyBidi, let bidiLine = try bidiLine(from: runs, x: x, maxWidth: maxWidth) {
+            for run in bidiLine.visualRuns.sorted(by: { $0.sourceScalarOffset < $1.sourceScalarOffset }) {
+                try drawBidiPositionedRun(run, y: y)
+            }
+            return
+        }
+
+        var cursor = x
+        for run in runs {
+            if let destination = run.namedDestination {
+                addNamedDestination(destination, x: cursor, y: y + run.baselineOffset + run.size)
+            }
+            if let box = run.inlineMathBox {
+                currentPage.beginActualText(run.text)
+                try drawMathBox(box, x: cursor, baselineY: y + run.baselineOffset)
+                currentPage.endMarkedContent()
+                cursor += box.width
+                continue
+            }
+            try currentPage.drawTextRun(
+                run,
+                x: cursor,
+                y: y,
+                fontSet: options.fontSet,
+                embeddedFonts: embeddedFonts,
+            )
+            cursor += try textWidth(run)
+        }
+    }
+
+    private func bidiLine(
+        from runs: [PDFTextRun],
+        x: Double,
+        maxWidth: Double?,
+    ) throws -> BidiLine? {
+        guard let template = runs.first,
+              runs.allSatisfy({ isSingleStyleBidiRun($0, matching: template) })
+        else {
+            return nil
+        }
+
+        let logicalText = runs.map(\.text).joined()
+        let ordering = BidiParagraphOrdering()
+        guard ordering.containsRightToLeftText(logicalText) else {
+            return nil
+        }
+
+        let paragraph = try ordering.order(logicalText)
+        let visualRuns = paragraph.visualRuns.map { run in
+            template.withText(run.displayText)
+        }
+        let lineWidth = try textWidth(visualRuns)
+        var cursor = x
+        if paragraph.baseDirection == .rightToLeft, let maxWidth {
+            cursor += max(0, maxWidth - lineWidth)
+        }
+
+        var positionedRuns: [BidiPositionedRun] = []
+        for run in paragraph.visualRuns {
+            let positioned = try positionedBidiRuns(for: run, template: template, x: cursor)
+            positionedRuns.append(contentsOf: positioned)
+            cursor += try textWidth(template.withText(run.displayText))
+        }
+        return BidiLine(visualRuns: positionedRuns)
+    }
+
+    private func drawBidiPositionedRun(_ run: BidiPositionedRun, y: Double) throws {
+        if let mapping = try mirroredBidiGlyphMapping(for: run),
+           let entry = embeddedFonts.entry(for: run.sourceTextRun.font)
+        {
+            try currentPage.drawCIDText(
+                mapping: mapping,
+                fontResource: entry.resource,
+                fontSize: run.sourceTextRun.size,
+                x: run.x,
+                y: y,
+                color: run.sourceTextRun.color,
+                decorationsFor: run.sourceTextRun,
+            )
+            return
+        }
+
+        try currentPage.drawTextRun(
+            run.sourceTextRun,
+            x: run.x,
+            y: y,
+            fontSet: options.fontSet,
+            embeddedFonts: embeddedFonts,
+        )
+    }
+
+    private func isSingleStyleBidiRun(_ run: PDFTextRun, matching template: PDFTextRun) -> Bool {
+        run.font == template.font
+            && run.size == template.size
+            && run.color == template.color
+            && run.underline == template.underline
+            && run.strikethrough == template.strikethrough
+            && run.linkDestination == nil
+            && run.baselineOffset == template.baselineOffset
+            && run.namedDestination == nil
+    }
+
+    private func positionedBidiRuns(
+        for run: BidiParagraphOrdering.Run,
+        template: PDFTextRun,
+        x: Double,
+    ) throws -> [BidiPositionedRun] {
+        let sourceCharacters = Array(run.sourceText)
+        let displayCharacters = Array(run.displayText)
+        let sourceScalarOffsets = scalarOffsetsByCharacter(in: run.sourceText)
+        guard sourceCharacters.count == displayCharacters.count else {
+            return [
+                BidiPositionedRun(
+                    sourceTextRun: template.withText(run.sourceText),
+                    displayText: run.sourceText,
+                    x: x,
+                    sourceScalarOffset: run.sourceScalarRange.lowerBound,
+                ),
+            ]
+        }
+
+        var cursor = x
+        var positionedRuns: [BidiPositionedRun] = []
+        for displayIndex in sourceCharacters.indices {
+            let sourceIndex = run.direction == .rightToLeft
+                ? sourceCharacters.count - 1 - displayIndex
+                : displayIndex
+            let displayText = String(displayCharacters[displayIndex])
+            let textRun = template.withText(String(sourceCharacters[sourceIndex]))
+            positionedRuns.append(
+                BidiPositionedRun(
+                    sourceTextRun: textRun,
+                    displayText: displayText,
+                    x: cursor,
+                    sourceScalarOffset: run.sourceScalarRange.lowerBound + sourceScalarOffsets[sourceIndex],
+                ),
+            )
+            cursor += try textWidth(template.withText(displayText))
+        }
+        return positionedRuns
+    }
+
+    private func mirroredBidiGlyphMapping(for run: BidiPositionedRun) throws -> ShapedTextMapping? {
+        guard run.sourceTextRun.text != run.displayText,
+              let entry = embeddedFonts.entry(for: run.sourceTextRun.font),
+              let sourceScalar = onlyScalar(in: run.sourceTextRun.text),
+              let displayScalar = onlyScalar(in: run.displayText)
+        else {
+            return nil
+        }
+        let syntheticCode = try mirroredPDFCharacterCode(source: sourceScalar, display: displayScalar, entry: entry)
+
+        let displayMapping = try embeddedFonts.mapping(
+            for: run.sourceTextRun.withText(run.displayText),
+            entry: entry,
+        )
+        guard let displayGlyph = displayMapping.glyphs.first, displayMapping.glyphs.count == 1 else {
+            return nil
+        }
+
+        guard let syntheticScalar = UnicodeScalar(0x100000 + UInt32(syntheticCode)) else {
+            throw PDFEmbeddedFontError.unavailableMirroredGlyphCode(source: sourceScalar, display: displayScalar)
+        }
+        let glyph = ShapedTextMapping.Glyph(
+            glyphID: displayGlyph.glyphID,
+            cid: syntheticCode,
+            pdfCharacterCode: syntheticCode,
+            advanceWidth: displayGlyph.advanceWidth,
+            advance: displayGlyph.width,
+            cmapScalar: syntheticScalar,
+        )
+        return try ShapedTextMapping(
+            sourceText: run.sourceTextRun.text,
+            clusters: [
+                ShapedTextMapping.Cluster(
+                    sourceScalarRange: 0 ..< 1,
+                    normalizedText: run.displayText,
+                    glyphs: [glyph],
+                    toUnicodeScalars: [sourceScalar],
+                ),
+            ],
+        )
+    }
+
+    private func mirroredPDFCharacterCode(
+        source: UnicodeScalar,
+        display: UnicodeScalar,
+        entry: PDFEmbeddedFontCatalog.Entry,
+    ) throws -> UInt16 {
+        guard let pairOffset = mirroredPairOffset(source: source, display: display) else {
+            throw PDFEmbeddedFontError.unavailableMirroredGlyphCode(source: source, display: display)
+        }
+
+        let code = UInt32(entry.resource.metadata.maxp.numGlyphs) + UInt32(pairOffset)
+        guard code <= UInt16.max else {
+            throw PDFEmbeddedFontError.unavailableMirroredGlyphCode(source: source, display: display)
+        }
+        return UInt16(code)
+    }
+
+    private func mirroredPairOffset(source: UnicodeScalar, display: UnicodeScalar) -> UInt16? {
+        switch (source.value, display.value) {
+        case (0x28, 0x29):
+            1
+        case (0x29, 0x28):
+            2
+        case (0x3C, 0x3E):
+            3
+        case (0x3E, 0x3C):
+            4
+        case (0x5B, 0x5D):
+            5
+        case (0x5D, 0x5B):
+            6
+        case (0x7B, 0x7D):
+            7
+        case (0x7D, 0x7B):
+            8
+        default:
+            nil
+        }
+    }
+
+    private func onlyScalar(in text: String) -> UnicodeScalar? {
+        let scalars = Array(text.unicodeScalars)
+        return scalars.count == 1 ? scalars[0] : nil
+    }
+
+    private func scalarOffsetsByCharacter(in text: String) -> [Int] {
+        var offsets: [Int] = []
+        var scalarOffset = 0
+        for character in text {
+            offsets.append(scalarOffset)
+            scalarOffset += character.unicodeScalars.count
+        }
+        return offsets
+    }
+
+    private func textWidth(_ run: PDFTextRun) throws -> Double {
+        if let box = run.inlineMathBox {
+            return box.width
+        }
+        return try embeddedFonts.width(of: run, fallbackFontSet: options.fontSet)
+    }
+
+    private func textWidth(_ runs: [PDFTextRun]) throws -> Double {
+        try runs.reduce(0) { partial, run in
+            let width = try textWidth(run)
+            return partial + width
+        }
+    }
+
+    private func mathLayout(for style: PDFOptions.ElementStyle) throws -> MathLayout {
+        let font = standardFont(for: style.fontRole)
+        return try MathLayout(
+            font: MathFontStyle(font),
+            color: MathColor(style.color),
+            measureText: { try textWidth(PDFTextRun($0)) },
+            metrics: mathMetrics(for: style),
+            // Draw each math symbol with its Unicode glyph when the active font
+            // covers it, and fall back to the ASCII transliteration when it does
+            // not. The portable base-14 profile covers no math glyphs (all ASCII),
+            // an embedded math font covers them all (all glyphs), and a partial
+            // font gets glyphs where it can. The radical sign is drawn as vector
+            // strokes regardless. See MathTypeset SymbolStyle.
+            symbolStyle: .unicodeWhereCovered,
+            symbolCoverage: { embeddedFonts.covers($0, font: font) },
+        )
+    }
+
+    private func mathMetrics(for style: PDFOptions.ElementStyle) throws -> MathLayoutMetrics {
+        let font = standardFont(for: style.fontRole)
+        if let metrics = embeddedFonts.entry(for: font)?.mathMetrics {
+            return metrics
+        }
+        try requireEmbeddedMathFont(for: style)
+        return .default
+    }
+
+    private func requireEmbeddedMathFont(for style: PDFOptions.ElementStyle) throws {
+        guard options.mathTypesetting.requiresEmbeddedMathFont else {
+            return
+        }
+
+        let font = standardFont(for: style.fontRole)
+        let entry = embeddedFonts.entry(for: font)
+        guard entry?.mathMetrics != nil else {
+            throw MarkdownPDFError.missingEmbeddedMathFont(
+                font: entry?.resource.baseName ?? font.baseName(in: options.fontSet),
+            )
+        }
+    }
+
+    private func style(for role: PDFOptions.ElementRole) -> PDFOptions.ElementStyle {
+        options.theme.style(for: role)
+    }
+
+    private func fontSize(for role: PDFOptions.ElementRole) -> Double {
+        options.baseFontSize * style(for: role).sizeMultiplier
+    }
+
+    private func standardFont(for role: PDFOptions.FontRole) -> StandardFont {
+        switch role {
+        case .regular:
+            .helvetica
+        case .bold:
+            .helveticaBold
+        case .italic:
+            .helveticaOblique
+        case .monospaced:
+            .courier
+        }
+    }
+
+    private mutating func ensureSpace(_ height: Double) {
+        if y - height < options.margins.bottom {
+            startNewPage()
+        }
+    }
+
+    private mutating func startNewPage() {
+        pages.append(PDFPageCanvas())
+        drawPageBackgroundIfNeeded()
+        y = pageTopY
+    }
+
+    private mutating func drawPageBackgroundIfNeeded() {
+        guard let background = options.theme.pageBackground else {
+            return
+        }
+
+        let artifact = beginArtifactIfTagged()
+        currentPage.drawRectangle(
+            x: 0,
+            y: 0,
+            width: options.pageSize.width,
+            height: options.pageSize.height,
+            stroke: nil,
+            fill: background,
+        )
+        endMarkedContentIfNeeded(artifact)
+    }
+
+    private mutating func keepHeadingWithNextBlock(
+        _ block: MarkdownBlock,
+        isLast: Bool,
+    ) {
+        guard !isLast,
+              case let .heading(level, _) = block
+        else {
+            return
+        }
+
+        let topSpacing = y < pageTopY - 1 ? headingTopSpacing(level) : 0
+        let height = topSpacing + headingSize(level) * 1.8 + headingKeepWithNextHeight(level)
+        ensureSpace(height)
+    }
+
+    private mutating func addHeadingTopSpacing(_ spacing: Double) {
+        guard y < pageTopY - 1 else {
+            return
+        }
+
+        y -= spacing
+    }
+
+    private mutating func addHeadingDestination(
+        level: Int,
+        content: [MarkdownInline],
+        y: Double,
+    ) {
+        let title = plainText(content).trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = title.isEmpty ? "Heading" : title
+        currentPage.addHeadingDestination(
+            PDFHeadingDestination(
+                name: headingNames.uniqueName(for: displayTitle),
+                title: displayTitle,
+                level: level,
+                x: options.margins.left,
+                y: min(options.pageSize.height, y),
+            ),
+        )
+    }
+
+    private mutating func addNamedDestination(_ name: String, x: Double, y: Double) {
+        guard registeredNamedDestinations.insert(name).inserted else {
+            return
+        }
+
+        currentPage.addNamedDestination(
+            PDFHeadingDestination(
+                name: name,
+                title: name,
+                level: 6,
+                x: x,
+                y: min(options.pageSize.height, y),
+            ),
+        )
+    }
+
+    private func plainText(_ inlines: [MarkdownInline]) -> String {
+        inlines.map(plainText).joined()
+    }
+
+    private func plainText(_ inline: MarkdownInline) -> String {
+        switch inline {
+        case let .text(text), let .code(text):
+            text
+        case let .inlineMath(math):
+            (try? MathParser().parse(math.source))?.linearizedText ?? math.delimitedSource
+        case .softBreak, .lineBreak:
+            " "
+        case let .emphasis(children), let .strong(children), let .strikethrough(children):
+            plainText(children)
+        case let .link(children, _, _):
+            plainText(children)
+        case let .image(alt, source, _):
+            alt.isEmpty ? source : alt
+        case let .footnoteReference(label):
+            "[^\(label)]"
+        }
+    }
+
+    private func plainText(_ block: MarkdownBlock) -> String {
+        switch block {
+        case let .heading(_, content), let .paragraph(content):
+            plainText(content)
+        case let .blockQuote(blocks):
+            blocks.map(plainText).joined(separator: " ")
+        case let .unorderedList(items), let .orderedList(_, items):
+            items.flatMap(\.blocks).map(plainText).joined(separator: " ")
+        case let .codeBlock(_, code):
+            code
+        case let .displayMath(math):
+            (try? MathParser().parse(math.source))?.linearizedText ?? math.delimitedSource
+        case let .table(table):
+            (table.headers + table.rows.flatMap(\.self)).map { plainText($0) }.joined(separator: " ")
+        case .thematicBreak:
+            ""
+        case let .html(html):
+            html
+        case let .footnoteDefinition(_, blocks):
+            blocks.map(plainText).joined(separator: " ")
+        }
+    }
+
+    private func headingTopSpacing(_ level: Int) -> Double {
+        options.baseFontSize * style(for: .heading(level: level)).spacingBeforeMultiplier
+    }
+
+    private func headingKeepWithNextHeight(_ level: Int) -> Double {
+        switch level {
+        case 1, 2:
+            options.baseFontSize * 9.0
+        case 3:
+            options.baseFontSize * 4.5
+        default:
+            options.baseFontSize * 2.6
+        }
+    }
+
+    private func headingSize(_ level: Int) -> Double {
+        fontSize(for: .heading(level: level))
+    }
+
+    private var bodyLineHeight: Double {
+        let role: PDFOptions.ElementRole = listDepth > 0 ? .list : .paragraph
+        return fontSize(for: role) * style(for: role).lineHeightMultiplier
+    }
+
+    private var paragraphSpacing: Double {
+        if listDepth > 0 {
+            return 2
+        }
+        return options.baseFontSize * style(for: .paragraph).spacingAfterMultiplier
+    }
+
+    private var codeBlockPadding: Double {
+        6
+    }
+
+    private var codeBlockFollowingGap: Double {
+        max(8, options.baseFontSize * style(for: .codeBlock).spacingAfterMultiplier)
+    }
+
+    private var codeBlockTabWidth: Int {
+        4
+    }
+
+    private var listTrailingSpacing: Double {
+        if listDepth > 1 {
+            return 1
+        }
+        return options.baseFontSize * style(for: .list).spacingAfterMultiplier
+    }
+
+    private var blockQuoteTopSpacing: Double {
+        options.baseFontSize * style(for: .blockQuote).spacingBeforeMultiplier
+    }
+
+    private var blockQuoteBottomSpacing: Double {
+        options.baseFontSize * style(for: .blockQuote).spacingAfterMultiplier
+    }
+
+    private var contentWidth: Double {
+        options.pageSize.width - options.margins.left - options.margins.right
+    }
+
+    private var contentHeight: Double {
+        options.pageSize.height - options.margins.top - options.margins.bottom
+    }
+
+    private var availablePageHeight: Double {
+        y - options.margins.bottom
+    }
+
+    private var pageTopY: Double {
+        options.pageSize.height - options.margins.top
+    }
+
+    private var currentPage: PDFPageCanvas {
+        pages[pages.count - 1]
+    }
+
+    private var currentPageIndex: Int {
+        pages.count - 1
+    }
+
+    private var chartTitleSize: Double {
+        options.baseFontSize * 0.95
+    }
+
+    private var chartLabelSize: Double {
+        max(7.2, options.baseFontSize * 0.72)
+    }
+
+    private var chartPalette: [PDFColor] {
+        [
+            PDFColor(red: 0.11, green: 0.47, blue: 0.71),
+            PDFColor(red: 0.89, green: 0.47, blue: 0.20),
+            PDFColor(red: 0.20, green: 0.63, blue: 0.17),
+            PDFColor(red: 0.58, green: 0.40, blue: 0.74),
+            PDFColor(red: 0.55, green: 0.34, blue: 0.29),
+            PDFColor(red: 0.89, green: 0.10, blue: 0.11),
+            PDFColor(red: 0.50, green: 0.50, blue: 0.50),
+            PDFColor(red: 0.74, green: 0.74, blue: 0.13),
+        ]
+    }
+
+    private enum ChartTextAlignment {
+        case left
+        case center
+        case right
+    }
+
+    private enum ChartRenderPlanResult {
+        case plan(ChartRenderPlan)
+        case fallback(String)
+    }
+
+    private struct ChartRenderPlan {
+        var chart: ChartBlock
+        var height: Double
+        var plotFrame: ChartFrame?
+        var xTicks: [Double]
+        var yTicks: [Double]
+        var xDomain: (min: Double, max: Double)
+        var yDomain: (min: Double, max: Double)
+        var pieRadius: Double?
+        var legendWidth: Double?
+    }
+
+    private struct ChartFrame {
+        var left: Double
+        var top: Double
+        var width: Double
+        var height: Double
+
+        var right: Double {
+            left + width
+        }
+
+        var bottom: Double {
+            top - height
+        }
+    }
+
+    private enum MermaidMeasurementResult {
+        case measurements([String: MermaidNodeMeasurement])
+        case fallback(String)
+    }
+
+    private enum MermaidRenderPlanResult {
+        case plan(MermaidRenderPlan)
+        case fallback(String)
+    }
+
+    private struct MermaidRenderPlan {
+        var height: Double
+        var boxes: [MermaidNodeBox]
+        var edges: [MermaidDiagram.Edge]
+    }
+
+    private struct MermaidNodeMeasurement {
+        var id: String
+        var labelLines: [[PDFTextRun]]
+        var width: Double
+        var height: Double
+        var fontSize: Double
+        var lineHeight: Double
+        var verticalPadding: Double
+    }
+
+    private struct MermaidNodeBox {
+        var id: String
+        var labelLines: [[PDFTextRun]]
+        var x: Double
+        var topOffset: Double
+        var width: Double
+        var height: Double
+        var fontSize: Double
+        var lineHeight: Double
+        var verticalPadding: Double
+
+        init(measurement: MermaidNodeMeasurement, x: Double, topOffset: Double) {
+            id = measurement.id
+            labelLines = measurement.labelLines
+            self.x = x
+            self.topOffset = topOffset
+            width = measurement.width
+            height = measurement.height
+            fontSize = measurement.fontSize
+            lineHeight = measurement.lineHeight
+            verticalPadding = measurement.verticalPadding
+        }
+
+        func frame(topY: Double) -> MermaidFrame {
+            let top = topY - topOffset
+            return MermaidFrame(left: x, top: top, width: width, height: height)
+        }
+    }
+
+    private struct MermaidFrame {
+        var left: Double
+        var top: Double
+        var width: Double
+        var height: Double
+
+        var right: Double {
+            left + width
+        }
+
+        var bottom: Double {
+            top - height
+        }
+
+        var centerX: Double {
+            left + width / 2
+        }
+
+        var centerY: Double {
+            top - height / 2
+        }
+
+        func contains(_ child: MermaidFrame) -> Bool {
+            child.left >= left
+                && child.right <= right
+                && child.top <= top
+                && child.bottom >= bottom
+        }
+
+        func intersects(_ other: MermaidFrame) -> Bool {
+            left < other.right
+                && right > other.left
+                && bottom < other.top
+                && top > other.bottom
+        }
+
+        func expanded(by amount: Double) -> MermaidFrame {
+            MermaidFrame(
+                left: left - amount,
+                top: top + amount,
+                width: width + amount * 2,
+                height: height + amount * 2,
+            )
+        }
+    }
+
+    private struct MermaidPoint {
+        var x: Double
+        var y: Double
+    }
+}
+
+private extension PDFTextRun {
+    func withText(_ newText: String) -> PDFTextRun {
+        PDFTextRun(
+            text: newText,
+            font: font,
+            size: size,
+            color: color,
+            underline: underline,
+            strikethrough: strikethrough,
+            linkDestination: linkDestination,
+            baselineOffset: baselineOffset,
+            namedDestination: namedDestination,
+            inlineMathBox: inlineMathBox,
+        )
+    }
+}

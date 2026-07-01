@@ -1,0 +1,125 @@
+{
+  "basics": {
+    "name": "Alex Rivera",
+    "headline": "Senior Mobile Architect | Swift Server | OpenAPI Tooling",
+    "location": "Example City, Example Country",
+    "email": "alex.rivera@example.com",
+    "phone": "+1 555 010 0199",
+    "links": [
+      {
+        "label": "LinkedIn",
+        "url": "https://example.com/linkedin"
+      },
+      {
+        "label": "GitHub",
+        "url": "https://example.com/github"
+      },
+      {
+        "label": "Blog",
+        "url": "https://example.com/blog"
+      }
+    ]
+  },
+  "summary": [
+    "Experienced mobile engineer focused on modular architecture, typed API contracts, and maintainable product systems."
+  ],
+  "experience": [
+    {
+      "organization": "Northbridge Systems",
+      "url": "https://example.com/northbridge",
+      "location": "Remote from Example City",
+      "title": "Senior Mobile Architect",
+      "start": "Sep 2025",
+      "end": "Present",
+      "projects": [
+        {
+          "name": "Identity Capture Platform",
+          "highlights": [
+            "Architecting iOS applications for secure document capture and verification",
+            "Building mobile features for regulated identity workflows",
+            "Designing modular architectures for security-sensitive applications"
+          ],
+          "technologies": [
+            "Swift",
+            "SwiftUI",
+            "UIKit",
+            "Swift Package Manager",
+            "Unit Testing"
+          ]
+        }
+      ]
+    },
+    {
+      "organization": "Lumen Works",
+      "url": "https://example.com/lumen",
+      "title": "Senior iOS Developer",
+      "start": "May 2024",
+      "end": "Jun 2025",
+      "highlights": [
+        "Developed OpenAPI YAML specifications for REST and Server-Sent Events endpoints",
+        "Generated a modular Swift networking layer from OpenAPI specifications"
+      ],
+      "technologies": [
+        "Swift",
+        "SwiftUI",
+        "REST",
+        "OpenAPI",
+        "Swift Server"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "Example Metropolitan University",
+      "degree": "M.Sc.",
+      "field": "Human-Computer Information Systems",
+      "details": [
+        "School of Applied Computing"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "DocHarbor",
+      "url": "https://example.com/docharbor",
+      "summary": "Local developer documentation crawler and Swift service for offline reference.",
+      "technologies": [
+        "Swift",
+        "Documentation",
+        "Swift Package Manager"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "Languages",
+      "items": [
+        "Swift",
+        "Objective-C"
+      ]
+    },
+    {
+      "name": "Frameworks",
+      "items": [
+        "SwiftUI",
+        "UIKit",
+        "AppKit"
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "title": "Speaking",
+      "entries": [
+        {
+          "title": "Mobile Systems Forum",
+          "subtitle": "May 2026, Speaker",
+          "url": "https://example.com/mobile-systems-forum",
+          "details": [
+            "\"Teaching Developer Tools to Read Documentation\""
+          ]
+        }
+      ]
+    }
+  ]
+}

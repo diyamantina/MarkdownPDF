@@ -1,0 +1,14 @@
+# Mechanical enforcement of the code rules a machine can decide
+# (engineering.md principle: no force-unwrap in shipping code).
+#
+# Inert until Swift sources exist. The CI workflow that runs swiftlint plus
+# build plus test ships with the engine package.
+only_rules:
+  - force_unwrapping
+  - force_try
+  - force_cast
+force_unwrapping: error
+force_try: error
+force_cast: error
+excluded:
+  - .build

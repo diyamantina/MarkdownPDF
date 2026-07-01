@@ -1,0 +1,8 @@
+# Vendored research references (borb and other canonical PDF/Markdown sources)
+# are kept for study only. Exclude them from GitHub Linguist language stats so
+# the repository is correctly identified as Swift, and collapse them in diffs.
+researchcode/** linguist-vendored
+researchcode/** linguist-generated
+
+# Helper scripts are not the project language.
+scripts/*.py linguist-vendored

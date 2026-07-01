@@ -1,0 +1,112 @@
+@testable import MarkdownPDF
+import Testing
+
+@Suite("Line break opportunity detector")
+struct LineBreakOpportunityDetectorTests {
+    @Test("Keeps Latin whitespace wrapping compatible with existing tokenizer")
+    func keepsLatinWhitespaceWrappingCompatibleWithExistingTokenizer() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "Alpha beta\tgamma") == ["Alpha ", "beta ", "gamma"])
+        #expect(detector.opportunities(in: "Alpha beta\tgamma") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 6, kind: .allowed),
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 11, kind: .allowed),
+        ])
+    }
+
+    @Test("Keeps mandatory line breaks as separate segments")
+    func keepsMandatoryLineBreaksAsSeparateSegments() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "Alpha\nBeta") == ["Alpha", "\n", "Beta"])
+        #expect(detector.opportunities(in: "Alpha\nBeta") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 6, kind: .mandatory),
+        ])
+    }
+
+    @Test("Keeps Thai and Khmer intact until word segmentation exists")
+    func keepsThaiAndKhmerIntactUntilWordSegmentationExists() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "\u{0E40}\u{0E01}") == ["\u{0E40}\u{0E01}"])
+        #expect(detector.opportunities(in: "\u{0E40}\u{0E01}").isEmpty)
+        #expect(detector.segments(in: "ภาษาไทย") == ["ภาษาไทย"])
+        #expect(detector.opportunities(in: "ภาษาไทย").isEmpty)
+        #expect(detector.segments(in: "កខគ") == ["កខគ"])
+        #expect(detector.opportunities(in: "កខគ").isEmpty)
+    }
+
+    @Test("Adds CJK ID-class break opportunities")
+    func addsCJKIDClassBreakOpportunities() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "漢字仮名") == ["漢", "字", "仮", "名"])
+        #expect(detector.opportunities(in: "漢字仮名") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 1, kind: .allowed),
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 3, kind: .allowed),
+        ])
+        #expect(detector.segments(in: "かなカナ") == ["か", "な", "カ", "ナ"])
+        #expect(detector.segments(in: "\u{2EBF0}\u{2EBF1}") == ["\u{2EBF0}", "\u{2EBF1}"])
+        #expect(detector.segments(in: "\u{2F800}\u{2F801}") == ["\u{2F800}", "\u{2F801}"])
+        #expect(detector.segments(in: "\u{31350}\u{31351}") == ["\u{31350}", "\u{31351}"])
+    }
+
+    @Test("Protects Japanese non-starters")
+    func protectsJapaneseNonStarters() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "きゃく") == ["きゃ", "く"])
+        #expect(detector.opportunities(in: "きゃく") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
+        ])
+        #expect(detector.segments(in: "カーソル") == ["カー", "ソ", "ル"])
+        #expect(detector.opportunities(in: "カーソル") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 3, kind: .allowed),
+        ])
+    }
+
+    @Test("Keeps Hangul syllables together except at spaces")
+    func keepsHangulSyllablesTogetherExceptAtSpaces() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "한글") == ["한글"])
+        #expect(detector.opportunities(in: "한글").isEmpty)
+        #expect(detector.segments(in: "한글 테스트") == ["한글 ", "테스트"])
+        #expect(detector.opportunities(in: "한글 테스트") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 3, kind: .allowed),
+        ])
+    }
+
+    @Test("Protects CJK opening and closing punctuation boundaries")
+    func protectsCJKOpeningAndClosingPunctuationBoundaries() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "「漢字」仮") == ["「漢", "字」", "仮"])
+        #expect(detector.opportunities(in: "「漢字」仮") == [
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 2, kind: .allowed),
+            LineBreakOpportunityDetector.Opportunity(scalarOffset: 4, kind: .allowed),
+        ])
+        #expect(detector.segments(in: "漢。字") == ["漢。", "字"])
+    }
+
+    @Test("Does not split combining mark clusters")
+    func doesNotSplitCombiningMarkClusters() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "ก\u{0E49}ก") == ["ก\u{0E49}ก"])
+        #expect(detector.opportunities(in: "ก\u{0E49}ก").isEmpty)
+        #expect(detector.segments(in: "e\u{0301}e") == ["e\u{0301}e"])
+        #expect(detector.opportunities(in: "e\u{0301}e").isEmpty)
+    }
+
+    @Test("Protects punctuation boundaries")
+    func protectsPunctuationBoundaries() {
+        let detector = LineBreakOpportunityDetector()
+
+        #expect(detector.segments(in: "Hello,world") == ["Hello,world"])
+        #expect(detector.opportunities(in: "Hello,world").isEmpty)
+        #expect(detector.segments(in: "(Alpha beta)") == ["(Alpha ", "beta)"])
+    }
+}

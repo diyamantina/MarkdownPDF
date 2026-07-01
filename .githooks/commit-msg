@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# commit-msg hook: reject style tells in commit messages.
+#
+# Enforces github-discipline.md Rule 5.1 (no AI attribution) and
+# Rule 5.2 (no em dashes U+2014) at the commit boundary.
+#
+# Install (per repo): git config core.hooksPath .githooks
+#
+# Portable: uses only BSD-compatible grep (no -P, no \x escapes in patterns).
+
+set -e
+
+MSG_FILE="$1"
+[ -z "$MSG_FILE" ] && exit 0
+[ ! -f "$MSG_FILE" ] && exit 0
+
+# Strip comment lines (lines starting with #) and the diff scissors block.
+CONTENT=$(awk '
+  /^# ------------------------ >8 ------------------------$/ { exit }
+  /^[[:space:]]*#/ { next }
+  { print }
+' "$MSG_FILE")
+
+FAIL=0
+
+# Em dash U+2014 = UTF-8 bytes E2 80 94. Build the literal as a variable so the
+# script source itself contains no em-dash character.
+EMDASH=$(printf '\xe2\x80\x94')
+if LC_ALL=C printf '%s' "$CONTENT" | grep -qF -- "$EMDASH"; then
+  printf 'commit-msg: forbidden em dash (U+2014) in commit message.\n' >&2
+  printf '  Replace with a comma, period, colon, semicolon, or restructure.\n' >&2
+  printf '  Rule: github-discipline.md Rule 5.2\n' >&2
+  printf '  Locations (line numbers in the cleaned message):\n' >&2
+  LC_ALL=C printf '%s\n' "$CONTENT" | grep -nF -- "$EMDASH" | sed 's/^/    /' >&2
+  FAIL=1
+fi
+
+# Rule 5.1: AI-attribution phrases. Tool-agnostic: any assistant or its vendor,
+# not just one. Bare tool names are NOT flagged (that would false-positive on
+# legitimate text like "fix cursor blink"); only attribution-context mentions
+# are. Case-insensitive, BSD-grep -E compatible.
+AI_TOOLS='Claude|Anthropic|Codex|OpenAI|ChatGPT|GPT-[0-9]|Cursor|Copilot|Gemini|Google AI'
+ATTRIB_REGEX="(Co-Authored-By|Co-authored-with|Generated (with|by)|Created (with|by)|Powered by|with help from|written by|authored by)[: ].*(${AI_TOOLS})"
+if printf '%s' "$CONTENT" | grep -qiE -- "$ATTRIB_REGEX"; then
+  printf 'commit-msg: forbidden AI-attribution phrase (names an AI tool/vendor).\n' >&2
+  printf '  Rule: github-discipline.md Rule 5.1 (tool-agnostic)\n' >&2
+  printf '  Matched lines:\n' >&2
+  printf '%s\n' "$CONTENT" | grep -niE -- "$ATTRIB_REGEX" | sed 's/^/    /' >&2
+  FAIL=1
+fi
+
+# Generic self-reference tells, independent of any vendor name.
+GENERIC_PATTERNS=(
+  'as an AI'
+  'As an AI'
+  'this commit was generated'
+  'This commit was generated'
+  'this change was generated'
+  'This change was generated'
+)
+for p in "${GENERIC_PATTERNS[@]}"; do
+  if printf '%s' "$CONTENT" | grep -qF -- "$p"; then
+    printf 'commit-msg: forbidden AI-attribution phrase: %s\n' "$p" >&2
+    printf '  Rule: github-discipline.md Rule 5.1\n' >&2
+    FAIL=1
+  fi
+done
+
+# Rule 5.1: AI-tell signature emojis used as flourish at end of line.
+# Build emoji byte sequences in a variable so the script source stays clean.
+EMOJI_TELLS=$(printf '\xf0\x9f\xa4\x96\n\xe2\x9c\xa8\n\xf0\x9f\xaa\x84\n\xf0\x9f\xa7\xa0\n\xf0\x9f\xa6\xbe\n\xf0\x9f\xa4\x9d')
+while IFS= read -r emoji; do
+  [ -z "$emoji" ] && continue
+  if LC_ALL=C printf '%s' "$CONTENT" | grep -qF -- "$emoji"; then
+    printf 'commit-msg: forbidden AI-signature emoji in commit message.\n' >&2
+    printf '  Rule: github-discipline.md Rule 5.1\n' >&2
+    FAIL=1
+    break
+  fi
+done <<<"$EMOJI_TELLS"
+
+# Rule 5.1: AI-tell preamble phrasings at start of any line.
+PREAMBLE_PATTERNS=(
+  "I'll now"
+  "Let me "
+  "Here is a quick summary"
+  "Here's a quick summary"
+)
+for p in "${PREAMBLE_PATTERNS[@]}"; do
+  if printf '%s' "$CONTENT" | grep -qE -- "^${p}"; then
+    printf 'commit-msg: forbidden AI-tell preamble at line start: %s\n' "$p" >&2
+    printf '  Rule: github-discipline.md Rule 5.1\n' >&2
+    FAIL=1
+  fi
+done
+
+exit $FAIL

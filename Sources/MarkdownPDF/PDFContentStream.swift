@@ -1,0 +1,124 @@
+struct PDFContentStream {
+    private var lines: [Line] = []
+
+    var serialized: String {
+        lines.map(\.serialized).joined()
+    }
+
+    mutating func append(_ contentOperator: Operator) {
+        append([contentOperator])
+    }
+
+    mutating func append(_ operators: [Operator]) {
+        guard !operators.isEmpty else {
+            return
+        }
+
+        lines.append(Line(operators: operators))
+    }
+
+    struct Line {
+        var operators: [Operator]
+
+        var serialized: String {
+            operators.map(\.serialized).joined(separator: " ") + "\n"
+        }
+    }
+
+    enum Operator: Equatable {
+        case beginText
+        case setFont(PDFSyntax.Name, size: Double)
+        case moveText(x: Double, y: Double)
+        case showText(PDFSyntax.LiteralString)
+        case showCIDText([UInt16])
+        case endText
+        case setFillColor(PDFColor)
+        case setStrokeColor(PDFColor)
+        case setLineWidth(Double)
+        case setDash(lengths: [Double], phase: Double)
+        case moveTo(x: Double, y: Double)
+        case lineTo(x: Double, y: Double)
+        case curveTo(x1: Double, y1: Double, x2: Double, y2: Double, x3: Double, y3: Double)
+        case rectangle(x: Double, y: Double, width: Double, height: Double)
+        case closePath
+        case stroke
+        case fill
+        case fillAndStroke
+        case saveGraphicsState
+        case restoreGraphicsState
+        case beginMarkedContent(PDFSyntax.Name, mcid: Int)
+        case beginActualText(PDFSyntax.LiteralString)
+        case beginArtifact
+        case endMarkedContent
+        case concatenateMatrix(
+            a: Double,
+            b: Double,
+            c: Double,
+            d: Double,
+            e: Double,
+            f: Double,
+        )
+        case drawXObject(PDFSyntax.Name)
+
+        var serialized: String {
+            switch self {
+            case .beginText:
+                "BT"
+            case let .setFont(name, size):
+                "\(name.serialized) \(pdfNumber(size)) Tf"
+            case let .moveText(x, y):
+                "\(pdfNumber(x)) \(pdfNumber(y)) Td"
+            case let .showText(text):
+                "\(text.serialized) Tj"
+            case let .showCIDText(codes):
+                "\(PDFSyntax.HexString(twoByteCodes: codes).serialized) Tj"
+            case .endText:
+                "ET"
+            case let .setFillColor(color):
+                "\(pdfNumber(color.red)) \(pdfNumber(color.green)) \(pdfNumber(color.blue)) rg"
+            case let .setStrokeColor(color):
+                "\(pdfNumber(color.red)) \(pdfNumber(color.green)) \(pdfNumber(color.blue)) RG"
+            case let .setLineWidth(width):
+                "\(pdfNumber(width)) w"
+            case let .setDash(lengths, phase):
+                "[\(lengths.map { pdfNumber($0) }.joined(separator: " "))] \(pdfNumber(phase)) d"
+            case let .moveTo(x, y):
+                "\(pdfNumber(x)) \(pdfNumber(y)) m"
+            case let .lineTo(x, y):
+                "\(pdfNumber(x)) \(pdfNumber(y)) l"
+            case let .curveTo(x1, y1, x2, y2, x3, y3):
+                "\(pdfNumber(x1)) \(pdfNumber(y1)) \(pdfNumber(x2)) \(pdfNumber(y2)) \(pdfNumber(x3)) \(pdfNumber(y3)) c"
+            case let .rectangle(x, y, width, height):
+                "\(pdfNumber(x)) \(pdfNumber(y)) \(pdfNumber(width)) \(pdfNumber(height)) re"
+            case .closePath:
+                "h"
+            case .stroke:
+                "S"
+            case .fill:
+                "f"
+            case .fillAndStroke:
+                "B"
+            case .saveGraphicsState:
+                "q"
+            case .restoreGraphicsState:
+                "Q"
+            case let .beginMarkedContent(tag, mcid):
+                "\(tag.serialized) << /MCID \(mcid) >> BDC"
+            case let .beginActualText(text):
+                "/Span << /ActualText \(text.serialized) >> BDC"
+            case .beginArtifact:
+                "/Artifact BMC"
+            case .endMarkedContent:
+                "EMC"
+            case let .concatenateMatrix(a, b, c, d, e, f):
+                "\(pdfNumber(a)) \(pdfNumber(b)) \(pdfNumber(c)) \(pdfNumber(d)) \(pdfNumber(e)) \(pdfNumber(f)) cm"
+            case let .drawXObject(name):
+                "\(name.serialized) Do"
+            }
+        }
+
+        private func pdfNumber(_ value: Double) -> String {
+            PDFSyntax.Number(value).serialized
+        }
+    }
+}

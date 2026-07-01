@@ -1,0 +1,90 @@
+import MathTypeset
+import Testing
+
+@Suite("Markdown math parser")
+struct MathParserTests {
+    @Test("Parses fixed left right delimiters")
+    func parsesFixedLeftRightDelimiters() throws {
+        let parser = MathParser()
+
+        #expect(try parser.parse(#"\left (\frac{x}{y}\right )"#).linearizedText == "(frac(x, y))")
+        #expect(try parser.parse(#"\left\langle{x}\right\rangle"#).linearizedText == "<x>")
+        #expect(try parser.parse(#"\left\{\frac{x}{y}\right\}"#).linearizedText == "{frac(x, y)}")
+        #expect(try parser.parse(#"\left. x \right."#).linearizedText == "x")
+        #expect(try parser.parse(#"\left/x\right\backslash"#).linearizedText == #"/x\"#)
+        #expect(try parser.parse(#"\left< x \right>"#).linearizedText == "< x >")
+    }
+
+    @Test("Parses nested fixed left right delimiters")
+    func parsesNestedFixedLeftRightDelimiters() throws {
+        let parsed = try MathParser().parse(#"\left(\left[x\right]\right)"#)
+
+        #expect(parsed.linearizedText == "([x])")
+    }
+
+    @Test("Rejects malformed left right delimiters")
+    func rejectsMalformedLeftRightDelimiters() throws {
+        #expect(throws: MathParser.ParseError.missingRightDelimiter) {
+            try MathParser().parse(#"\left(x"#)
+        }
+        #expect(throws: MathParser.ParseError.missingDelimiter("right")) {
+            try MathParser().parse(#"\left(x\right"#)
+        }
+    }
+
+    @Test("Parses and linearizes the expanded symbol set")
+    func parsesExpandedSymbolSet() throws {
+        let parser = MathParser()
+
+        #expect(try parser.parse(#"\forall x \in S"#).linearizedText == "forall x in S")
+        #expect(try parser.parse(#"a \approx b"#).linearizedText == "a ~= b")
+        #expect(try parser.parse(#"x \leftarrow y \Rightarrow z"#).linearizedText == "x <- y => z")
+        #expect(try parser.parse(#"\sin x + \cos y"#).linearizedText == "sin x + cos y")
+        #expect(try parser.parse(#"A \cup B \cap C"#).linearizedText == "A cup B cap C")
+        #expect(try parser.parse(#"\rho \tau \chi"#).linearizedText == "rho tau chi")
+    }
+
+    @Test("Treats limit-style operators as big operators with scripts")
+    func treatsLimitOperatorsAsBigOperators() throws {
+        #expect(try MathParser().parse(#"\lim_{x \to 0} f"#).linearizedText == "lim_{x -> 0} f")
+    }
+
+    @Test("Parses and linearizes math accents")
+    func parsesMathAccents() throws {
+        let parser = MathParser()
+
+        #expect(try parser.parse(#"\hat{x}"#).linearizedText == "hat(x)")
+        #expect(try parser.parse(#"\overline{AB}"#).linearizedText == "overline(AB)")
+        #expect(try parser.parse(#"\vec{v}"#).linearizedText == "vec(v)")
+        #expect(try parser.parse(#"\bar{y} + \tilde{z}"#).linearizedText == "bar(y) + tilde(z)")
+    }
+
+    @Test("Parses operatorname as an upright multi-character operator")
+    func parsesOperatorname() throws {
+        let parser = MathParser()
+
+        #expect(try parser.parse(#"\operatorname{argmax}_x f"#).linearizedText == "argmax_{x} f")
+        #expect(try parser.parse(#"\operatorname{Var}(X)"#).linearizedText == "Var(X)")
+    }
+
+    @Test("Parses matrix and cases environments")
+    func parsesMatrixEnvironments() throws {
+        let parser = MathParser()
+
+        #expect(try parser.parse(#"\begin{pmatrix} a & b \\ c & d \end{pmatrix}"#).linearizedText == "(a, b; c, d)")
+        #expect(try parser.parse(#"\begin{matrix} 1 & 0 \\ 0 & 1 \end{matrix}"#).linearizedText == "matrix(1, 0; 0, 1)")
+        #expect(try parser.parse(#"\begin{cases} x & x \geq 0 \\ -x & x < 0 \end{cases}"#).linearizedText == "{x, x >= 0; -x, x < 0")
+        #expect(throws: (any Error).self) {
+            try parser.parse(#"\begin{unknownenv} a \end{unknownenv}"#)
+        }
+    }
+
+    @Test("Parses scaling delimiters")
+    func parsesScalingDelimiters() throws {
+        let parser = MathParser()
+
+        #expect(try parser.parse(#"\big( x \big)"#).linearizedText == "( x )")
+        #expect(try parser.parse(#"\Big[ y \Big]"#).linearizedText == "[ y ]")
+        #expect(try parser.parse(#"\bigg\{ z \bigg\}"#).linearizedText == "{ z }")
+    }
+}
