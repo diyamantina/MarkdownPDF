@@ -332,7 +332,7 @@ production renderer forks.
 Set `MARKDOWNPDF_ARTIFACT_DIR` while running tests to preserve witness outputs.
 The visual layout tests write the representative PDF, extracted text, `pdfinfo`
 output, Poppler TSV, MuPDF structured text, and Poppler/MuPDF page rasters under
-that directory, with a `README.txt` manifest naming each witness. GitHub CI
+that directory, with a `README.txt` manifest naming each witness. CI
 uploads those files as `markdownpdf-witness-linux` and
 `markdownpdf-witness-macos` artifacts for pull request review.
 
