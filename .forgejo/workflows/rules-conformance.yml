@@ -9,7 +9,7 @@ on:
 jobs:
   rules:
     # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
-    runs-on: macos
+    runs-on: quick
     steps:
       - uses: actions/checkout@v4
       - name: Rules baseline freshness (VERSION)
