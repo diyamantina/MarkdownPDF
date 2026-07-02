@@ -70,8 +70,8 @@ git config core.hooksPath .githooks
 ```
 
 The Swift gates run in both local hooks and GitHub workflows. CI lives in
-`.github/workflows/style.yml`, `.github/workflows/swift-macos.yml`, and
-`.github/workflows/swift-linux.yml`.
+`.forgejo/workflows/style.yml`, `.forgejo/workflows/swift-macos.yml`, and
+`.forgejo/workflows/swift-linux.yml`.
 
 ## Anti-Patterns
 

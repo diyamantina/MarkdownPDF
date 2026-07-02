@@ -48,7 +48,7 @@ When the claim is structural (a schema column, a config default, a flag name), a
 
 ### Rule 1.6: Issue templates use GitHub forms, not markdown
 
-Use `.yml` form templates, not `.github/ISSUE_TEMPLATE/feature.md` style markdown. Forms enforce structure mechanically at filing time; markdown templates only suggest it.
+Use `.yml` form templates, not `.forgejo/ISSUE_TEMPLATE/feature.md` style markdown. Forms enforce structure mechanically at filing time; markdown templates only suggest it.
 
 Required fields: status date (input), priority (dropdown), complexity (dropdown). Required structured textareas per template kind (goal + acceptance for features; symptom + expected + reproduce + acceptance for bugs).
 
