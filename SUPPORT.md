@@ -2,8 +2,8 @@
 
 Need help with MarkdownPDF? Here is where to go.
 
-- **Questions and ideas**: open a [Discussion](https://github.com/mihaelamj/MarkdownPDF/discussions).
-- **Bug reports**: open an [issue](https://github.com/mihaelamj/MarkdownPDF/issues/new/choose)
+- **Questions and ideas**: open a [Discussion](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/discussions).
+- **Bug reports**: open an [issue](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/new/choose)
   using the bug form.
 - **Feature requests**: open an issue using the feature form.
 - **Security issues**: do not open a public issue. See [SECURITY.md](SECURITY.md).

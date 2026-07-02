@@ -2,7 +2,7 @@
 
 How MarkdownPDF turns Unicode text into PDF glyphs across scripts: what works
 today, the first-principles target, and the concrete blockers between the two.
-Tracked by epic [#210](https://github.com/mihaelamj/MarkdownPDF/issues/210).
+Tracked by epic [#210](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/210).
 
 ## First principles
 

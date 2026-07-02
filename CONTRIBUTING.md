@@ -30,7 +30,7 @@ Requires a recent Swift toolchain. MarkdownPDF is a pure Swift package:
 `Package.swift`, `Sources/`, and `Tests/` at the repo root, with library products
 for the portable renderer and the platform entry points. The `markdownpdf` and
 `resumepdf` CLIs live in the separate
-[MarkdownPDFCli](https://github.com/mihaelamj/MarkdownPDFCli) repo.
+[MarkdownPDFCli](https://codeberg.org/MarkdownPdfHQ/MarkdownPDFCli) repo.
 
 ```sh
 git config core.hooksPath .githooks

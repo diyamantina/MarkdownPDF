@@ -2,11 +2,11 @@
 
 **Follow updates on [@diyamantina](https://x.com/diyamantina).**
 
-[![Style and namespacing](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/style.yml/badge.svg)](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/style.yml)
-[![Swift macOS](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-macos.yml/badge.svg)](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-macos.yml)
-[![Swift Linux](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-linux.yml/badge.svg)](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-linux.yml)
-[![Swift Windows](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-windows.yml/badge.svg)](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-windows.yml)
-[![Swift WASM](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-wasm.yml/badge.svg)](https://github.com/mihaelamj/MarkdownPDF/actions/workflows/swift-wasm.yml)
+[![Style and namespacing](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/style.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/style.yml)
+[![Swift macOS](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-macos.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-macos.yml)
+[![Swift Linux](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-linux.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-linux.yml)
+[![Swift Windows](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-windows.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-windows.yml)
+[![Swift WASM](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-wasm.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-wasm.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 MarkdownPDF is a Pure Swift Markdown to PDF renderer. It parses Markdown, lays
@@ -26,7 +26,7 @@ JavaScript, Python, shell renderers, or C Markdown/PDF libraries.
 > **contributions are very welcome**: Arabic and Hebrew shaping, CJK by default,
 > coverage-driven font fallback, and color emoji. See
 > [Help Wanted: International Text](#help-wanted-international-text) and epic
-> [#210](https://github.com/mihaelamj/MarkdownPDF/issues/210).
+> [#210](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/210).
 
 <p align="center">
   <img src="Docs/images/hero.png" alt="Example pages rendered by MarkdownPDF: multilingual text, native charts, and a mixed-content handbook" width="100%">
@@ -102,7 +102,7 @@ The generic renderer currently covers:
   for unsupported commands. Symbols draw with their real Unicode glyphs (∑, ±,
   σ, ...) when the active embedded font covers them, falling back to an ASCII
   transliteration per symbol where it does not. The math engine lives in the
-  shared, dependency-free [MathTypeset](https://github.com/mihaelamj/MathTypeset)
+  shared, dependency-free [MathTypeset](https://codeberg.org/MarkdownPdfHQ/MathTypeset)
   package. `PDFOptions.MathTypesetting.fontBacked` additionally requires the
   styled math role to use an embedded OpenType font with a `MATH` table.
 - Opt-in Pure Swift `/FlateDecode` compression for page content streams and
@@ -129,7 +129,7 @@ default, complex-script shaping (Arabic joining, Hebrew niqqud), full
 coverage-driven font fallback, and color emoji. Each has a per-item issue and a
 how-to-contribute note under [Help Wanted: International
 Text](#help-wanted-international-text) and epic
-[#210](https://github.com/mihaelamj/MarkdownPDF/issues/210). The guiding
+[#210](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/210). The guiding
 principle throughout: render every character the active fonts can represent, and
 degrade visibly and recoverably, never with a silent `?`.
 
@@ -144,7 +144,7 @@ degrade visibly and recoverably, never with a silent `?`.
 
 This package ships libraries only. The `markdownpdf` and `resumepdf`
 command-line tools live in the separate
-[MarkdownPDFCli](https://github.com/mihaelamj/MarkdownPDFCli) repository, which
+[MarkdownPDFCli](https://codeberg.org/MarkdownPdfHQ/MarkdownPDFCli) repository, which
 depends on these libraries.
 
 `MarkdownPDFMac` is available only when the package is built on macOS. iOS
@@ -294,7 +294,7 @@ let data = try MarkdownPDFMacRenderer().render(markdown: markdown)
 ```
 
 The `markdownpdf` and `resumepdf` command-line tools live in the
-[MarkdownPDFCli](https://github.com/mihaelamj/MarkdownPDFCli) repository, which
+[MarkdownPDFCli](https://codeberg.org/MarkdownPdfHQ/MarkdownPDFCli) repository, which
 consumes this package.
 
 See [Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/ResumeTemplate.md](Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/ResumeTemplate.md) for the resume JSON
@@ -408,13 +408,13 @@ The catalog landing page groups every article under Topics.
   scalars, including Latin-1 letters, Windows-1252 punctuation, emoji, complex
   scripts, combining marks, and bidirectional text, render as `?` unless the
   caller enables an embedded TrueType font profile that covers those scalars.
-- Issue [#95](https://github.com/mihaelamj/MarkdownPDF/issues/95) completed the
+- Issue [#95](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/95) completed the
   hard fixture corpus pass with duplicate headings, generated ToC pressure,
   internal and external links, nested quotes, lists, wide tables, reused local
   images, remote image fallback, raw HTML fallback, code blocks, Mermaid drawing,
   and unsupported Mermaid fallback.
-- Issue [#97](https://github.com/mihaelamj/MarkdownPDF/issues/97), landed by
-  PR [#98](https://github.com/mihaelamj/MarkdownPDF/pull/98), completed the A4
+- Issue [#97](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/97), landed by
+  PR [#98](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/pull/98), completed the A4
   and external manuscript witness pass. It adds sustained manuscript prose, A4
   page-size assertions, tables, local and remote figures, supported Mermaid
   drawing, unsupported Mermaid fallback, a complete patent fixture, Formidabble
@@ -425,30 +425,30 @@ The catalog landing page groups every article under Topics.
 - The full WWDC fixture is committed for special stress coverage. Run it with
   `MARKDOWNPDF_LARGE_FIXTURE_TESTS=1 swift test --filter FixtureTests/wwdcLargeFixtureRendersSelectedOversizedAssetsWhenEnabled`
   from the repo root.
-- Issue [#99](https://github.com/mihaelamj/MarkdownPDF/issues/99) completed
+- Issue [#99](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/99) completed
   source-code formatting research and implementation, including the reported
   quote-stroke, crammed-layout, glyph-overlap, and image-presence regressions.
-  Issue [#120](https://github.com/mihaelamj/MarkdownPDF/issues/120) landed the
+  Issue [#120](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/120) landed the
   portable syntax-coloring implementation. Issue
-  [#122](https://github.com/mihaelamj/MarkdownPDF/issues/122) landed Unicode
+  [#122](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/122) landed Unicode
   combining diacritics and CJK / kanji coverage. Issue
-  [#135](https://github.com/mihaelamj/MarkdownPDF/issues/135) landed
+  [#135](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/135) landed
   screenshot-reported source-code layout regression coverage across code,
   quotes, headings, images, and fallback text. Issue
-  [#123](https://github.com/mihaelamj/MarkdownPDF/issues/123) landed RTL
+  [#123](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/123) landed RTL
   manuscript hardening. Issue
-  [#141](https://github.com/mihaelamj/MarkdownPDF/issues/141) landed the #135
+  [#141](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/141) landed the #135
   negative-control proof. Issue
-  [#146](https://github.com/mihaelamj/MarkdownPDF/issues/146) preserved staged
+  [#146](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/146) preserved staged
   research for the next implementation shortlist. Issue
-  [#142](https://github.com/mihaelamj/MarkdownPDF/issues/142) landed the
+  [#142](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/142) landed the
   line-break correctness follow-up for Thai, Khmer, Japanese non-starters, and
   Hangul. Issue
-  [#143](https://github.com/mihaelamj/MarkdownPDF/issues/143) expanded
+  [#143](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/143) expanded
   syntax-coloring coverage with data-driven comment delimiters for shell,
   YAML, XML/HTML, Pascal, Lisp-family, SQL, Lua, Haskell, Ada, Erlang, LaTeX,
   and Visual Basic hints.
-- Issue [#100](https://github.com/mihaelamj/MarkdownPDF/issues/100) added named
+- Issue [#100](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/100) added named
   PDF page sizes through `PDFOptions.PageSize`: the A-series A0 through A6 plus
   `letter`, `legal`, and `tabloid`.
 - Apple system font names remain available through
@@ -525,14 +525,14 @@ These epics are fully landed and their child issues all closed, so their phase
 diagrams have been retired to keep the roadmap focused on active work. The work
 itself is described in the sections below and under `Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/`.
 
-- [#27](https://github.com/mihaelamj/MarkdownPDF/issues/27): canonical PDF document structure.
-- [#48](https://github.com/mihaelamj/MarkdownPDF/issues/48): portable article-grade fidelity hardening.
-- [#63](https://github.com/mihaelamj/MarkdownPDF/issues/63): portable embedded-font foundation.
-- [#79](https://github.com/mihaelamj/MarkdownPDF/issues/79): complex-script shaping and bidi.
+- [#27](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/27): canonical PDF document structure.
+- [#48](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/48): portable article-grade fidelity hardening.
+- [#63](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/63): portable embedded-font foundation.
+- [#79](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/79): complex-script shaping and bidi.
 
 ## Current Hardening
 
-Epic [#145](https://github.com/mihaelamj/MarkdownPDF/issues/145) gathered the
+Epic [#145](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/145) gathered the
 staged-research shortlist (charts, DEFLATE, tagged PDF, footnotes, theming,
 fonts) plus the embedded-font and multilingual-showcase hardening that followed.
 Those child issues have all landed, so they are retired from this diagram; only
@@ -556,7 +556,7 @@ flowchart TD
 
 ## Math typesetting roadmap
 
-Epic [#131](https://github.com/mihaelamj/MarkdownPDF/issues/131) is the
+Epic [#131](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/131) is the
 standalone pure-Swift TeX-math subset. LaTeX is banned by the project boundary,
 so inline `$...$` and display `$$...$$` are parsed, laid out by a box-and-glue
 engine, and emitted as ordinary PDF text and rule drawing; unsupported
@@ -583,7 +583,7 @@ flowchart TD
 
 ## macOS article-grade renderer roadmap
 
-Epic [#10](https://github.com/mihaelamj/MarkdownPDF/issues/10) makes
+Epic [#10](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/10) makes
 `MarkdownPDFMac` the high-quality macOS product for scientific and technical
 articles while keeping the portable core Linux-buildable. The mac product may
 use Apple-native APIs such as CoreGraphics, CoreText, and ImageIO; the core
@@ -618,7 +618,7 @@ supplied embedded font covers (Central European Latin, Cyrillic, Greek, CJK)
 renders today. Reaching correct, default international coverage is a focused body
 of work, and external contributions are very welcome. Each item below is a
 self-contained, documented issue under epic
-[#210](https://github.com/mihaelamj/MarkdownPDF/issues/210); the design write-up
+[#210](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/210); the design write-up
 is in `Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/InternationalTextRendering.md`.
 
 What is shipped:
@@ -630,19 +630,19 @@ What is shipped:
 
 What is not there yet (help wanted):
 
-- [#212](https://github.com/mihaelamj/MarkdownPDF/issues/212) **Coverage-driven
+- [#212](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/212) **Coverage-driven
   font fallback** (the keystone): route each grapheme to a covering font
   (including the base-14 `Symbol`/`ZapfDingbats` faces), fall back recoverably,
   never with a silent `?`. Includes variable-font instancing and TrueType
   Collection (`.ttc`) face selection.
-- [#215](https://github.com/mihaelamj/MarkdownPDF/issues/215) **Chinese and
+- [#215](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/215) **Chinese and
   Japanese (CJK)** by default with an embedded font.
-- [#213](https://github.com/mihaelamj/MarkdownPDF/issues/213) **Hebrew**: RTL with
+- [#213](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/213) **Hebrew**: RTL with
   an embedded font plus GPOS niqqud positioning.
-- [#214](https://github.com/mihaelamj/MarkdownPDF/issues/214) **Arabic**: a
+- [#214](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/214) **Arabic**: a
   pure-Swift OpenType GSUB/GPOS shaping engine (contextual joining, ligatures,
   marks). The largest single piece.
-- [#216](https://github.com/mihaelamj/MarkdownPDF/issues/216) **Color emoji**:
+- [#216](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/issues/216) **Color emoji**:
   COLR/CPAL, sbix/CBDT, OpenType-SVG, and grapheme clustering.
 
 The constraint throughout: Pure Swift, Linux-buildable, no C libraries and no
