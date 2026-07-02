@@ -60,7 +60,7 @@ while IFS= read -r f; do
   fi
 done < <(git ls-files)
 
-# Roadmap diagram gate (github-discipline Rule 1.8): valid, vertical,
+# Roadmap diagram gate (git-discipline Rule 1.8): valid, vertical,
 # legend-keyed mermaid diagrams, and every epic visible in a diagram.
 if command -v python3 >/dev/null 2>&1; then
   if ! python3 "$(dirname "$0")/check-roadmap.py"; then

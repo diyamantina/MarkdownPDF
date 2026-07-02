@@ -18,7 +18,7 @@ systems, and developer workflow automation.
 - Phone: +1 555 010 0199
 - Location: Example City, Example Country
 - [LinkedIn](https://example.com/linkedin)
-- [GitHub](https://example.com/github)
+- [Codeberg](https://example.com/codeberg)
 - [Blog](https://example.com/blog)
 - [Download CV (PDF)](https://example.com/assets/alex-rivera-cv.pdf)
 

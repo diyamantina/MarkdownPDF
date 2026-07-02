@@ -297,7 +297,7 @@ References: ST-0009, ST-0016, ST-0017, ST-0022 (Swift Testing parity across Appl
 
 ## 11. CI for Linux-buildable server products
 
-Every Linux-buildable product runs a Linux build on every PR. Minimum GitHub Actions job:
+Every Linux-buildable product runs a Linux build on every PR. Minimum CI job:
 
 ```yaml
 linux-build:

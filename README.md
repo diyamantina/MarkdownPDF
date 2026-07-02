@@ -18,8 +18,6 @@ per release. It does not use PDFKit,
 CoreGraphics, WebKit, wkhtmltopdf, Chromium, LaTeX, browser renderers,
 JavaScript, Python, shell renderers, or C Markdown/PDF libraries.
 
-> If MarkdownPDF helps your Swift documentation or publishing workflow, consider [sponsoring its development](https://github.com/sponsors/mihaelamj). Sponsorship helps fund continued work on Unicode coverage, PDF conformance, and Apple/Linux support.
-
 > **Text coverage and help wanted.** ASCII and the full WinAnsi (Western
 > European) set render with no embedded font; Central European, Cyrillic, Greek,
 > and CJK render with an embedded font. Full Unicode is in progress and
@@ -84,7 +82,7 @@ The generic renderer currently covers:
   text.
 - Emphasis, strong text, strike-through, inline code, links, and backslash
   escapes.
-- Ordered lists, unordered lists, fenced code blocks, and GitHub-flavored tables.
+- Ordered lists, unordered lists, fenced code blocks, and GFM tables.
 - Local JPEG and PNG images resolved relative to the input document.
 - PDF document title metadata, heading outlines, and internal heading links.
 - Opt-in generated table of contents with final page numbers and internal links.
@@ -113,7 +111,7 @@ The generic renderer currently covers:
   `PDFOptions.Conformance.pdfUA1`, `.pdfA2A`, and `.pdfUA1AndPDFA2A`,
   verified with veraPDF on profile fixtures.
 
-The compatibility target is CommonMark plus GitHub Flavored Markdown tables and
+The compatibility target is CommonMark plus GFM tables and
 images. The generated PDF profile is intentionally small, typed, and documented
 under `Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/`.
 

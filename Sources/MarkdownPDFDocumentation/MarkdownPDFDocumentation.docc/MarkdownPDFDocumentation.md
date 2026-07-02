@@ -23,7 +23,7 @@ swift test
 swift run markdownpdf input.md output.pdf
 ```
 
-The same package builds on macOS and Linux. GitHub CI runs style, macOS, and Linux checks. Build this documentation with the Swift-DocC plugin:
+The same package builds on macOS and Linux. CI runs style, macOS, and Linux checks. Build this documentation with the Swift-DocC plugin:
 
 ```sh
 cd Packages

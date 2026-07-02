@@ -30,8 +30,6 @@ jobs:
           fi
           git checkout --detach FETCH_HEAD
       - name: Style gate
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: bash scripts/check-style.sh
       - name: Namespacing gate
         run: bash scripts/check-namespacing.sh

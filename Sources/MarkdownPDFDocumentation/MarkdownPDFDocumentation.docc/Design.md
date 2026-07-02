@@ -11,7 +11,7 @@
 MarkdownPDF converts Markdown to PDF with no external renderer. The core path is
 Markdown text, Swift parser, Swift layout, Swift PDF serialization, PDF bytes.
 The first implementation is intentionally small, but the compatibility target is
-CommonMark plus GitHub Flavored Markdown tables and images.
+CommonMark plus GFM tables and images.
 
 ## Goals
 
@@ -96,6 +96,6 @@ strict monospaced output is preferred.
 
 ## Compatibility Target
 
-The target is CommonMark plus GitHub Flavored Markdown tables and images. The
+The target is CommonMark plus GFM tables and images. The
 current implementation covers the syntax listed in the README and should grow
 through parser fixtures and renderer tests.

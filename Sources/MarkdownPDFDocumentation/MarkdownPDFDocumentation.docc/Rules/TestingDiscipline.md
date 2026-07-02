@@ -66,7 +66,7 @@ When in doubt, write the test. The cost of writing a test you did not strictly n
 Where the project supports it, add the test run to:
 
 - A pre-push hook that runs the project's test command and refuses the push on non-zero exit.
-- A CI workflow (GitHub Actions, or any CI) that runs tests on every PR and blocks merge on red.
+- A CI workflow (any CI) that runs tests on every PR and blocks merge on red.
 - A pre-commit hook for fast-running suites (under a few seconds). Slow suites belong on push or in CI.
 
 The CI gate is the durable backstop. The local hook catches things before they hit CI. Neither replaces the responsibility to run tests during the work; both prevent forgetting at the boundary.

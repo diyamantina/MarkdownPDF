@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Roadmap diagram gate.
 
-Enforces github-discipline Rule 1.8 against this repo's README:
+Enforces git-discipline Rule 1.8 against this repo's README:
 
   1. Structural: every mermaid block is vertical (flowchart TD), every node
      referenced by an edge is defined, every node is assigned exactly one
@@ -16,16 +16,13 @@ Enforces github-discipline Rule 1.8 against this repo's README:
      Completed epics section, so the diagrams stay focused on remaining work.
 
 Structural and legend checks run offline and always. The epic-coverage check
-needs GitHub access, so it runs only when `gh` is available and authenticated;
-otherwise it is skipped with a notice so the gate stays portable for offline
-and local runs. In CI the workflow grants `issues: read` and a token so
-coverage is enforced.
+queries the forge's issue API anonymously (the repo is public); when the forge
+is unreachable it is skipped with a notice so the gate stays portable for
+offline and local runs.
 """
 import json
 import os
 import re
-import shutil
-import subprocess
 import sys
 
 LEGEND = {"done", "active", "review", "next", "todo"}
@@ -82,24 +79,21 @@ def lint_block(block):
 
 
 def all_epics():
-    if not shutil.which("gh"):
-        return None, "gh not installed"
     # Only open epics must appear in a diagram. A closed epic is removed from the
     # roadmap once its issue closes; the work it delivered lives in the CHANGELOG
     # and the Completed epics section, so the diagrams stay focused on remaining
-    # work.
-    cmd = ["gh", "issue", "list", "--label", "epic", "--state", "open",
-           "--json", "number", "--limit", "200"]
-    repo = os.environ.get("GITHUB_REPOSITORY")
-    if repo:
-        cmd += ["-R", repo]
+    # work. The issue tracker is the forge's API; the repo is public, so the
+    # query needs no token.
+    repo = os.environ.get("GITHUB_REPOSITORY", "MarkdownPdfHQ/MarkdownPDF")
+    server = os.environ.get("GITHUB_SERVER_URL", "https://codeberg.org")
+    url = f"{server}/api/v1/repos/{repo}/issues?labels=epic&state=open&type=issues&limit=200"
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    except Exception as exc:  # network, auth, or missing binary
-        return None, f"gh call failed: {exc}"
-    if out.returncode != 0:
-        return None, (out.stderr.strip().splitlines()[-1] if out.stderr.strip() else "gh returned nonzero")
-    return [str(x["number"]) for x in json.loads(out.stdout)], None
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=30) as response:
+            issues = json.load(response)
+    except Exception as exc:  # network down, forge unreachable
+        return None, f"issue query failed: {exc}"
+    return [str(x["number"]) for x in issues], None
 
 
 def mermaid_sections(text):
@@ -147,7 +141,7 @@ def main():
             print(f"roadmap: all {len(epics)} open epics appear in a diagram")
 
     if fail:
-        print("roadmap: gate failed. Rule: github-discipline Rule 1.8 "
+        print("roadmap: gate failed. Rule: git-discipline Rule 1.8 "
               "(every epic appears in a valid, legend-keyed status diagram; "
               "in-progress epics keep a detailed roadmap).",
               file=sys.stderr)

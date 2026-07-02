@@ -51,7 +51,7 @@ Cite each step's outcome. Git hooks may run a subset; that is not a substitute f
 ## Mechanical enforcement: local and CI
 
 Every gate a machine can decide runs in two places: a local git hook, so a
-violation is never committed, and GitHub CI, so a violation is never merged even
+violation is never committed, and CI, so a violation is never merged even
 if the local hook was skipped. The local hook catches it early; CI is the backstop.
 
 | Gate | Local hook | CI job |
@@ -69,7 +69,7 @@ Enable the local hooks once after cloning:
 git config core.hooksPath .githooks
 ```
 
-The Swift gates run in both local hooks and GitHub workflows. CI lives in
+The Swift gates run in both local hooks and CI workflows. CI lives in
 `.forgejo/workflows/style.yml`, `.forgejo/workflows/swift-macos.yml`, and
 `.forgejo/workflows/swift-linux.yml`.
 

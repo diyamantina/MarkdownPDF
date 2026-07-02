@@ -15,7 +15,7 @@ struct MarkdownParserTests {
         #expect(document.blocks.first == .heading(level: 1, content: [.text("Title")]))
     }
 
-    @Test("Parses GitHub style tables")
+    @Test("Parses GFM tables")
     func parsesTables() {
         let document = MarkdownParser().parse("""
         | Name | Score |
