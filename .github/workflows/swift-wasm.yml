@@ -9,6 +9,7 @@ name: Swift (WASM)
 # artifactbundle, so this route is the robust one.
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:

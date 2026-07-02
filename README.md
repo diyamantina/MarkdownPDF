@@ -5,7 +5,6 @@
 [![Style and namespacing](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/style.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/style.yml)
 [![Swift macOS](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-macos.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-macos.yml)
 [![Swift Linux](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-linux.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-linux.yml)
-[![Swift Windows](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-windows.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-windows.yml)
 [![Swift WASM](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-wasm.yml/badge.svg)](https://codeberg.org/MarkdownPdfHQ/MarkdownPDF/actions/workflows/swift-wasm.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
@@ -14,7 +13,8 @@ the document out, and serializes PDF bytes directly in Swift.
 
 The core renderer builds on macOS, Linux, Windows, and WebAssembly (wasm32-unknown-wasip1).
 The full package, including the witness-based test suite, runs on macOS and Linux;
-Windows and WASI are core build gates. It does not use PDFKit,
+WASI is a core build gate on every push, and the Windows core build is verified
+per release. It does not use PDFKit,
 CoreGraphics, WebKit, wkhtmltopdf, Chromium, LaTeX, browser renderers,
 JavaScript, Python, shell renderers, or C Markdown/PDF libraries.
 
@@ -356,8 +356,8 @@ swift test
 ```
 
 The same package builds on macOS and Linux, and the core engine builds on Windows
-and WebAssembly (WASI). GitHub CI runs style, macOS Swift, Linux Swift, Windows
-core, and WASM build checks. Build the core for WebAssembly locally with:
+and WebAssembly (WASI). CI runs style, macOS Swift, Linux Swift, and WASM build
+checks on every push; the Windows core build is verified per release. Build the core for WebAssembly locally with:
 
 ```sh
 swift sdk install https://download.swift.org/swift-6.3.2-release/wasm-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_wasm.artifactbundle.tar.gz --checksum a61f0584c93283589f8b2f42db05c1f9a182b506c2957271402992655591dd7c
