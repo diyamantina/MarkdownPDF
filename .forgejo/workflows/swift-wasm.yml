@@ -4,9 +4,10 @@ name: Swift (WASM)
 # badge reflects current WASI build health. This is a build check; running wasm
 # tests needs a separate runtime and is out of scope for this gate.
 #
-# Uses swiftly + the official swift.org wasm SDK (the same path PureYAML uses).
-# The swift:6.3.0 container's `swift sdk install` segfaults on the swiftwasm
-# artifactbundle, so this route is the robust one.
+# Uses the swift:6.3.2 container plus the official swift.org wasm SDK for the
+# same version, so the host compiler and SDK match exactly and no toolchain
+# bootstrap is needed. (The old swiftly route existed for a segfault in
+# swift:6.3.0 with the swiftwasm bundle; the official SDK installs cleanly.)
 
 on:
   workflow_dispatch:
@@ -22,6 +23,7 @@ jobs:
     name: Swift (WASM)
     # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
     runs-on: ubuntu-latest
+    container: swift:6.3.2
     steps:
       - name: Checkout
         env:
@@ -36,22 +38,10 @@ jobs:
             git fetch --depth=1 origin "$GITHUB_SHA"
           fi
           git checkout --detach FETCH_HEAD
-      - name: Install toolchain dependencies
+      - name: Install the wasm SDK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev
-      - name: Install swiftly
-        run: |
-          curl -L https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz > swiftly.tar.gz
-          tar zxf swiftly.tar.gz
-          ./swiftly init --quiet-shell-followup --assume-yes --skip-install
-      - name: Install Swift 6.3.2 and the wasm SDK
-        run: |
-          . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
-          swiftly install --use 6.3.2
           swift sdk install https://download.swift.org/swift-6.3.2-release/wasm-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_wasm.artifactbundle.tar.gz --checksum a61f0584c93283589f8b2f42db05c1f9a182b506c2957271402992655591dd7c
       - name: Build for WebAssembly
         run: |
-          . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
           swift build --swift-sdk swift-6.3.2-RELEASE_wasm
           swift build -c release --swift-sdk swift-6.3.2-RELEASE_wasm
