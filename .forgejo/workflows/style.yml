@@ -13,6 +13,7 @@ permissions:
 jobs:
   style:
     name: Style and namespacing
+    # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

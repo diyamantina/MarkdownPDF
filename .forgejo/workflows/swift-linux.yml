@@ -12,6 +12,7 @@ permissions:
 jobs:
   swift-linux:
     name: Swift (Linux)
+    # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
     runs-on: ubuntu-latest
     # Prebuilt CI image: swift 6.1 + node 22 + qpdf/poppler/mupdf/veraPDF +
     # DejaVu fonts, so no per-run tool install. Source: MarkdownPdfHQ ci-image.

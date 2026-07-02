@@ -12,6 +12,7 @@ permissions:
 jobs:
   swift-macos:
     name: Swift (macOS)
+    # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
     runs-on: macos-latest
     steps:
       - name: Checkout repository
