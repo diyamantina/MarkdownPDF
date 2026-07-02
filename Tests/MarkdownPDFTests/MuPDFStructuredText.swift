@@ -19,6 +19,14 @@ struct MuPDFStructuredText {
         var index: Int
         var text: String
         var box: Box
+        /// True when MuPDF emitted a degenerate (near-zero-area / collapsed) quad for
+        /// this character. It does that for the trailing characters of a ligature or
+        /// math glyph whose ToUnicode maps one painted glyph to several characters
+        /// (e.g. the "i" of an "fi" ligature): the character shares the base glyph's
+        /// painted region and MuPDF gives it a collapsed quad rather than a real box.
+        /// Such continuations legitimately share a sibling's position and must be
+        /// exempt from the adjacency (overlap / moves-left) checks. See #197.
+        var isToUnicodeContinuation: Bool = false
 
         var isWhitespace: Bool {
             text.unicodeScalars.allSatisfy {
@@ -238,8 +246,15 @@ struct MuPDFStructuredText {
             return
         }
 
+        // ToUnicode expansion continuations (ligature/math trailing characters with a
+        // collapsed MuPDF quad) legitimately share their base glyph's position, so they
+        // cannot be a real overlap or a backwards move. Drop them before adjacency
+        // checks. A genuinely mispositioned glyph still carries a proper quad and is
+        // still caught. See #197 and isDegenerateQuad.
+        let laidOutGlyphs = glyphs.filter { !$0.isToUnicodeContinuation }
+
         if allowRightToLeftRuns {
-            let spatialGlyphs = glyphs.sorted { left, right in
+            let spatialGlyphs = laidOutGlyphs.sorted { left, right in
                 if left.box.left == right.box.left {
                     return left.index < right.index
                 }
@@ -249,7 +264,7 @@ struct MuPDFStructuredText {
             return
         }
 
-        for (left, right) in zip(glyphs, glyphs.dropFirst()) {
+        for (left, right) in zip(laidOutGlyphs, laidOutGlyphs.dropFirst()) {
             if right.box.left < left.box.left - tolerance {
                 issues.append(glyphDescription(right, line: line, page: page) + " moves left inside a text run")
             }
@@ -402,8 +417,32 @@ private struct MuPDFStructuredTextParser {
             index: pages[pageIndex].lines[lineIndex].glyphs.count + 1,
             text: attributes["c"] ?? "",
             box: .quad(values),
+            isToUnicodeContinuation: Self.isDegenerateQuad(values),
         )
         pages[pageIndex].lines[lineIndex].glyphs.append(glyph)
+    }
+
+    /// A well-formed glyph quad is a proper (near-rectangular) polygon with clearly
+    /// positive area. MuPDF emits a collapsed, near-zero-area quad for a ToUnicode
+    /// expansion continuation (a trailing ligature/math character that shares the
+    /// base glyph's painted region). Detect it by the quad's signed area, which is
+    /// ~0 when corners collapse onto a line. Quad corner order is ul, ur, ll, lr;
+    /// traverse the perimeter ul -> ur -> lr -> ll for the shoelace formula.
+    private static func isDegenerateQuad(_ values: [Double], tolerance: Double = 0.5) -> Bool {
+        guard values.count == 8 else { return false }
+        let perimeter = [
+            (values[0], values[1]),
+            (values[2], values[3]),
+            (values[6], values[7]),
+            (values[4], values[5]),
+        ]
+        var twiceArea = 0.0
+        for index in 0 ..< 4 {
+            let (x1, y1) = perimeter[index]
+            let (x2, y2) = perimeter[(index + 1) % 4]
+            twiceArea += x1 * y2 - x2 * y1
+        }
+        return abs(twiceArea) / 2 <= tolerance
     }
 
     private func doubleAttribute(
