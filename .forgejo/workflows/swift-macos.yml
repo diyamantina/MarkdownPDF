@@ -41,7 +41,8 @@ jobs:
           swift build && swift test
       - name: Upload PDF witness artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        # v3: Codeberg's Forgejo serves the v3 artifact API; the v4 protocol fails.
+        uses: actions/upload-artifact@v3.2.2
         with:
           name: markdownpdf-witness-macos
           path: rendered-test-artifacts/macos
