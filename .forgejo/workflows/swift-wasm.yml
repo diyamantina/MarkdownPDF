@@ -23,7 +23,19 @@ jobs:
     # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git fetch --depth=1 origin "refs/pull/$PR_NUMBER/merge"
+          else
+            git fetch --depth=1 origin "$GITHUB_SHA"
+          fi
+          git checkout --detach FETCH_HEAD
       - name: Install toolchain dependencies
         run: |
           sudo apt-get update
