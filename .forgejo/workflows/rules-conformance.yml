@@ -1,0 +1,25 @@
+# Managed by rules-swift (scripts/sync-rules.sh). Verifies this repo tracks the
+# CURRENT shared-rules baseline. The repo's own .swiftformat/.swiftlint.yml are
+# repo-specific (baseline + project rules) and are intentionally NOT byte-checked.
+name: rules-conformance
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  rules:
+    # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
+    runs-on: macos
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rules baseline freshness (VERSION)
+        run: |
+          BASE=https://codeberg.org/Mihaela/rules-swift/raw/branch/main
+          canon=$(curl -fsSL "$BASE/VERSION" | tr -d '[:space:]')
+          mine=$(tr -d '[:space:]' < .rules-version 2>/dev/null || echo MISSING)
+          if [ "$mine" != "$canon" ]; then
+            echo "STALE: shared-rules baseline is v$canon, this repo tracks v$mine."
+            echo "Review the baseline diff, fold it into this repo's rules, then set .rules-version to $canon."
+            exit 1
+          fi
+          echo "rules baseline FRESH at v$canon (repo-specific rules preserved, not checked)"
