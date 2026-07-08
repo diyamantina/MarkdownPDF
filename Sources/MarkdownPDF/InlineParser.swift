@@ -13,10 +13,47 @@ struct InlineParser {
         var index: String.Index
         var options: MarkdownParser.Options
 
+        /// For each close character, the earliest index from which it is known to be
+        /// absent through the end of the source.
+        ///
+        /// Every opener that fails to find its closer scans to the end, and
+        /// `consumeText` then advances a single character, so a run of unmatched
+        /// openers (`[[[…`, `<<<…`, `[a]([a](…`) re-scanned the whole tail per
+        /// character: O(n^2), a few KB of one byte wedging the parser for seconds.
+        /// A close char absent from index i is absent from every j > i, so one
+        /// recorded absence short-circuits every later scan. Soundness for the
+        /// escape-aware `]` scan: two starts i < j can disagree on whether a given
+        /// `]` is escaped only if j lands strictly inside the backslash run before
+        /// it, i.e. the character before j is `\`. Every scan start is one or two
+        /// positions past an opener, so the character before it is always `[`, `^`,
+        /// `(`, `<`, or a backtick, never `\`. Escape parity past j is therefore
+        /// start-invariant. The other three scans are plain substring searches, for
+        /// which absence is trivially monotone.
+        private var absentCloseFrom: [Character: String.Index] = [:]
+
         init(source: String, options: MarkdownParser.Options) {
             self.source = source
             self.options = options
             index = source.startIndex
+        }
+
+        /// The next occurrence of `character` at or after `start`, or nil when none
+        /// remains. `unescaped` selects the backslash-aware scan used for `]`.
+        private mutating func nextClose(
+            _ character: Character,
+            from start: String.Index,
+            unescaped: Bool,
+        ) -> String.Index? {
+            if let known = absentCloseFrom[character], start >= known {
+                return nil
+            }
+            let found = unescaped
+                ? firstUnescaped(character, from: start)
+                : source[start...].firstIndex(of: character)
+            if found == nil {
+                absentCloseFrom[character] = start
+            }
+            return found
         }
 
         mutating func parse() -> [MarkdownInline] {
@@ -99,7 +136,7 @@ struct InlineParser {
             }
 
             let contentStart = source.index(after: index)
-            guard let close = source[contentStart...].firstIndex(of: "`") else {
+            guard let close = nextClose("`", from: contentStart, unescaped: false) else {
                 return nil
             }
 
@@ -152,7 +189,7 @@ struct InlineParser {
             }
 
             let labelStart = source.index(index, offsetBy: 2)
-            guard let labelEnd = firstUnescaped("]", from: labelStart) else {
+            guard let labelEnd = nextClose("]", from: labelStart, unescaped: true) else {
                 return nil
             }
             let afterLabel = source.index(after: labelEnd)
@@ -177,7 +214,7 @@ struct InlineParser {
             }
 
             let labelStart = source.index(after: index)
-            guard let labelEnd = firstUnescaped("]", from: labelStart) else {
+            guard let labelEnd = nextClose("]", from: labelStart, unescaped: true) else {
                 return nil
             }
             let afterLabel = source.index(after: labelEnd)
@@ -203,7 +240,7 @@ struct InlineParser {
             }
 
             let labelStart = source.index(index, offsetBy: 2)
-            guard let labelEnd = firstUnescaped("]", from: labelStart) else {
+            guard let labelEnd = nextClose("]", from: labelStart, unescaped: true) else {
                 return nil
             }
 
@@ -224,7 +261,7 @@ struct InlineParser {
             }
 
             let contentStart = source.index(after: index)
-            guard let close = source[contentStart...].firstIndex(of: ">") else {
+            guard let close = nextClose(">", from: contentStart, unescaped: false) else {
                 return nil
             }
 
@@ -241,8 +278,8 @@ struct InlineParser {
             )
         }
 
-        private func parseDestination(from start: String.Index) -> (url: String, title: String?, end: String.Index)? {
-            guard let close = source[start...].firstIndex(of: ")") else {
+        private mutating func parseDestination(from start: String.Index) -> (url: String, title: String?, end: String.Index)? {
+            guard let close = nextClose(")", from: start, unescaped: false) else {
                 return nil
             }
 
