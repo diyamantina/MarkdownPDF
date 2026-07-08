@@ -229,37 +229,49 @@ struct MarkdownPDFRendererTests {
         }
     }
 
-    @Test("No rule is drawn on a page that carries no quote content", arguments: [
+    @Test("Rule and quote content appear on exactly the same pages", arguments: [
         "# Quoted Heading",
         "```\n> code\n> code\n> ```",
         "| a | b |\n> |---|---|\n> | 1 | 2 |",
         "```mermaid\n> flowchart LR\n>     A[Apps] --> B[Features]\n> ```",
+        "---",
+        "$$\\frac{a}{b}$$",
     ])
-    func quoteRuleNeverOrphans(_ opening: String) throws {
+    func quoteRuleTracksItsContent(_ opening: String) throws {
         var theme = PDFOptions.Theme.default
         var quote = theme.style(for: .blockQuote)
         quote.borderColor = PDFColor(red: 1, green: 0, blue: 0)
         theme.elements[.blockQuote] = quote
-
-        // Fill the page so the quote's first block must decide whether to break it.
-        let markdown = String(repeating: "Filler.\n\n", count: 36)
-            + "> \(opening)\n>\n> quoted body\n"
-        let inspector = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: theme))
-            .render(markdown: markdown))
+        let options = PDFOptions(mathTypesetting: .enabled, theme: theme)
 
         // Body text outside a quote sits at the left margin, 54. A quote indents by
-        // 14, so anything drawn at x >= 68 is the quote's own content. Figures are
-        // invoked with `Do`.
+        // 14, so anything drawn at or past 68 is the quote's own content. Figures use
+        // `Do`, and a quoted rule or math bar is a path starting at 68.
         let gutter = PDFOptions.Margins.standard.left + 14
-        for page in inspector.streams where page.body.contains(" l S") {
-            let hasQuoteContent = page.body.split(separator: "\n").contains { line in
-                if line.contains(" Do") { return true }
-                let parts = line.split(separator: " ")
-                // `BT /F1 11 Tf 68 733.160 Td (quoted ) Tj ET`
-                guard parts.count > 6, parts[6] == "Td", let x = Double(parts[4]) else { return false }
-                return x >= gutter
+
+        // One filler count is not enough: whether the first block breaks the page
+        // depends on exactly how full the page is, so the interesting window is a
+        // few paragraphs wide and a hardcoded value slides straight past it.
+        for fillerCount in 30 ... 40 {
+            let markdown = String(repeating: "Filler.\n\n", count: fillerCount)
+                + "> \(opening)\n>\n> quoted body\n"
+            let inspector = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: markdown))
+
+            for page in inspector.streams where page.body.contains(" Tj") || page.body.contains(" S") {
+                let hasRule = page.body.contains("2 w \(Int(gutter - 11)) ")
+                let hasQuoteContent = page.body.split(separator: "\n").contains { line in
+                    if line.contains(" Do") { return true }
+                    let parts = line.split(separator: " ")
+                    // A quoted path: `0.750 w 68 75.900 m ...`
+                    if parts.count > 3, parts.contains("m"), let x = Double(parts[2]), x >= gutter { return true }
+                    guard parts.count > 6, parts[6] == "Td", let x = Double(parts[4]) else { return false }
+                    return x >= gutter
+                }
+                #expect(
+                    hasRule == hasQuoteContent,
+                    "filler \(fillerCount), opening \(opening.prefix(12)): rule=\(hasRule) content=\(hasQuoteContent)",
+                )
             }
-            #expect(hasQuoteContent, "a rule was stroked on a page with no quote content")
         }
     }
 

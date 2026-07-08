@@ -464,6 +464,7 @@ private struct Layout {
             }
         case .thematicBreak:
             ensureSpace(18)
+            markBlockQuoteContentDrawn()
             let artifact = beginArtifactIfTagged()
             defer { endMarkedContentIfNeeded(artifact) }
             currentPage.drawLine(
@@ -1074,6 +1075,7 @@ private struct Layout {
         x: Double,
         baselineY: Double,
     ) throws {
+        markBlockQuoteContentDrawn()
         let marked = beginMarkedContentForCurrentElement()
         defer { endMarkedContentIfNeeded(marked) }
 
@@ -3198,10 +3200,10 @@ private struct Layout {
         maxWidth: Double? = nil,
         applyBidi: Bool = true,
     ) throws {
-        markBlockQuoteContentDrawn()
         guard !runs.isEmpty else {
             return
         }
+        markBlockQuoteContentDrawn()
 
         let marked = beginMarkedContentForCurrentElement()
         defer { endMarkedContentIfNeeded(marked) }
