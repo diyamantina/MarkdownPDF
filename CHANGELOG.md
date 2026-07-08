@@ -22,7 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A list marker inside a themed block quote now takes the quote's color, while
   keeping its own font face, so italicising a quote no longer leaves black bullets
   beside quote-colored text
-  ([#12](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/12)).
+  ([#12](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/12)). This covers
+  bullets, ordered numbers, and task checkboxes, whose box and check stroke are
+  drawn from the same `.listMarker` color. The built-in themes give `.blockQuote`
+  and `.listMarker` the same `bodyColor`, so their output is unchanged.
 
 ### Added
 

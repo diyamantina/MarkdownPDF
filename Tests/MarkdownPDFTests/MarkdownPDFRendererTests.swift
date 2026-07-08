@@ -182,6 +182,18 @@ struct MarkdownPDFRendererTests {
         #expect(text.contains("0.010 0 0.270 rg\nBT /F3 11 Tf 92 "))
         // A bullet outside the quote is untouched.
         #expect(text.contains("0 0 0 rg\nBT /F1 11 Tf 54 "))
+
+        // Ordered numbers are markers too.
+        let ordered = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: theme))
+            .render(markdown: "> 1. item\n")).text
+        #expect(ordered.contains("0.010 0 0.270 rg\nBT /F1 11 Tf 68 "))
+
+        // So is a task checkbox, whose box and check are stroked from the same
+        // `.listMarker` color.
+        let task = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: theme))
+            .render(markdown: "> - [x] done\n")).text
+        #expect(task.contains("0.010 0 0.270 RG"))
+        #expect(!task.contains("0 0 0 RG"))
     }
 
     @Test("A themeless block quote draws no rule and no recolor")
