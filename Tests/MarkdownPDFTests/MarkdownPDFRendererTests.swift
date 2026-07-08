@@ -497,23 +497,19 @@ struct MarkdownPDFRendererTests {
         "\u{200D}", // ZERO WIDTH JOINER
         "\u{2060}", // WORD JOINER
         "\u{00AD}", // SOFT HYPHEN
-        "\u{202A}", // LEFT-TO-RIGHT EMBEDDING
-        "\u{202C}", // POP DIRECTIONAL FORMATTING
-        "\u{202E}", // RIGHT-TO-LEFT OVERRIDE
-        "\u{2066}", // LEFT-TO-RIGHT ISOLATE
-        "\u{2069}", // POP DIRECTIONAL ISOLATE
+        "\u{034F}", // COMBINING GRAPHEME JOINER
         "\u{FEFF}", // BYTE ORDER MARK
-        "\u{2028}", // LINE SEPARATOR
-        "\u{2029}", // PARAGRAPH SEPARATOR
         "\u{FE0F}", // VARIATION SELECTOR-16
+        "\u{3164}", // HANGUL FILLER
+        "\u{E0041}", // TAG LATIN CAPITAL LETTER A
         "\u{200D}\u{200D}", // a doubled control, adjacent
     ])
     func invisibleFormatControlsDoNotAbortEmbeddedRender(_ control: String) throws {
         // Follow-up to the BOM fix (#27): under an embedded font whose cmap lacks
-        // them, every one of these threw `missingGlyph` (or the shaper rejected it
-        // as an unsupported script scalar) and aborted the whole document. Per
-        // Unicode they are default-ignorable and must render invisibly. They are
-        // stripped before either font path sees them.
+        // them, every one of these threw `missingGlyph` and aborted the whole
+        // document. Per Unicode they are default-ignorable and semantically inert,
+        // so they render invisibly. They are stripped before either font path sees
+        // them.
         let input = "AB\(control)CD"
 
         // The run text is clean, so measurement and encoding never see the control.
@@ -532,6 +528,46 @@ struct MarkdownPDFRendererTests {
         // Base-14: the control is not painted as `?`, and the surrounding text survives.
         let text = try PDFInspector(MarkdownPDFRenderer().render(markdown: input)).text
         #expect(!text.contains("(?) Tj"), "control painted as ? for \(input.debugDescription)")
+    }
+
+    @Test("Semantically load-bearing controls are preserved, not stripped as invisible", arguments: [
+        "\u{061C}", // ARABIC LETTER MARK (bidi)
+        "\u{200E}", // LEFT-TO-RIGHT MARK (bidi)
+        "\u{200F}", // RIGHT-TO-LEFT MARK (bidi)
+        "\u{202A}", // LEFT-TO-RIGHT EMBEDDING (bidi)
+        "\u{202E}", // RIGHT-TO-LEFT OVERRIDE (bidi)
+        "\u{2066}", // LEFT-TO-RIGHT ISOLATE (bidi)
+        "\u{2069}", // POP DIRECTIONAL ISOLATE (bidi)
+        "\u{2028}", // LINE SEPARATOR (Zl, a word boundary)
+        "\u{2029}", // PARAGRAPH SEPARATOR (Zp, a word boundary)
+        "\u{FFF9}", // INTERLINEAR ANNOTATION ANCHOR (ruby delimiter)
+    ])
+    func loadBearingControlsSurviveTheStrip(_ control: String) throws {
+        // These are default-ignorable for glyph purposes but drive ordering,
+        // word boundaries, or annotation structure. Stripping them changes meaning:
+        // a bidi control silently reorders, and a separator fuses the words it
+        // split. The strip must leave them for the layer that owns them.
+        let scalar = try #require(control.unicodeScalars.first)
+        let run = PDFTextRun(text: "AB\(control)CD", font: .helvetica, size: 10)
+        #expect(run.text.unicodeScalars.contains(scalar), "\(control.debugDescription) was wrongly stripped")
+    }
+
+    @Test("A line separator between words is not fused into one word")
+    func lineSeparatorDoesNotFuseWords() {
+        // U+2028 is a word boundary. Deleting it would turn "foo bar" into "foobar",
+        // changing both the painted glyphs and the extracted text.
+        let run = PDFTextRun(text: "foo\u{2028}bar", font: .helvetica, size: 10)
+        #expect(run.text == "foo\u{2028}bar")
+    }
+
+    @Test("An explicit bidi control still refuses ordering rather than reordering wrongly")
+    func explicitBidiControlStillRefuses() {
+        // The strip must not defang BidiParagraphOrdering's correct-or-refuse
+        // posture: an RLO inside a paragraph with RTL text has no supported
+        // ordering, so the engine refuses instead of painting a UBA-divergent order.
+        #expect(throws: BidiParagraphOrdering.ValidationError.self) {
+            _ = try BidiParagraphOrdering().order("abc \u{202E}xy\u{202C} \u{05D0}\u{05D1}")
+        }
     }
 
     @Test("Named page sizes set the page MediaBox")

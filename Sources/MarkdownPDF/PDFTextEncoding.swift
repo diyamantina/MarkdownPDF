@@ -8,21 +8,34 @@ enum PDFTextEncoding {
     }
 
     /// Removes the Unicode default-ignorable format controls that must render
-    /// invisibly when the active font has no glyph for them: the zero-width
-    /// joiners and non-joiners, the word joiner, the soft hyphen, the bidi
-    /// embedding/override/isolate controls, the variation selectors, the byte
-    /// order mark, and the line/paragraph separators.
+    /// invisibly when the active font has no glyph for them: the zero-width space,
+    /// joiner and non-joiner, the word joiner and invisible operators, the soft
+    /// hyphen, the variation selectors, the Mongolian and shorthand and musical
+    /// format controls, the Hangul fillers, and the byte order mark.
     ///
     /// Per Unicode, a default-ignorable code point the font cannot draw renders
     /// as nothing, not as a missing glyph. Without this strip these scalars paint
-    /// `?` on the base-14 path and, worse, abort the whole render on the embedded
-    /// path: a cmap that omits them makes `TrueTypeGlyphMapper` throw
-    /// `missingGlyph` (or the shaper reject them as an unsupported script scalar).
-    /// A ZWSP pasted from a web page is as plausible as a BOM, so removing them
-    /// here keeps width, glyphs, and the `/ActualText` span consistent across both
-    /// paths. The line and paragraph separators (U+2028/U+2029) are folded in as
-    /// well: block-level line breaking already happened in the parser, so a stray
-    /// one reaching a run is invisible formatting, not a break.
+    /// `?` on the base-14 path (a visible hyphen for the soft hyphen) and, worse,
+    /// abort the whole render on the embedded path: a cmap that omits them makes
+    /// `TrueTypeGlyphMapper` throw `missingGlyph`. A ZWSP pasted from a web page is
+    /// as plausible as a BOM, so removing them here keeps width, glyphs, and the
+    /// `/ActualText` span consistent across both paths.
+    ///
+    /// This set is deliberately narrow. It excludes scalars that are
+    /// default-ignorable for *glyph* purposes but are still semantically
+    /// load-bearing, because dropping those changes meaning, not just appearance:
+    /// - the explicit bidi controls (U+061C, U+200E/200F, U+202A...U+202E,
+    ///   U+2066...U+2069) drive paragraph ordering; `BidiParagraphOrdering` owns
+    ///   them and refuses text it cannot order rather than reorder it wrongly, so
+    ///   stripping them here would silently produce UBA-divergent visual order;
+    /// - the line and paragraph separators (U+2028/U+2029) are Zl/Zp word
+    ///   boundaries, not default-ignorable, so deleting one fuses the words it
+    ///   split;
+    /// - the interlinear annotation controls (U+FFF9...U+FFFB) delimit ruby text,
+    ///   so deleting a separator merges annotation into base text.
+    /// It also excludes the reserved-but-unassigned default-ignorable code points:
+    /// an unassigned scalar is a genuinely absent glyph, handled by the per-scalar
+    /// fallback rather than silently dropped.
     static func strippingInvisibleFormatControls(_ text: String) -> String {
         guard text.unicodeScalars.contains(where: isInvisibleFormatControl) else {
             return text
@@ -30,35 +43,28 @@ enum PDFTextEncoding {
         return String(String.UnicodeScalarView(text.unicodeScalars.filter { !isInvisibleFormatControl($0) }))
     }
 
-    /// Whether `scalar` is a default-ignorable format control that renders
-    /// invisibly (see ``strippingInvisibleFormatControls(_:)``). The ranges are
-    /// the assigned format and control code points carrying
-    /// `Default_Ignorable_Code_Point`, plus the two separators U+2028/U+2029. It
-    /// deliberately excludes the large reserved-but-unassigned default-ignorable
-    /// blocks: an unassigned scalar is a genuinely absent glyph, handled by the
-    /// per-scalar fallback rather than silently dropped.
+    /// Whether `scalar` is a genuinely-invisible, semantically-inert
+    /// default-ignorable format control (see
+    /// ``strippingInvisibleFormatControls(_:)`` for the exclusions).
     static func isInvisibleFormatControl(_ scalar: UnicodeScalar) -> Bool {
         switch scalar.value {
         case 0x00AD, // SOFT HYPHEN
              0x034F, // COMBINING GRAPHEME JOINER
-             0x061C, // ARABIC LETTER MARK
              0x115F, 0x1160, // HANGUL CHOSEONG / JUNGSEONG FILLER
              0x17B4, 0x17B5, // KHMER VOWEL INHERENT AQ / AA
              0x180B ... 0x180F, // MONGOLIAN FREE VARIATION SELECTORS, VOWEL SEPARATOR
-             0x200B ... 0x200F, // ZWSP, ZWNJ, ZWJ, LRM, RLM
-             0x2028, 0x2029, // LINE / PARAGRAPH SEPARATOR
-             0x202A ... 0x202E, // bidi embeddings and overrides
+             0x200B ... 0x200D, // ZERO WIDTH SPACE, NON-JOINER, JOINER
              0x2060 ... 0x2064, // WORD JOINER + invisible operators
-             0x2065, // reserved default-ignorable
-             0x2066 ... 0x206F, // bidi isolates + deprecated format controls
+             0x206A ... 0x206F, // deprecated symmetric-swapping / shaping / digit format controls
              0x3164, // HANGUL FILLER
              0xFE00 ... 0xFE0F, // VARIATION SELECTORS 1-16
              0xFEFF, // ZERO WIDTH NO-BREAK SPACE / BYTE ORDER MARK
              0xFFA0, // HALFWIDTH HANGUL FILLER
-             0xFFF9 ... 0xFFFB, // INTERLINEAR ANNOTATION ANCHOR / SEPARATOR / TERMINATOR
              0x1BCA0 ... 0x1BCA3, // SHORTHAND FORMAT CONTROLS
              0x1D173 ... 0x1D17A, // MUSICAL SYMBOL begin / end format controls
-             0xE0000 ... 0xE0FFF: // language tags + VARIATION SELECTORS SUPPLEMENT
+             0xE0001, // LANGUAGE TAG
+             0xE0020 ... 0xE007F, // TAG code points
+             0xE0100 ... 0xE01EF: // VARIATION SELECTORS SUPPLEMENT
             true
         default:
             false
