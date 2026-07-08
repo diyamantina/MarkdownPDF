@@ -501,6 +501,12 @@ enum SyntheticTrueTypeFont {
         case latinWitness
         case latinLigature
         case rtlWitness
+        /// Latin capitals plus U+2022. An embedded font that can draw the
+        /// unordered-list bullet.
+        case bulletWitness
+        /// Latin capitals plus `-`, and no U+2022. Forces the list marker's
+        /// hyphen fallback.
+        case hyphenWitness
     }
 
     static func data(
@@ -1446,6 +1452,10 @@ enum SyntheticTrueTypeFont {
                 ]
             case .rtlWitness:
                 Self.rtlWitnessGlyphs()
+            case .bulletWitness:
+                Self.markerWitnessGlyphs(marker: "\u{2022}")
+            case .hyphenWitness:
+                Self.markerWitnessGlyphs(marker: "-")
             }
         }
 
@@ -1474,7 +1484,8 @@ enum SyntheticTrueTypeFont {
             switch profile {
             case .basic:
                 2
-            case .compositeWitness, .cjkDiacriticWitness, .cjkWitness, .largeBMPWitness, .latinWitness, .latinLigature, .rtlWitness:
+            case .compositeWitness, .cjkDiacriticWitness, .cjkWitness, .largeBMPWitness, .latinWitness,
+                 .latinLigature, .rtlWitness, .bulletWitness, .hyphenWitness:
                 numGlyphs
             }
         }
@@ -1507,6 +1518,23 @@ enum SyntheticTrueTypeFont {
                 640
             default:
                 600
+            }
+        }
+
+        /// Latin capitals, space, and exactly one marker glyph. Everything the
+        /// unordered-list marker tests need and nothing else, so a profile that
+        /// omits U+2022 genuinely cannot draw it.
+        private static func markerWitnessGlyphs(marker: UnicodeScalar) -> [GlyphRecord] {
+            let uppercase = (UInt8(ascii: "A") ... UInt8(ascii: "Z")).map(UnicodeScalar.init)
+            let scalars: [UnicodeScalar] = [" ", marker] + uppercase
+            return scalars.map { scalar in
+                let width: UInt16 = scalar == " " ? 280 : Self.latinWitnessAdvanceWidth(for: scalar)
+                return GlyphRecord(
+                    scalar: scalar,
+                    advanceWidth: width,
+                    xMin: scalar == " " ? nil : 40,
+                    xMax: scalar == " " ? nil : Int16(max(90, Int(width) - 60)),
+                )
             }
         }
 

@@ -704,7 +704,7 @@ private struct Layout {
         defer { listDepth -= 1 }
         for item in items {
             let itemElement = beginStructureElement(.listItem)
-            ensureSpace(bodyLineHeight)
+            ensureSpace(leadingBlockHeight(of: item))
             if start != nil {
                 let labelElement = beginStructureElement(.listLabel)
                 let markerStyle = style(for: .listMarker)
@@ -727,6 +727,28 @@ private struct Layout {
                 let labelElement = beginStructureElement(.listLabel)
                 drawTaskCheckbox(checkbox, x: options.margins.left, baselineY: y)
                 endStructureElement(labelElement)
+            } else {
+                // Unordered item. Draw the bullet through the same `.listMarker`
+                // role the ordered branch uses, so a theme styles both alike.
+                let markerStyle = style(for: .listMarker)
+                let markerFont = standardFont(for: markerStyle.fontRole)
+                if let marker = unorderedMarkerText(for: markerFont) {
+                    let labelElement = beginStructureElement(.listLabel)
+                    try drawRuns(
+                        [
+                            PDFTextRun(
+                                text: marker,
+                                font: markerFont,
+                                size: fontSize(for: .listMarker),
+                                color: markerStyle.color,
+                            ),
+                        ],
+                        x: options.margins.left,
+                        y: y,
+                        applyBidi: false,
+                    )
+                    endStructureElement(labelElement)
+                }
             }
             let savedLeft = options.margins.left
             options.margins.left += 24
@@ -739,6 +761,71 @@ private struct Layout {
             endStructureElement(itemElement)
         }
         y -= listTrailingSpacing
+    }
+
+    /// The unordered-list marker the font bound to `font` can actually draw, or
+    /// `nil` when it can draw none of the candidates.
+    ///
+    /// U+2022 is the intended marker, with an ASCII hyphen as the fallback. The
+    /// two font profiles disagree about who is authoritative:
+    ///
+    /// - Base-14 (no embedded entry): WinAnsiEncoding maps U+2022 to `0x95`, so
+    ///   the bullet is drawable. `PDFEmbeddedFontCatalog.covers` answers `false`
+    ///   here because there is no embedded entry at all, so it must not be the
+    ///   authority on this path. `PDFTextEncoding` is.
+    /// - Embedded TrueType: the caller's font may lack both glyphs. A font
+    ///   carrying only Hebrew, Arabic, Latin capitals and a little punctuation
+    ///   has neither U+2022 nor `-`, and mapping either through it throws
+    ///   `TrueTypeGlyphMappingError.missingGlyph`.
+    ///
+    /// Returning `nil` keeps the item's 24pt indent and omits only the
+    /// decorative glyph, which is what the renderer did for every unordered
+    /// list before markers existed. A marker is presentation, not content: the
+    /// list is still tagged `/L`, so assistive technology is unaffected.
+    private func unorderedMarkerText(for font: StandardFont) -> String? {
+        let candidates = ["\u{2022}", "-"]
+        guard embeddedFonts.entry(for: font) != nil else {
+            // No embedded font is bound to this role, so the marker would be drawn
+            // with an unembedded base-14 font. PDF/UA-1 and PDF/A-2a forbid those,
+            // and `PDFDocumentWriter.validateConformance` fails the whole document
+            // when one is used. A marker is presentation, not content: omit it
+            // rather than refuse to render a document that rendered before.
+            guard !options.conformance.isEnabled else {
+                return nil
+            }
+            return candidates.first { candidate in
+                candidate.unicodeScalars.allSatisfy(PDFTextEncoding.isRepresentable)
+            }
+        }
+        return candidates.first { embeddedFonts.covers($0, font: font) }
+    }
+
+    /// Height the list item's first block will occupy, used to reserve space
+    /// before the marker is drawn.
+    ///
+    /// Every item body is a paragraph, except a lone image, which
+    /// ``renderStandaloneImage(_:)`` draws as a figure after calling
+    /// `ensureSpace(drawHeight)` of its own. Reserving only `bodyLineHeight` for
+    /// such an item strands the marker at the bottom of one page while its image
+    /// starts the next. Reserve the figure's real height instead.
+    ///
+    /// The width available to the body is `contentWidth - 24`, because
+    /// ``renderList(items:start:)`` indents `margins.left` by 24 after the marker.
+    private mutating func leadingBlockHeight(of item: MarkdownBlock.ListItem) -> Double {
+        guard case let .paragraph(content)? = item.blocks.first,
+              content.count == 1,
+              case let .image(_, source, _) = content[0],
+              !source.hasPrefix("http://"),
+              !source.hasPrefix("https://"),
+              let image = try? loadImage(source: source)
+        else {
+            return bodyLineHeight
+        }
+
+        let maxWidth = max(1, contentWidth - 24)
+        let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
+        let scale = min(1, maxWidth / Double(image.width), maxHeight / Double(image.height))
+        return Double(image.height) * scale
     }
 
     private mutating func drawTaskCheckbox(
