@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page before drawing (a heading, a code fence, a figure, a table) left a rule on a
   page carrying no quote content
   ([#13](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/13)).
+- Quoting a block no longer destroys its indentation. `stripBlockQuoteMarker` trimmed
+  the content after the `>`, dedenting the whole quote to column zero, so a nested
+  list, an indented code block, or a continuation line could not survive being
+  quoted ([#17](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/17)). The
+  marker is now up to three spaces, a `>`, and at most one space.
 
 ### Added
 
