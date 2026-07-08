@@ -240,20 +240,7 @@ private struct BlockParser {
             return nil
         }
 
-        var items: [MarkdownBlock.ListItem] = []
-        while index < lines.count, let contentStart = unorderedMarker(in: lines[index]) {
-            let item = String(lines[index].dropFirst(contentStart)).trimmingCharacters(in: .whitespaces)
-            index += 1
-            if let task = taskListItem(from: item) {
-                items.append(.init(
-                    blocks: [.paragraph(inlineParser.parse(task.content))],
-                    checkbox: task.checkbox,
-                ))
-            } else {
-                items.append(.init(blocks: [.paragraph(inlineParser.parse(item))]))
-            }
-        }
-
+        let items = parseListItems(kind: .unordered)
         return .unorderedList(items)
     }
 
@@ -263,15 +250,110 @@ private struct BlockParser {
         }
 
         let start = first.number
+        let items = parseListItems(kind: .ordered)
+        return .orderedList(start: start, items: items)
+    }
+
+    /// Collects the items of one list, taking indentation seriously.
+    ///
+    /// A marker line at the list's own indent opens an item. Everything that
+    /// follows and is indented to at least the item's content column belongs to
+    /// that item, including blank lines that are themselves followed by indented
+    /// content. Those lines are dedented by the content column and parsed as a
+    /// document in their own right, which is what makes nested lists, lazy
+    /// continuation paragraphs, and block content inside items work: the nested
+    /// parser simply sees a smaller document.
+    ///
+    /// A marker indented to at least the previous item's content column is that
+    /// item's content, and the continuation loop below swallows it. Anything still
+    /// carrying a marker when control returns here is therefore a sibling, however
+    /// it is indented. That keeps `- a` / ` - b` one two-item list, as CommonMark
+    /// requires and as the flat parser already did.
+    private mutating func parseListItems(kind: ListKind) -> [MarkdownBlock.ListItem] {
         var items: [MarkdownBlock.ListItem] = []
 
-        while index < lines.count, let marker = orderedMarker(in: lines[index]) {
-            let item = String(lines[index].dropFirst(marker.contentStart))
+        while index < lines.count,
+              let contentStart = contentColumn(of: lines[index], kind: kind)
+        {
+            var itemLines = [String(lines[index].dropFirst(contentStart))]
             index += 1
-            items.append(.init(blocks: [.paragraph(inlineParser.parse(item.trimmingCharacters(in: .whitespaces)))]))
+
+            while index < lines.count {
+                let line = lines[index]
+                if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    // A blank line continues the item only when indented content
+                    // follows it. Otherwise it terminates the item, and the list.
+                    guard let next = lines[(index + 1)...].first(where: {
+                        !$0.trimmingCharacters(in: .whitespaces).isEmpty
+                    }), Self.indentWidth(of: next) >= contentStart else {
+                        break
+                    }
+                    itemLines.append("")
+                    index += 1
+                    continue
+                }
+                guard Self.indentWidth(of: line) >= contentStart else {
+                    break
+                }
+                itemLines.append(String(line.dropFirst(contentStart)))
+                index += 1
+            }
+
+            var checkbox: MarkdownBlock.ListItem.Checkbox?
+            if let first = itemLines.first,
+               let task = taskListItem(from: first.trimmingCharacters(in: .whitespaces))
+            {
+                checkbox = task.checkbox
+                itemLines[0] = task.content
+            }
+
+            var nested = BlockParser(markdown: itemLines.joined(separator: "\n"), options: options)
+            let blocks = nested.parseBlocks()
+            items.append(.init(
+                blocks: blocks.isEmpty ? [.paragraph([])] : blocks,
+                checkbox: checkbox,
+            ))
+
+            // Loose list: blank lines sitting between two siblings belong to the
+            // list, not after it. Without this a blank line splits one list into
+            // two, and the second restarts an ordered list's numbering.
+            var lookahead = index
+            while lookahead < lines.count,
+                  lines[lookahead].trimmingCharacters(in: .whitespaces).isEmpty
+            {
+                lookahead += 1
+            }
+            if lookahead < lines.count,
+               contentColumn(of: lines[lookahead], kind: kind) != nil,
+               Self.indentWidth(of: lines[lookahead]) < contentStart
+            {
+                index = lookahead
+            }
         }
 
-        return .orderedList(start: start, items: items)
+        return items
+    }
+
+    private enum ListKind {
+        case unordered
+        case ordered
+    }
+
+    /// The content column of a line that opens an item of `kind`, or nil when the
+    /// line does not open one.
+    private func contentColumn(of line: String, kind: ListKind) -> Int? {
+        switch kind {
+        case .unordered:
+            unorderedMarker(in: line)
+        case .ordered:
+            orderedMarker(in: line)?.contentStart
+        }
+    }
+
+    /// Leading whitespace, counted in characters so it lines up with the
+    /// character offsets `unorderedMarker(in:)` and `orderedMarker(in:)` return.
+    private static func indentWidth(of line: String) -> Int {
+        line.count - line.trimmingLeadingSpaces().count
     }
 
     private mutating func parseHTMLBlock() -> MarkdownBlock? {

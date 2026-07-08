@@ -3,6 +3,146 @@ import Testing
 
 @Suite("Markdown parser")
 struct MarkdownParserTests {
+    @Test("Indented markers nest instead of flattening into siblings")
+    func nestsUnorderedLists() {
+        let document = MarkdownParser().parse("""
+        - top one
+          - nested a
+            - deep
+        - top two
+        """)
+
+        guard case let .unorderedList(items) = document.blocks.first else {
+            Issue.record("expected an unordered list, got \(document.blocks)")
+            return
+        }
+        #expect(items.count == 2)
+
+        guard case let .unorderedList(nested) = items[0].blocks.last else {
+            Issue.record("expected a nested list inside the first item")
+            return
+        }
+        #expect(nested.count == 1)
+        guard case let .unorderedList(deep) = nested[0].blocks.last else {
+            Issue.record("expected a doubly nested list")
+            return
+        }
+        #expect(deep.count == 1)
+        // The last top-level item is a sibling, not swallowed by the nesting.
+        #expect(items[1].blocks.count == 1)
+    }
+
+    @Test("A marker below the content column is a sibling, however it is indented")
+    func shallowIndentStaysSibling() {
+        // CommonMark allows up to three spaces before a marker without nesting it.
+        // "- a" has content column 2, so " - b" is a sibling and "  - b" nests.
+        let sibling = MarkdownParser().parse("- a\n - b\n")
+        #expect(sibling.blocks.count == 1)
+        guard case let .unorderedList(items) = sibling.blocks[0] else {
+            Issue.record("expected one list")
+            return
+        }
+        #expect(items.count == 2)
+
+        // Dedenting below the list's own indent keeps the items siblings too.
+        let dedented = MarkdownParser().parse("  - a\n- b\n")
+        #expect(dedented.blocks.count == 1)
+
+        let nested = MarkdownParser().parse("- a\n  - b\n")
+        #expect(nested.blocks.count == 1)
+        guard case let .unorderedList(outer) = nested.blocks[0] else {
+            Issue.record("expected one list")
+            return
+        }
+        #expect(outer.count == 1)
+    }
+
+    @Test("Ordered lists nest and each level keeps its own start")
+    func nestsOrderedLists() {
+        let document = MarkdownParser().parse("""
+        3. three
+           1. sub one
+           2. sub two
+        4. four
+        """)
+
+        guard case let .orderedList(start, items) = document.blocks.first else {
+            Issue.record("expected an ordered list")
+            return
+        }
+        #expect(start == 3)
+        #expect(items.count == 2)
+        guard case let .orderedList(nestedStart, nested) = items[0].blocks.last else {
+            Issue.record("expected a nested ordered list")
+            return
+        }
+        #expect(nestedStart == 1)
+        #expect(nested.count == 2)
+    }
+
+    @Test("A blank line between siblings makes one loose list, not two lists")
+    func blankLineKeepsOneList() {
+        let loose = MarkdownParser().parse("- a\n\n- b\n")
+        #expect(loose.blocks.count == 1)
+        guard case let .unorderedList(items) = loose.blocks[0] else {
+            Issue.record("expected one list")
+            return
+        }
+        #expect(items.count == 2)
+
+        // An ordered loose list must not restart its numbering.
+        let ordered = MarkdownParser().parse("1. a\n\n2. b\n")
+        #expect(ordered.blocks.count == 1)
+
+        // A dedented paragraph still ends the list.
+        let ended = MarkdownParser().parse("- a\n\nplain\n")
+        #expect(ended.blocks.count == 2)
+        if case .paragraph = ended.blocks[1] {} else {
+            Issue.record("expected the list to end at the dedented paragraph")
+        }
+    }
+
+    @Test("An item carries block content, not just one paragraph")
+    func itemsCarryBlockContent() {
+        let document = MarkdownParser().parse("""
+        - outer
+
+          a second paragraph
+
+        - sibling
+        """)
+
+        guard case let .unorderedList(items) = document.blocks.first else {
+            Issue.record("expected an unordered list")
+            return
+        }
+        #expect(items.count == 2)
+        #expect(items[0].blocks.count == 2)
+    }
+
+    @Test("Task checkboxes survive nesting")
+    func taskItemsNest() {
+        let document = MarkdownParser().parse("""
+        - [x] done
+        - [ ] todo
+          - [x] sub
+        """)
+
+        guard case let .unorderedList(items) = document.blocks.first else {
+            Issue.record("expected an unordered list")
+            return
+        }
+        #expect(items.count == 2)
+        #expect(items[0].checkbox == .checked)
+        #expect(items[1].checkbox == .unchecked)
+
+        guard case let .unorderedList(nested) = items[1].blocks.last else {
+            Issue.record("expected a nested task list")
+            return
+        }
+        #expect(nested[0].checkbox == .checked)
+    }
+
     @Test("Parses headings, inline styles, links, and code")
     func parsesInlineMarkdown() {
         let document = MarkdownParser().parse("""
