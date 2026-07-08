@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Nested lists. `parseUnorderedList` and `parseOrderedList` now take indentation
+  seriously: a marker indented to the previous item's content column belongs to
+  that item, and the item's lines are re-parsed as a document of their own. That
+  brings nested lists at every depth, continuation lines indented to the content
+  column, and block content inside items such as extra paragraphs and code fences
+  ([#3](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/3)). Container
+  nesting is bounded at `BlockParser.maximumNestingDepth`; beyond it an item's
+  content is kept as prose rather than recursed into.
+- A blank line between two siblings now yields one loose list instead of two
+  lists, so an ordered list no longer restarts its numbering after a blank line.
 - `MarkdownBlock.pageBreak`, written as `<!-- pagebreak -->`, starts a new page.
   An HTML comment keeps the directive invisible in other Markdown renderers.
   Trailing breaks are dropped by the parser and leading or consecutive breaks
