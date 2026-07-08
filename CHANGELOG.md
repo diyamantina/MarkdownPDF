@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Invisible default-ignorable format controls no longer abort an embedded-font
+  render or paint `?` on the base-14 path. A zero-width space, joiner, non-joiner,
+  word joiner, soft hyphen, bidi control, variation selector, or line/paragraph
+  separator whose glyph the embedded font's cmap omits made `TrueTypeGlyphMapper`
+  throw `missingGlyph` and drop the whole document. Per Unicode these render
+  invisibly, so they are stripped before either font path measures or encodes them,
+  generalizing the BOM strip from #27
+  ([#29](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/29)).
 - Base-14 advance widths now match the Adobe Core-14 AFM metrics for the whole
   WinAnsi set. Any non-ASCII WinAnsi scalar that was neither hand-listed nor
   ASCII-decomposable (Æ, ß, ½, Ø, the superscripts, the ordinals) measured at the

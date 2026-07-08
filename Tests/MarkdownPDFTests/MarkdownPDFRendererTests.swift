@@ -491,6 +491,49 @@ struct MarkdownPDFRendererTests {
         #expect(text.contains("(ABCD)") || text.contains("(AB)"))
     }
 
+    @Test("Invisible default-ignorable format controls never abort an embedded-font render", arguments: [
+        "\u{200B}", // ZERO WIDTH SPACE
+        "\u{200C}", // ZERO WIDTH NON-JOINER
+        "\u{200D}", // ZERO WIDTH JOINER
+        "\u{2060}", // WORD JOINER
+        "\u{00AD}", // SOFT HYPHEN
+        "\u{202A}", // LEFT-TO-RIGHT EMBEDDING
+        "\u{202C}", // POP DIRECTIONAL FORMATTING
+        "\u{202E}", // RIGHT-TO-LEFT OVERRIDE
+        "\u{2066}", // LEFT-TO-RIGHT ISOLATE
+        "\u{2069}", // POP DIRECTIONAL ISOLATE
+        "\u{FEFF}", // BYTE ORDER MARK
+        "\u{2028}", // LINE SEPARATOR
+        "\u{2029}", // PARAGRAPH SEPARATOR
+        "\u{FE0F}", // VARIATION SELECTOR-16
+        "\u{200D}\u{200D}", // a doubled control, adjacent
+    ])
+    func invisibleFormatControlsDoNotAbortEmbeddedRender(_ control: String) throws {
+        // Follow-up to the BOM fix (#27): under an embedded font whose cmap lacks
+        // them, every one of these threw `missingGlyph` (or the shaper rejected it
+        // as an unsupported script scalar) and aborted the whole document. Per
+        // Unicode they are default-ignorable and must render invisibly. They are
+        // stripped before either font path sees them.
+        let input = "AB\(control)CD"
+
+        // The run text is clean, so measurement and encoding never see the control.
+        let run = PDFTextRun(text: input, font: .helvetica, size: 10)
+        #expect(run.text == "ABCD", "control survived in \(input.debugDescription): \(run.text.debugDescription)")
+
+        // Embedded font: previously aborted. Now renders. The witness font provides
+        // only uppercase Latin, so ABCD is the whole visible payload.
+        let witness = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let embedded = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: witness, baseName: "Witness"),
+        ))
+        let data = try MarkdownPDFRenderer(options: embedded).render(markdown: input)
+        #expect(!data.isEmpty)
+
+        // Base-14: the control is not painted as `?`, and the surrounding text survives.
+        let text = try PDFInspector(MarkdownPDFRenderer().render(markdown: input)).text
+        #expect(!text.contains("(?) Tj"), "control painted as ? for \(input.debugDescription)")
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
