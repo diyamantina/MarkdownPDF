@@ -108,6 +108,36 @@ struct MarkdownPDFRendererTests {
         #expect(PDFInspector(plain).text.contains("(\\225) Tj"))
     }
 
+    @Test("An HTML-comment page break starts a new page and never draws itself")
+    func explicitPageBreaks() throws {
+        func pageCount(_ markdown: String) throws -> Int {
+            try PDFInspector(MarkdownPDFRenderer().render(markdown: markdown)).pageCount
+        }
+
+        #expect(try pageCount("A\n\nB\n") == 1)
+        #expect(try pageCount("A\n\n<!-- pagebreak -->\n\nB\n") == 2)
+        #expect(try pageCount("A\n\n<!-- pagebreak -->\n\nB\n\n<!-- pagebreak -->\n\nC\n") == 3)
+
+        // Whitespace and case tolerance, matching how people actually type it.
+        #expect(try pageCount("A\n\n<!--pagebreak-->\n\nB\n") == 2)
+        #expect(try pageCount("A\n\n<!--   pageBreak   -->\n\nB\n") == 2)
+
+        // A break is a separator, not content: leading, trailing, and repeated
+        // breaks must never produce a blank page.
+        #expect(try pageCount("<!-- pagebreak -->\n\nA\n") == 1)
+        #expect(try pageCount("A\n\n<!-- pagebreak -->\n") == 1)
+        #expect(try pageCount("A\n\n<!-- pagebreak -->\n\n<!-- pagebreak -->\n\nB\n") == 2)
+
+        // The directive itself is consumed, never painted.
+        let data = try MarkdownPDFRenderer().render(markdown: "A\n\n<!-- pagebreak -->\n\nB\n")
+        #expect(!PDFInspector(data).text.contains("pagebreak"))
+
+        // Any other HTML comment keeps its existing visible-text rendering.
+        let other = try MarkdownPDFRenderer().render(markdown: "A\n\n<!-- note -->\n\nB\n")
+        #expect(PDFInspector(other).text.contains("note"))
+        #expect(try pageCount("A\n\n<!-- note -->\n\nB\n") == 1)
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
