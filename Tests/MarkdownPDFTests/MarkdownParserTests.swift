@@ -313,6 +313,28 @@ struct MarkdownParserTests {
         #expect(title == "Title")
     }
 
+    @Test("Unmatched inline openers parse in linear time", arguments: ["[", "![", "<", "[a](", "[^"])
+    func unmatchedOpenersAreLinear(_ opener: String) {
+        // Each unmatched opener used to scan to end-of-string, while the loop
+        // advanced one character, so a run was O(n^2): a few KB of one byte wedged
+        // the parser for seconds. A memo of "this close char is absent from here on"
+        // makes it linear.
+        //
+        // Sized so the quadratic path still completes (a bit over a second) and
+        // fails this bound outright, rather than hanging the suite. Linear parses
+        // 8000 openers in well under 20 ms, a ~50x margin under the ceiling, so this
+        // does not flake on a loaded machine.
+        let clock = ContinuousClock()
+        let elapsed = clock.measure {
+            _ = MarkdownParser().parse(String(repeating: opener, count: 8000))
+        }
+        #expect(elapsed < .seconds(1), "8000 \(opener.debugDescription) took \(elapsed)")
+
+        // The openers still parse to their literal text, unchanged by the memo.
+        let parsed = MarkdownParser().parse(String(repeating: opener, count: 8))
+        #expect(parsed.blocks.count == 1)
+    }
+
     @Test("A stray trailing quote in a link destination does not crash", arguments: [
         "[a](\")",
         "[site](https://example.com\")",

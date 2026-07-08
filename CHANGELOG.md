@@ -7,37 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- A link or image whose destination ends in a stray `"` (`[a](")`,
-  `[site](https://example.com")`) no longer crashes the renderer. The trailing
-  quote was mistaken for a title close, building an inverted string range. A title
-  is now taken only from a distinct opening quote before the closing one; otherwise
-  the quote belongs to the destination
-  ([#19](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/19)).
-
-### Fixed
-
-- A block quote's left rule now takes its origin from the first drawing inside the
-  quote, not from the cursor when the quote opened. A first block that broke the
-  page before drawing (a heading, a code fence, a figure, a table) left a rule on a
-  page carrying no quote content
-  ([#13](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/13)).
-- Quoting a block no longer destroys its indentation. `stripBlockQuoteMarker` trimmed
-  the content after the `>`, dedenting the whole quote to column zero, so a nested
-  list, an indented code block, or a continuation line could not survive being
-  quoted ([#17](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/17)). The
-  marker is now up to three spaces, a `>`, and at most one space.
-- A list marker inside a themed block quote now takes the quote's color, while
-  keeping its own font face, so italicising a quote no longer leaves black bullets
-  beside quote-colored text
-  ([#12](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/12)). This covers
-  bullets, ordered numbers, and task checkboxes, whose box and check stroke are
-  drawn from the same `.listMarker` color. The built-in themes give `.blockQuote`
-  and `.listMarker` the same `bodyColor`, so their output is unchanged.
-
 ### Added
-
 - Block quotes honor `backgroundColor` from their `.blockQuote` theme role. The
   fill is inserted just above the page background rather than appended, because a
   quote's height is unknown until its blocks have rendered and its text is already
@@ -70,6 +40,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#10](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/10)).
 
 ### Fixed
+- A run of unmatched inline openers (`[[[…`, `![![…`, `<<<…`, `[a]([a](…`) no longer
+  parses in O(n^2) time. Each failed opener scanned to the end of the source while
+  the loop advanced one character, so a few KB of one byte wedged the parser for
+  seconds. A memo of "this close character is absent from here on" makes it linear;
+  a 40 KB run now parses in milliseconds. Output is unchanged.
+- A link or image whose destination ends in a stray `"` (`[a](")`,
+  `[site](https://example.com")`) no longer crashes the renderer. The trailing
+  quote was mistaken for a title close, building an inverted string range. A title
+  is now taken only from a distinct opening quote before the closing one; otherwise
+  the quote belongs to the destination
+  ([#19](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/19)).
+
+
+
+- A block quote's left rule now takes its origin from the first drawing inside the
+  quote, not from the cursor when the quote opened. A first block that broke the
+  page before drawing (a heading, a code fence, a figure, a table) left a rule on a
+  page carrying no quote content
+  ([#13](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/13)).
+- Quoting a block no longer destroys its indentation. `stripBlockQuoteMarker` trimmed
+  the content after the `>`, dedenting the whole quote to column zero, so a nested
+  list, an indented code block, or a continuation line could not survive being
+  quoted ([#17](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/17)). The
+  marker is now up to three spaces, a `>`, and at most one space.
+- A list marker inside a themed block quote now takes the quote's color, while
+  keeping its own font face, so italicising a quote no longer leaves black bullets
+  beside quote-colored text
+  ([#12](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/12)). This covers
+  bullets, ordered numbers, and task checkboxes, whose box and check stroke are
+  drawn from the same `.listMarker` color. The built-in themes give `.blockQuote`
+  and `.listMarker` the same `bodyColor`, so their output is unchanged.
+
+
 
 - Unordered list items now draw a bullet through the `.listMarker` theme role.
   Previously only ordered items and task checkboxes drew a marker, so bullet
@@ -88,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#7](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/7)). The trailing
   gap is applied to the cursor, not reserved, so a figure that fits on the page
   still fits.
+
 
 ## [0.6.0] - 2026-06-26
 
