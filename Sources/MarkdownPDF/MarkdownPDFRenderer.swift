@@ -425,15 +425,27 @@ private struct Layout {
                 throw error
             }
 
+            // `y` already carries the last block's trailing spacing, which can
+            // legally dip below the bottom margin without forcing a page break.
+            let bottomY = max(y + paragraphSpacing, options.margins.bottom)
+            // The fill is inserted under the page's content; the rule is appended
+            // over it.
+            drawBlockQuoteBackground(
+                color: quoteStyle.backgroundColor,
+                x: savedLeft,
+                width: options.pageSize.width - options.margins.right - savedLeft,
+                firstPage: frame.page,
+                topY: frame.top,
+                lastPage: currentPageIndex,
+                bottomY: bottomY,
+            )
             drawBlockQuoteRule(
                 color: quoteStyle.borderColor,
                 x: savedLeft + 3,
                 firstPage: frame.page,
                 topY: frame.top,
                 lastPage: currentPageIndex,
-                // `y` already carries the last block's trailing spacing, which can
-                // legally dip below the bottom margin without forcing a page break.
-                bottomY: max(y + paragraphSpacing, options.margins.bottom),
+                bottomY: bottomY,
             )
 
             y -= blockQuoteBottomSpacing
@@ -883,6 +895,47 @@ private struct Layout {
         let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
         let scale = min(1, maxWidth / Double(image.width), maxHeight / Double(image.height))
         return Double(image.height) * scale
+    }
+
+    /// Fills a block quote's background behind every page the quote occupies.
+    ///
+    /// The quote's height is unknown until its blocks have rendered, and by then its
+    /// text is already in the content stream. So the fill is *inserted* just after
+    /// the page background rather than appended. The rectangle is confined to the
+    /// quote's own vertical extent, so it cannot cover content drawn above the quote
+    /// on the same page.
+    ///
+    /// Nested quotes stack correctly: the outer quote finishes last and therefore
+    /// inserts last, landing beneath the inner quote's fill.
+    private func drawBlockQuoteBackground(
+        color: PDFColor?,
+        x: Double,
+        width: Double,
+        firstPage: Int,
+        topY: Double,
+        lastPage: Int,
+        bottomY: Double,
+    ) {
+        guard let color, firstPage <= lastPage, width > 0 else {
+            return
+        }
+
+        let isTagged = taggedContentBuilder != nil
+        for page in firstPage ... lastPage {
+            let segmentTop = page == firstPage ? topY : pageTopY
+            let segmentBottom = page == lastPage ? bottomY : options.margins.bottom
+            guard segmentTop > segmentBottom else {
+                continue
+            }
+            pages[page].insertBackgroundRectangle(
+                x: x,
+                y: segmentBottom,
+                width: width,
+                height: segmentTop - segmentBottom,
+                fill: color,
+                asArtifact: isTagged,
+            )
+        }
     }
 
     /// Strokes a block quote's left rule down every page the quote occupies.
@@ -3563,6 +3616,7 @@ private struct Layout {
     }
 
     private mutating func drawPageBackgroundIfNeeded() {
+        defer { currentPage.markContentStart() }
         guard let background = options.theme.pageBackground else {
             return
         }

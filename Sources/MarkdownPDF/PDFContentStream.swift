@@ -1,6 +1,13 @@
 struct PDFContentStream {
     private var lines: [Line] = []
 
+    /// Where page content begins, after whatever the page background drew.
+    ///
+    /// Marks are appended in paint order, so anything that must sit *under* text
+    /// already emitted has to be inserted, not appended. A block quote's background
+    /// is the case: its height is unknown until its blocks have rendered.
+    private var contentStartIndex = 0
+
     var serialized: String {
         lines.map(\.serialized).joined()
     }
@@ -15,6 +22,25 @@ struct PDFContentStream {
         }
 
         lines.append(Line(operators: operators))
+    }
+
+    /// Records that everything appended from here on is page content, so a later
+    /// insert lands above the page background and below the content.
+    mutating func markContentStart() {
+        contentStartIndex = lines.count
+    }
+
+    /// Inserts one line of operators immediately after the page background.
+    ///
+    /// Successive inserts stack in reverse: the last one inserted is drawn first.
+    /// Nested block quotes rely on that, so an inner quote's background paints over
+    /// its outer quote's rather than under it.
+    mutating func insertAtContentStart(_ operators: [Operator]) {
+        guard !operators.isEmpty else {
+            return
+        }
+
+        lines.insert(Line(operators: operators), at: min(contentStartIndex, lines.count))
     }
 
     struct Line {

@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Block quotes honor `backgroundColor` from their `.blockQuote` theme role. The
+  fill is inserted just above the page background rather than appended, because a
+  quote's height is unknown until its blocks have rendered and its text is already
+  in the content stream by then
+  ([#10](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/10)). Nested quotes
+  stack, page-spanning quotes get one fill per page, and the fill is a tagged
+  artifact so PDF/UA-1 still passes.
+
 - Nested lists. `parseUnorderedList` and `parseOrderedList` now take indentation
   seriously: a marker indented to the previous item's content column belongs to
   that item, and the item's lines are re-parsed as a document of their own. That
