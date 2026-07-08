@@ -501,13 +501,32 @@ private struct BlockParser {
             isThematicBreak(line)
     }
 
+    /// Removes one block quote marker, leaving the quoted content's own
+    /// indentation intact.
+    ///
+    /// The marker is up to three leading spaces, a `>`, then at most one space.
+    /// Trimming the remainder instead, as this once did, dedents everything inside
+    /// the quote to column zero, so a nested list, an indented code block, or a
+    /// continuation line cannot survive being quoted.
     private func stripBlockQuoteMarker(from line: String) -> String? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard trimmed.hasPrefix(">") else {
-            return nil
+        var cursor = line.startIndex
+        var indent = 0
+        while cursor < line.endIndex, line[cursor] == " ", indent < 3 {
+            indent += 1
+            cursor = line.index(after: cursor)
         }
 
-        return String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+        guard cursor < line.endIndex, line[cursor] == ">" else {
+            return nil
+        }
+        cursor = line.index(after: cursor)
+
+        // Exactly one optional space belongs to the marker. A second is content,
+        // and four of them open an indented code block.
+        if cursor < line.endIndex, line[cursor] == " " {
+            cursor = line.index(after: cursor)
+        }
+        return String(line[cursor...])
     }
 
     private func unorderedMarker(in line: String) -> Int? {

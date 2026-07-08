@@ -3,6 +3,46 @@ import Testing
 
 @Suite("Markdown parser")
 struct MarkdownParserTests {
+    @Test("Quoting a block keeps its indentation")
+    func blockQuoteKeepsIndentation() {
+        // The marker is up to three spaces, `>`, then at most one space. Everything
+        // after that is content, indentation intact. Trimming it dedents the whole
+        // quote to column zero, so nothing inside one could nest.
+        guard case let .blockQuote(inner)? = MarkdownParser().parse("> - a\n>   - b\n").blocks.first,
+              case let .unorderedList(items)? = inner.first
+        else {
+            Issue.record("expected a quoted list")
+            return
+        }
+        #expect(items.count == 1)
+        guard case .unorderedList = items[0].blocks.last else {
+            Issue.record("expected the quoted list to nest")
+            return
+        }
+
+        // A second space after the marker is content, not part of the marker.
+        guard case let .blockQuote(indented)? = MarkdownParser().parse(">     code\n").blocks.first,
+              case let .paragraph(content)? = indented.first
+        else {
+            Issue.record("expected a quoted paragraph")
+            return
+        }
+        let text = content.map { inline in
+            if case let .text(value) = inline { value } else { "" }
+        }.joined()
+        #expect(text == "    code")
+
+        // Up to three spaces may precede the marker.
+        #expect(MarkdownParser().parse("   > quoted\n").blocks.count == 1)
+        if case .blockQuote = MarkdownParser().parse("   > quoted\n").blocks[0] {} else {
+            Issue.record("three spaces before the marker should still open a quote")
+        }
+        // A fourth does not.
+        if case .blockQuote = MarkdownParser().parse("    > quoted\n").blocks[0] {
+            Issue.record("four spaces should not open a quote")
+        }
+    }
+
     @Test("Hostile nesting is bounded, not a stack overflow")
     func nestingIsBounded() {
         // One 4KB line used to recurse 2000 BlockParser frames and crash with
