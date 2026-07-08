@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A block quote's left rule now takes its origin from the first drawing inside the
+  quote, not from the cursor when the quote opened. A first block that broke the
+  page before drawing (a heading, a code fence, a figure, a table) left a rule on a
+  page carrying no quote content
+  ([#13](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/13)).
+
 ### Added
 
 - Nested lists. `parseUnorderedList` and `parseOrderedList` now take indentation
