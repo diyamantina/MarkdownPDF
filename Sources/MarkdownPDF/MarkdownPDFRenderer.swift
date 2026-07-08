@@ -392,8 +392,13 @@ private struct Layout {
             let topY = y
 
             blockQuoteDepth += 1
-            for nested in blocks {
-                try render(nested)
+            do {
+                for nested in blocks {
+                    try render(nested)
+                }
+            } catch {
+                blockQuoteDepth -= 1
+                throw error
             }
             blockQuoteDepth -= 1
 
@@ -876,11 +881,18 @@ private struct Layout {
             return
         }
 
+        let isTagged = taggedContentBuilder != nil
         for page in firstPage ... lastPage {
             let segmentTop = page == firstPage ? topY : pageTopY
             let segmentBottom = page == lastPage ? bottomY : options.margins.bottom
             guard segmentTop > segmentBottom else {
                 continue
+            }
+            // Decoration, not content. `beginArtifactIfTagged` only ever marks
+            // `currentPage`, and this rule is stroked onto earlier pages too, so
+            // mark each page directly. Untagged, it would fail PDF/UA-1.
+            if isTagged {
+                pages[page].beginArtifact()
             }
             pages[page].drawLine(
                 x1: x,
@@ -890,6 +902,9 @@ private struct Layout {
                 width: 2,
                 color: color,
             )
+            if isTagged {
+                pages[page].endMarkedContent()
+            }
         }
     }
 

@@ -177,6 +177,30 @@ struct MarkdownPDFRendererTests {
         #expect(!text.contains("/F3"))
     }
 
+    @Test("Nested quotes stack their rules, and the rule is a tagged artifact")
+    func blockQuoteRuleNestsAndIsAnArtifact() throws {
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.borderColor = PDFColor(red: 0, green: 0.82, blue: 0.59)
+        theme.elements[.blockQuote] = quote
+
+        // Each quote opens a fresh 14pt gutter, so the inner rule sits 14pt right
+        // of the outer one: 54+3 and 68+3.
+        let nested = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: theme))
+            .render(markdown: "> outer\n>\n> > inner\n")).text
+        #expect(nested.contains("2 w 57 "))
+        #expect(nested.contains("2 w 71 "))
+
+        // The rule is decoration. Under a tagged PDF it must be an artifact, or it
+        // becomes untagged page content and fails PDF/UA-1.
+        let tagged = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(
+            title: "Quote",
+            theme: theme,
+            taggedPDF: .enabled,
+        )).render(markdown: "> quoted\n")).text
+        #expect(tagged.contains("/Artifact BMC"))
+    }
+
     @Test("A block quote rule follows the quote across a page break")
     func blockQuoteRuleSpansPages() throws {
         var theme = PDFOptions.Theme.default
