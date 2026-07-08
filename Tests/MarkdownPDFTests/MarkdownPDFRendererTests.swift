@@ -177,6 +177,58 @@ struct MarkdownPDFRendererTests {
         #expect(!text.contains("/F3"))
     }
 
+    @Test("The quote rule brackets its text, stays inside the margin, and never orphans")
+    func blockQuoteRuleGeometry() throws {
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.borderColor = PDFColor(red: 1, green: 0, blue: 0)
+        theme.elements[.blockQuote] = quote
+        let options = PDFOptions(theme: theme)
+
+        func ruleSegments(_ body: String) -> [(top: Double, bottom: Double)] {
+            body.split(separator: "\n").compactMap { line in
+                let parts = line.split(separator: " ")
+                // `2 w 57 787.890 m 57 769.300 l S`
+                guard parts.count == 9, parts[1] == "w", parts[4] == "m",
+                      parts[7] == "l", parts[8] == "S",
+                      let top = Double(parts[3]), let bottom = Double(parts[6])
+                else { return nil }
+                return (top, bottom)
+            }
+        }
+
+        // The rule starts at the top of the first line's box, not at its baseline.
+        // Starting at the baseline hangs the whole ascender above the rule.
+        let single = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: "> quoted prose\n"))
+        let baseline = 782.94
+        let segment = try #require(ruleSegments(single.text).first)
+        #expect(segment.top > baseline)
+
+        // `y` carries the last block's trailing spacing, which can dip below the
+        // bottom margin without forcing a page break. The rule must not follow it.
+        let deep = String(repeating: "Filler.\n\n", count: 28)
+            + "```\n" + String(repeating: "code\n", count: 9) + "```\n\n> one\n>\n> two\n"
+        let clamped = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: deep))
+        for segment in ruleSegments(clamped.text) {
+            #expect(segment.bottom >= PDFOptions.Margins.standard.bottom)
+        }
+
+        // A quote whose first block reserves more than one line (a heading, a code
+        // fence) must not break the page after the rule's origin was captured, or
+        // page 1 keeps a rule with no quote content beside it.
+        for opening in ["# Quoted Heading", "```\n> code\n> code\n> ```"] {
+            let markdown = String(repeating: "Filler.\n\n", count: 36)
+                + "> \(opening)\n>\n> quoted body\n"
+            let inspector = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: markdown))
+            let pages = inspector.streams.filter { $0.body.contains(" Tj") || $0.body.contains(" l S") }
+            for page in pages {
+                let hasRule = page.body.contains(" l S")
+                let hasQuote = page.body.lowercased().contains("(quoted")
+                #expect(!hasRule || hasQuote, "a rule was drawn on a page with no quote content")
+            }
+        }
+    }
+
     @Test("Nested quotes stack their rules, and the rule is a tagged artifact")
     func blockQuoteRuleNestsAndIsAnArtifact() throws {
         var theme = PDFOptions.Theme.default

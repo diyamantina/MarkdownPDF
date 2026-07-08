@@ -382,7 +382,10 @@ private struct Layout {
         case let .blockQuote(blocks):
             let element = beginStructureElement(.blockQuote)
             defer { endStructureElement(element) }
-            ensureSpace(24)
+            // Reserve what the quote's first block actually needs. Reserving a flat
+            // 24 lets a heading or a code fence break the page after `topY` was
+            // captured, leaving a rule on a page with no quote content on it.
+            ensureSpace(blockQuoteLeadingHeight(of: blocks.first))
             let savedLeft = options.margins.left
             options.margins.left += 14
             y -= blockQuoteTopSpacing
@@ -406,9 +409,14 @@ private struct Layout {
                 color: quoteStyle.borderColor,
                 x: savedLeft + 3,
                 firstPage: firstPage,
-                topY: topY,
+                // `topY` is the first line's baseline. The rule must start at the
+                // top of that line's box, or it hangs a full ascender below the
+                // text it decorates.
+                topY: min(pageTopY, topY + fontSize(for: .paragraph) * 0.75),
                 lastPage: currentPageIndex,
-                bottomY: y,
+                // `y` already carries the last block's trailing spacing, which can
+                // legally dip below the bottom margin without forcing a page break.
+                bottomY: max(y + paragraphSpacing, options.margins.bottom),
             )
 
             y -= blockQuoteBottomSpacing
@@ -857,6 +865,26 @@ private struct Layout {
         let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
         let scale = min(1, maxWidth / Double(image.width), maxHeight / Double(image.height))
         return Double(image.height) * scale
+    }
+
+    /// Space the quote's first block needs before it will draw, so the page break,
+    /// if any, happens before the rule's starting point is captured.
+    ///
+    /// Mirrors each block's own `ensureSpace` call. Blocks that reserve per line as
+    /// they wrap (paragraphs, lists) need only one line.
+    private func blockQuoteLeadingHeight(of block: MarkdownBlock?) -> Double {
+        let minimum = 24.0
+        switch block {
+        case let .heading(level, _):
+            let size = headingSize(level)
+            return max(minimum, size * 1.8 + headingTopSpacing(level))
+        case let .codeBlock(_, code):
+            let lines = max(1, code.split(separator: "\n", omittingEmptySubsequences: false).count)
+            let lineHeight = fontSize(for: .codeBlock) * style(for: .codeBlock).lineHeightMultiplier
+            return max(minimum, Double(min(lines, 3)) * lineHeight + codeBlockPadding * 2)
+        default:
+            return minimum
+        }
     }
 
     /// Strokes a block quote's left rule down every page the quote occupies.
