@@ -1,6 +1,10 @@
 import Foundation
 
 public struct MarkdownParser: Sendable {
+    /// How deep container blocks (list items, block quotes, footnote bodies) may
+    /// nest before their content is kept as plain text. See ``BlockParser``.
+    public static let maximumNestingDepth = 32
+
     public struct Options: Equatable, Sendable {
         public var mathTypesetting: Bool
 
@@ -16,27 +20,53 @@ public struct MarkdownParser: Sendable {
     }
 
     public func parse(_ markdown: String) -> MarkdownDocument {
-        var parser = BlockParser(markdown: markdown, options: options)
+        var parser = BlockParser(markdown: markdown, options: options, nestingDepth: 0, isRoot: true)
         return MarkdownDocument(blocks: parser.parseBlocks())
     }
 }
 
 private struct BlockParser {
+    /// How deep container blocks (list items, block quotes, footnotes) may nest
+    /// before their content is kept as plain text.
+    ///
+    /// Each level costs one `BlockParser` frame and re-joins the remaining lines,
+    /// so unbounded nesting is both a stack-overflow and a superlinear-time bomb:
+    /// a single 4KB line of `"- " * 2000` used to crash with SIGSEGV, and 1500
+    /// levels of indentation took a minute. No real document nests this far;
+    /// hostile input reaches it in one line.
+    static let maximumNestingDepth = MarkdownParser.maximumNestingDepth
+
     private let options: MarkdownParser.Options
     private let inlineParser: InlineParser
+    private let nestingDepth: Int
+    private let isRoot: Bool
     private var lines: [String]
     private var index: Int = 0
 
-    init(markdown: String, options: MarkdownParser.Options) {
-        self.options = options
-        inlineParser = InlineParser(options: options)
-        lines = Self.stripFrontMatter(
-            markdown
-                .replacingOccurrences(of: "\r\n", with: "\n")
-                .replacingOccurrences(of: "\r", with: "\n")
-                .split(separator: "\n", omittingEmptySubsequences: false)
-                .map(String.init),
+    init(markdown: String, options: MarkdownParser.Options, nestingDepth: Int = 0, isRoot: Bool = false) {
+        self.init(
+            lines: Self.stripFrontMatter(
+                markdown
+                    .replacingOccurrences(of: "\r\n", with: "\n")
+                    .replacingOccurrences(of: "\r", with: "\n")
+                    .split(separator: "\n", omittingEmptySubsequences: false)
+                    .map(String.init),
+            ),
+            options: options,
+            nestingDepth: nestingDepth,
+            isRoot: isRoot,
         )
+    }
+
+    /// Nested parsers already hold their lines. Joining them into a string only to
+    /// split it again costs O(document) per nesting level, which is what made deep
+    /// indentation superlinear.
+    init(lines: [String], options: MarkdownParser.Options, nestingDepth: Int = 0, isRoot: Bool = false) {
+        self.options = options
+        self.nestingDepth = nestingDepth
+        self.isRoot = isRoot
+        self.lines = lines
+        inlineParser = InlineParser(options: options)
     }
 
     private static func stripFrontMatter(_ lines: [String]) -> [String] {
@@ -89,11 +119,15 @@ private struct BlockParser {
         }
 
         // A page break is a separator, not content. A trailing one would emit a
-        // blank final page, so it carries no meaning and is dropped here, where
-        // "trailing" is knowable. Leading and consecutive breaks collapse in the
-        // renderer, which skips a break on a page that has drawn nothing.
-        while blocks.last == .pageBreak {
-            blocks.removeLast()
+        // blank final page, so it carries no meaning and is dropped. Only the root
+        // parser may do this: inside a list item or a quote, "last block" is not
+        // "end of document", and dropping it would silently lose the break.
+        // Leading and consecutive breaks collapse in the renderer, which skips a
+        // break on a page that has drawn nothing.
+        if isRoot {
+            while blocks.last == .pageBreak {
+                blocks.removeLast()
+            }
         }
 
         return blocks
@@ -153,6 +187,12 @@ private struct BlockParser {
         guard stripBlockQuoteMarker(from: lines[index]) != nil else {
             return nil
         }
+        // Depth guard. Quotes recurse through the same parser as list items, so
+        // `"> " * 5000` on one line is the same stack-overflow bomb. Past the cap,
+        // fall through and let the line be a paragraph.
+        guard nestingDepth < Self.maximumNestingDepth else {
+            return nil
+        }
 
         var quoteLines: [String] = []
         while index < lines.count, let stripped = stripBlockQuoteMarker(from: lines[index]) {
@@ -160,7 +200,7 @@ private struct BlockParser {
             index += 1
         }
 
-        var nested = BlockParser(markdown: quoteLines.joined(separator: "\n"), options: options)
+        var nested = BlockParser(lines: quoteLines, options: options, nestingDepth: nestingDepth + 1)
         return .blockQuote(nested.parseBlocks())
     }
 
@@ -307,8 +347,21 @@ private struct BlockParser {
                 itemLines[0] = task.content
             }
 
-            var nested = BlockParser(markdown: itemLines.joined(separator: "\n"), options: options)
-            let blocks = nested.parseBlocks()
+            let blocks: [MarkdownBlock]
+            if nestingDepth >= Self.maximumNestingDepth {
+                // Depth guard. Keep the text rather than recursing further or
+                // discarding it, so pathological input degrades to prose.
+                blocks = [.paragraph(inlineParser.parse(
+                    itemLines.joined(separator: " ").trimmingCharacters(in: .whitespaces),
+                ))]
+            } else {
+                var nested = BlockParser(
+                    lines: itemLines,
+                    options: options,
+                    nestingDepth: nestingDepth + 1,
+                )
+                blocks = nested.parseBlocks()
+            }
             items.append(.init(
                 blocks: blocks.isEmpty ? [.paragraph([])] : blocks,
                 checkbox: checkbox,
@@ -352,8 +405,18 @@ private struct BlockParser {
 
     /// Leading whitespace, counted in characters so it lines up with the
     /// character offsets `unorderedMarker(in:)` and `orderedMarker(in:)` return.
+    ///
+    /// Counted in place. `line.count - line.trimmingLeadingSpaces().count` allocates
+    /// a trimmed copy of every line, and this runs once per line per nesting level.
     private static func indentWidth(of line: String) -> Int {
-        line.count - line.trimmingLeadingSpaces().count
+        var count = 0
+        for character in line {
+            guard character == " " || character == "\t" else {
+                break
+            }
+            count += 1
+        }
+        return count
     }
 
     private mutating func parseHTMLBlock() -> MarkdownBlock? {
@@ -375,6 +438,10 @@ private struct BlockParser {
         guard let marker = footnoteDefinitionMarker(in: lines[index]) else {
             return nil
         }
+        // Footnote bodies recurse through the same parser. Same guard, same reason.
+        guard nestingDepth < Self.maximumNestingDepth else {
+            return nil
+        }
 
         var definitionLines = [String(lines[index].dropFirst(marker.contentStart))]
         index += 1
@@ -385,7 +452,7 @@ private struct BlockParser {
         }
 
         let body = definitionLines.joined(separator: "\n")
-        var nested = BlockParser(markdown: body, options: options)
+        var nested = BlockParser(markdown: body, options: options, nestingDepth: nestingDepth + 1)
         return .footnoteDefinition(label: marker.label, blocks: nested.parseBlocks())
     }
 
@@ -456,7 +523,24 @@ private struct BlockParser {
         }
 
         let skipped = line.count - trimmed.count
-        return skipped + 2
+        return skipped + 1 + Self.spacesAfterMarker(in: trimmed, from: trimmed.index(after: trimmed.startIndex))
+    }
+
+    /// The width of the space run that separates a list marker from its content,
+    /// which is where the item's content column sits.
+    ///
+    /// `*   text` puts content at column 4, not column 2. Returning 1 there would
+    /// leave two spaces at the head of the item's text, misaligning the first line
+    /// against its own wrapped lines. A run of five or more spaces starts an
+    /// indented code block instead, so the content column stays at one.
+    private static func spacesAfterMarker(in trimmed: String, from start: String.Index) -> Int {
+        var cursor = start
+        var count = 0
+        while cursor < trimmed.endIndex, trimmed[cursor] == " " {
+            count += 1
+            cursor = trimmed.index(after: cursor)
+        }
+        return count > 4 ? 1 : max(1, count)
     }
 
     private func taskListItem(from item: String) -> (checkbox: MarkdownBlock.ListItem.Checkbox, content: String)? {
@@ -501,7 +585,8 @@ private struct BlockParser {
         }
 
         let skipped = line.count - trimmed.count
-        return (Int(digits) ?? 1, skipped + digits.count + 2)
+        let spaces = Self.spacesAfterMarker(in: trimmed, from: afterMarker)
+        return (Int(digits) ?? 1, skipped + digits.count + 1 + spaces)
     }
 
     private func footnoteDefinitionMarker(in line: String) -> (label: String, contentStart: Int)? {

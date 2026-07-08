@@ -3,6 +3,89 @@ import Testing
 
 @Suite("Markdown parser")
 struct MarkdownParserTests {
+    @Test("Hostile nesting is bounded, not a stack overflow")
+    func nestingIsBounded() {
+        // One 4KB line used to recurse 2000 BlockParser frames and crash with
+        // SIGSEGV. Each container level costs a frame, so hostile input reaches
+        // any depth in a single line.
+        let bomb = String(repeating: "- ", count: 2000) + "x"
+        let document = MarkdownParser().parse(bomb)
+        #expect(document.blocks.count == 1)
+
+        // Quotes and footnote bodies recurse through the same parser.
+        let quoteBomb = MarkdownParser().parse(String(repeating: "> ", count: 5000) + "x")
+        #expect(quoteBomb.blocks.count == 1)
+
+        /// Depth is capped, and the deepest item keeps its text as prose rather
+        /// than recursing further or dropping it.
+        func depth(_ blocks: [MarkdownBlock]) -> Int {
+            blocks.reduce(0) { deepest, block in
+                switch block {
+                case let .unorderedList(items):
+                    max(deepest, 1 + items.reduce(0) { max($0, depth($1.blocks)) })
+                default:
+                    deepest
+                }
+            }
+        }
+        #expect(depth(document.blocks) <= MarkdownParser.maximumNestingDepth + 1)
+    }
+
+    @Test("The content column skips the spaces after the marker")
+    func contentColumnSkipsMarkerSpaces() {
+        /// `*   text` puts content at column 4. Keeping the extra spaces left them
+        /// at the head of the item's text, so the first line drew two space glyphs
+        /// and no longer aligned with its own wrapped lines.
+        func firstText(_ markdown: String) -> String {
+            let block = MarkdownParser().parse(markdown).blocks.first
+            let inlines: [MarkdownInline]? = switch block {
+            case let .unorderedList(items):
+                items.first.flatMap { item -> [MarkdownInline]? in
+                    if case let .paragraph(content)? = item.blocks.first { content } else { nil }
+                }
+            case let .orderedList(_, items):
+                items.first.flatMap { item -> [MarkdownInline]? in
+                    if case let .paragraph(content)? = item.blocks.first { content } else { nil }
+                }
+            default:
+                nil
+            }
+            return (inlines ?? []).map { inline in
+                if case let .text(text) = inline { text } else { "" }
+            }.joined()
+        }
+
+        #expect(firstText("- normal\n") == "normal")
+        #expect(firstText("*   spaced\n") == "spaced")
+        #expect(firstText("1.   spaced\n") == "spaced")
+        // Five or more spaces open an indented code block, so the content column
+        // stays at one and the extra spaces are the item's own content.
+        #expect(firstText("-     code\n") == "    code")
+    }
+
+    @Test("A page break survives inside a list item")
+    func pageBreakSurvivesInsideAnItem() {
+        /// Trailing page breaks are dropped, but only by the root parser: inside an
+        /// item, "last block" is not "end of document".
+        func breaks(_ markdown: String) -> Int {
+            func walk(_ blocks: [MarkdownBlock]) -> Int {
+                blocks.reduce(0) { total, block in
+                    switch block {
+                    case .pageBreak: total + 1
+                    case let .unorderedList(items): total + items.reduce(0) { $0 + walk($1.blocks) }
+                    case let .blockQuote(inner): total + walk(inner)
+                    default: total
+                    }
+                }
+            }
+            return walk(MarkdownParser().parse(markdown).blocks)
+        }
+
+        #expect(breaks("- a\n\n  <!-- pagebreak -->\n\n- b\n") == 1)
+        #expect(breaks("a\n\n<!-- pagebreak -->\n\nb\n") == 1)
+        #expect(breaks("a\n\n<!-- pagebreak -->\n") == 0)
+    }
+
     @Test("Indented markers nest instead of flattening into siblings")
     func nestsUnorderedLists() {
         let document = MarkdownParser().parse("""
