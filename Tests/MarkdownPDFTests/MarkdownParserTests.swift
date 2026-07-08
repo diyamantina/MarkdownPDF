@@ -313,6 +313,40 @@ struct MarkdownParserTests {
         #expect(title == "Title")
     }
 
+    @Test("A stray trailing quote in a link destination does not crash", arguments: [
+        "[a](\")",
+        "[site](https://example.com\")",
+        "![alt](url\")",
+        "[a](\")text after",
+        "[a](\"",
+    ])
+    func linkWithTrailingQuoteDoesNotCrash(_ markdown: String) throws {
+        // The only `"` sits at the end, so it is not a title opener. Treating it as
+        // one built an inverted range and aborted the whole render.
+        let data = try MarkdownPDFRenderer().render(markdown: markdown)
+        #expect(!data.isEmpty)
+    }
+
+    @Test("A link title is taken only from a distinct opening and closing quote")
+    func linkTitleParsing() {
+        func firstLink(_ markdown: String) -> (String, String?)? {
+            guard case let .paragraph(inlines)? = MarkdownParser().parse(markdown).blocks.first
+            else { return nil }
+            for inline in inlines {
+                if case let .link(_, destination, title) = inline { return (destination, title) }
+            }
+            return nil
+        }
+
+        // A real title: distinct opening quote before the closing quote at the end.
+        #expect(firstLink("[a](url \"real title\")").map(\.0) == "url")
+        #expect(firstLink("[a](url \"real title\")").flatMap(\.1) == "real title")
+
+        // A lone trailing quote is part of the destination, not a title.
+        #expect(firstLink("[a](https://example.com\")")?.1 == nil)
+        #expect(firstLink("[a](https://example.com\")")?.0 == "https://example.com\"")
+    }
+
     @Test("Parses backslash escapes in text and link labels")
     func parsesBackslashEscapes() {
         let document = MarkdownParser().parse(#"\[literal\] \*not strong\* [ACME \[Labs\]](https://example.com/a%29)"#)
