@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `renderList` now reserves the height of a list item's first block rather than
   a single text line, so an item whose body is a standalone image no longer
   strands its marker at the bottom of the previous page.
+- Mermaid diagrams, native charts, and standalone images now separate themselves
+  from the following block with the theme's paragraph spacing on top of the 12pt
+  below the figure, which a following line's ascender consumed
+  ([#7](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/7)). The trailing
+  gap is applied to the cursor, not reserved, so a figure that fits on the page
+  still fits.
 
 ## [0.6.0] - 2026-06-26
 
