@@ -196,6 +196,71 @@ struct MarkdownPDFRendererTests {
         #expect(!task.contains("0 0 0 RG"))
     }
 
+    @Test("A block quote paints its background under its own text")
+    func blockQuoteBackground() throws {
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.backgroundColor = PDFColor(red: 0.9, green: 0.9, blue: 1)
+        theme.elements[.blockQuote] = quote
+        let options = PDFOptions(theme: theme)
+
+        // The fill is inserted, not appended: it must precede the quote's own text
+        // in the content stream, or it would cover it.
+        let text = try PDFInspector(MarkdownPDFRenderer(options: options)
+            .render(markdown: "Above.\n\n> quoted prose\n\nAfter.\n")).text
+        let fill = try #require(text.range(of: " re f Q"))
+        let quoted = try #require(text.range(of: "(quoted "))
+        #expect(fill.lowerBound < quoted.lowerBound)
+
+        // It must not reach the text drawn above it on the same page.
+        let aboveBaseline = 787.89
+        let fillLine = try #require(text.split(separator: "\n").first { $0.contains(" re f Q") })
+        let parts = fillLine.split(separator: " ")
+        let fillY = try #require(Double(parts[6]))
+        let fillHeight = try #require(Double(parts[8]))
+        #expect(fillY + fillHeight < aboveBaseline)
+
+        // Nested quotes stack: the outer fill is inserted last, so it is painted
+        // first and the inner fill lands on top of it.
+        let nested = try PDFInspector(MarkdownPDFRenderer(options: options)
+            .render(markdown: "> outer\n>\n> > inner\n")).text
+        let fills = nested.split(separator: "\n").filter { $0.contains(" re f Q") }
+        try #require(fills.count == 2)
+        let outerX = try #require(Double(fills[0].split(separator: " ")[5]))
+        let innerX = try #require(Double(fills[1].split(separator: " ")[5]))
+        #expect(outerX < innerX)
+
+        // One fill per page the quote spans.
+        let long = "> " + (1 ... 60).map { "line \($0)" }.joined(separator: "\n>\n> ") + "\n"
+        let spanning = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: long))
+        #expect(spanning.pageCount >= 2)
+        #expect(spanning.text.components(separatedBy: " re f Q").count - 1 == spanning.pageCount)
+
+        // Tagged output marks the fill as an artifact, or PDF/UA-1 rejects it.
+        let tagged = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(
+            title: "Quote",
+            theme: theme,
+            taggedPDF: .enabled,
+        )).render(markdown: "> quoted\n")).text
+        #expect(tagged.contains("q /Artifact BMC"))
+
+        // A theme without a background emits no fill at all.
+        let plain = try PDFInspector(MarkdownPDFRenderer().render(markdown: "> quoted\n")).text
+        #expect(!plain.contains(" re f Q"))
+
+        // The quote fill goes above the page background, not under it. The dark
+        // theme paints one, so its rectangle must be emitted first.
+        var dark = PDFOptions.Theme.dark
+        var darkQuote = dark.style(for: .blockQuote)
+        darkQuote.backgroundColor = PDFColor(red: 0.9, green: 0.9, blue: 1)
+        dark.elements[.blockQuote] = darkQuote
+        let layered = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: dark))
+            .render(markdown: "> quoted\n")).text
+        let pageBackground = try #require(layered.range(of: "re f\n"))
+        let quoteFill = try #require(layered.range(of: " re f Q"))
+        #expect(pageBackground.lowerBound < quoteFill.lowerBound)
+    }
+
     @Test("A themeless block quote draws no rule and no recolor")
     func blockQuoteWithoutThemeIsUnchanged() throws {
         // The built-in themes set no `borderColor`, so default output must not

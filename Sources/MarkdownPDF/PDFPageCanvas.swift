@@ -28,6 +28,41 @@ final class PDFPageCanvas {
         contentStream.append(.beginArtifact)
     }
 
+    /// Everything appended from here on is page content. Call once, after the page
+    /// background has been drawn.
+    func markContentStart() {
+        contentStream.markContentStart()
+    }
+
+    /// Fills a rectangle beneath everything already drawn on this page, above the
+    /// page background.
+    ///
+    /// Wrapped in `q`/`Q` so the inserted fill color cannot leak into the operators
+    /// that follow, which were emitted assuming the graphics state they left behind.
+    func insertBackgroundRectangle(
+        x: Double,
+        y: Double,
+        width: Double,
+        height: Double,
+        fill: PDFColor,
+        asArtifact: Bool,
+    ) {
+        var operators: [PDFContentStream.Operator] = [.saveGraphicsState]
+        if asArtifact {
+            operators.append(.beginArtifact)
+        }
+        operators.append(contentsOf: [
+            .setFillColor(fill),
+            .rectangle(x: x, y: y, width: width, height: height),
+            .fill,
+        ])
+        if asArtifact {
+            operators.append(.endMarkedContent)
+        }
+        operators.append(.restoreGraphicsState)
+        contentStream.insertAtContentStart(operators)
+    }
+
     func endMarkedContent() {
         contentStream.append(.endMarkedContent)
     }
