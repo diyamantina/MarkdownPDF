@@ -47,9 +47,8 @@ enum StandardFont: String, CaseIterable {
 
     func widthsForPDF(in fontSet: PDFOptions.FontSet) -> [Int] {
         let widths = widthTable(in: fontSet)
-        // Emit widths across the full WinAnsi byte range (32-255), so accented
-        // Latin and the CP1252 punctuation block paint at the right advance.
-        // Codes 32-126 are unchanged from before.
+        // Emit widths across the full WinAnsi byte range (32-255) from the AFM
+        // metrics, so every WinAnsi glyph paints at its true advance.
         return (32 ... 255).map { byte in
             widths.width(for: PDFTextEncoding.winAnsiScalar(for: UInt8(byte)))
         }
@@ -157,23 +156,19 @@ private struct WidthTable {
     /// exact: generated from the Adobe Core-14 AFM metrics through the WinAnsi
     /// encoding vector, not shared across faces (the bold advances differ from the
     /// regular ones at 31 code points, including the accented capitals and the
-    /// curly quotes). A scalar that WinAnsi cannot represent is not in here and
-    /// falls through to the ASCII-base derivation below.
+    /// curly quotes).
     var highWidths: [UnicodeScalar: Int] = [:]
 
+    /// The advance for `scalar`, which callers pass already reduced to the WinAnsi
+    /// set: `PDFTextEncoding.portableScalars` maps any scalar the base-14 fonts
+    /// cannot draw to the replacement `?` before measurement, so the tables need to
+    /// cover only ASCII and the WinAnsi high range.
     func width(for scalar: UnicodeScalar) -> Int {
         if let width = widths[scalar] {
             return width
         }
         if scalar.value > 0x7F {
             if let width = highWidths[scalar] {
-                return width
-            }
-            // A scalar outside WinAnsi that decomposes to an ASCII base shares that
-            // base's advance in these fonts, so derive e.g. a Latin letter with a
-            // combining mark from its unaccented base.
-            let base = String(scalar).decomposedStringWithCanonicalMapping.unicodeScalars.first
-            if let base, base.value <= 0x7F, let width = widths[base] {
                 return width
             }
         }

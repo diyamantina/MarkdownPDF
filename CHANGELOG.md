@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrote wrong values into /Widths and overlapped. The tables are generated from the
   AFM files through the WinAnsi encoding vector, per face (bold differs from
   regular at 31 code points), and the ASCII quote and grave advances are corrected
-  to their true metrics ([#31](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/30)).
+  to their true metrics ([#30](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/30)).
 - A chart or pie slice value large enough to overflow the geometry no longer
   crashes the renderer. `2 * pi * value` overflowed to Inf and `Inf / total` gave
   NaN, which trapped in `Int(NaN)` (arc segment count) and `Int(value.rounded())`
