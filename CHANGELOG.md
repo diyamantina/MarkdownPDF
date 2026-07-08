@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A link or image whose destination ends in a stray `"` (`[a](")`,
+  `[site](https://example.com")`) no longer crashes the renderer. The trailing
+  quote was mistaken for a title close, building an inverted string range. A title
+  is now taken only from a distinct opening quote before the closing one; otherwise
+  the quote belongs to the destination
+  ([#19](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/19)).
+
+### Fixed
+
 - A block quote's left rule now takes its origin from the first drawing inside the
   quote, not from the cursor when the quote opened. A first block that broke the
   page before drawing (a heading, a code fence, a figure, a table) left a rule on a

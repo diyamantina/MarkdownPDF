@@ -252,11 +252,15 @@ struct InlineParser {
                 return nil
             }
 
-            if let quote = raw.firstIndex(of: "\""), raw.last == "\"" {
+            // A title needs an opening quote strictly before the closing quote at
+            // the end. When the only `"` is the last character (`[a](")`,
+            // `[a](url")`), it is not a title opener; treating it as one built an
+            // inverted `titleStart ..< titleEnd` range and crashed the renderer. In
+            // that case the quote belongs to the destination.
+            let lastIndex = raw.index(before: raw.endIndex)
+            if let quote = raw.firstIndex(of: "\""), raw.last == "\"", quote < lastIndex {
                 let url = String(raw[..<quote]).trimmingCharacters(in: .whitespacesAndNewlines)
-                let titleStart = raw.index(after: quote)
-                let titleEnd = raw.index(before: raw.endIndex)
-                let title = String(raw[titleStart ..< titleEnd])
+                let title = String(raw[raw.index(after: quote) ..< lastIndex])
                 return (url, title, end)
             }
 
