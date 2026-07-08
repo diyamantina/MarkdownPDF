@@ -417,6 +417,49 @@ struct MarkdownPDFRendererTests {
         #expect(segments.count == inspector.pageCount)
     }
 
+    @Test("Deep list nesting cannot explode the page count")
+    func deepListIndentIsClamped() throws {
+        /// Unclamped, each level added 24pt of indent; past the page width the content
+        /// column went negative, every token landed on its own near-empty page, and a
+        /// few KB of markdown produced hundreds of pages. The indent is now capped so
+        /// the page count stays roughly linear in the input.
+        func pageCount(depth: Int) throws -> Int {
+            let markdown = (0 ..< depth)
+                .map { String(repeating: "  ", count: $0) + "- item \($0)" }
+                .joined(separator: "\n")
+            return try PDFInspector(MarkdownPDFRenderer().render(markdown: markdown)).pageCount
+        }
+
+        // On main this was ~81 pages; clamped it is a handful.
+        let hundred = try pageCount(depth: 100)
+        #expect(hundred < 15, "100-deep list produced \(hundred) pages")
+
+        // Shallow, realistic nesting is untouched: three levels fit one page.
+        #expect(try pageCount(depth: 3) == 1)
+
+        /// Block quotes indent through the same clamp. A list of deep quotes, or
+        /// quotes interleaved with lists, otherwise pushed the content column off the
+        /// page and every glyph landed outside the MediaBox, invisible.
+        func offPageTextOps(_ markdown: String) throws -> Int {
+            let text = try PDFInspector(MarkdownPDFRenderer().render(markdown: markdown)).text
+            let rightEdge = PDFOptions.PageSize.a4.width - PDFOptions.Margins.standard.right
+            return text.split(separator: "\n").count(where: { line in
+                let parts = line.split(separator: " ")
+                guard parts.count > 6, parts[6] == "Td", line.contains("Tj"),
+                      let x = Double(parts[4]) else { return false }
+                return x > rightEdge + 0.5
+            })
+        }
+        let tokens = (0 ..< 400).map { "tok\($0)" }.joined(separator: " ")
+        // 16 list levels then 16 quote levels, within the parser's depth cap.
+        let listThenQuote = String(repeating: "- ", count: 16)
+            + String(repeating: "> ", count: 16) + tokens
+        #expect(try offPageTextOps(listThenQuote) == 0, "content drawn off the page")
+        // Quotes alternating with lists.
+        let alternating = String(repeating: "> - ", count: 16) + tokens
+        #expect(try offPageTextOps(alternating) == 0, "content drawn off the page")
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))

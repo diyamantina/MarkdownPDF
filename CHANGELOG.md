@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   NaN, which trapped in `Int(NaN)` (arc segment count) and `Int(value.rounded())`
   (legend formatter). A finiteness guard at PDF number serialization also stops any non-finite coordinate
   from reaching the content stream as an unparseable nan/inf token ([#22](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/23)).
+- Deeply nested lists and block quotes no longer explode the page count. Each list
+  level added 24pt and each quote 14pt of indent unclamped; past the page width the content column went negative and every
+  token landed on its own near-empty page, so a few KB of markdown produced
+  hundreds of pages. The indent is capped so a usable column always remains
+  ([#24](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/25)). Shallow lists
+  are unchanged.
 
 - A link or image whose destination ends in a stray `"` (`[a](")`,
   `[site](https://example.com")`) no longer crashes the renderer. The trailing

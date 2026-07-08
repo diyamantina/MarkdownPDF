@@ -402,7 +402,7 @@ private struct Layout {
             defer { endStructureElement(element) }
             ensureSpace(24)
             let savedLeft = options.margins.left
-            options.margins.left += 14
+            indentLeftMargin(by: 14)
             y -= blockQuoteTopSpacing
 
             let quoteStyle = style(for: .blockQuote)
@@ -820,7 +820,7 @@ private struct Layout {
                 }
             }
             let savedLeft = options.margins.left
-            options.margins.left += 24
+            indentLeftMargin(by: 24)
             let bodyElement = beginStructureElement(.listBody)
             for block in item.blocks {
                 try render(block)
@@ -3815,6 +3815,26 @@ private struct Layout {
 
     private var blockQuoteBottomSpacing: Double {
         options.baseFontSize * style(for: .blockQuote).spacingAfterMultiplier
+    }
+
+    /// The narrowest content column any nested container is allowed to leave, so
+    /// runaway indentation cannot drive the usable width to zero. An inch holds
+    /// several characters, enough to keep wrapping sane at any nesting depth.
+    private static let minimumIndentedContentWidth: Double = 72
+
+    /// Indents the left margin for a nested container, but never so far that the
+    /// content column would drop below ``minimumIndentedContentWidth``.
+    ///
+    /// List items (`24`) and block quotes (`14`) both indent through here. Placing
+    /// the clamp on only one of them left the other free to push the margin past
+    /// the page edge: a list of quotes, or quotes alternating with lists, drove the
+    /// content column negative and reproduced the page-count explosion the clamp
+    /// exists to prevent. Past the clamp, further nesting of either kind stops
+    /// indenting and content stays at the deepest usable column. The caller saves
+    /// and restores the previous margin, so the clamp only bounds the descent.
+    private mutating func indentLeftMargin(by amount: Double) {
+        let deepest = options.pageSize.width - options.margins.right - Self.minimumIndentedContentWidth
+        options.margins.left = min(options.margins.left + amount, max(options.margins.left, deepest))
     }
 
     private var contentWidth: Double {
