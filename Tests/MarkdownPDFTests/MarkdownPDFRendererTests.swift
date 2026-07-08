@@ -466,14 +466,21 @@ struct MarkdownPDFRendererTests {
         // `unsupportedComplexScriptScalar` under an embedded font, aborting the whole
         // render; the base-14 path drew it as `?`. It is invisible formatting and is
         // stripped before it reaches either path.
-        let bomInputs = ["AB\u{FEFF}CD", "\u{FEFF}HELLO", "\u{FEFF}"]
+        // Stripped at the scalar level, so a BOM fused into a composed grapheme
+        // (`\u{FEFF}\u{0301}`) is removed too; a grapheme-aware replace would leave
+        // it. This is font-independent, so it uses no glyphs.
+        for input in ["AB\u{FEFF}CD", "AB\u{FEFF}\u{0301}CD", "A\u{FEFF}\u{FEFF}B", "\u{FEFF}\u{0301}x"] {
+            let run = PDFTextRun(text: input, font: .helvetica, size: 10)
+            #expect(!run.text.unicodeScalars.contains("\u{FEFF}"), "BOM survived in \(input.debugDescription)")
+        }
 
-        // Embedded font: previously threw. Now renders.
-        let arial = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        // Embedded font: previously threw. Now renders. Inputs use only glyphs the
+        // synthetic witness font provides (uppercase Latin).
+        let witness = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
         let embedded = PDFOptions(embeddedFonts: .allRoles(
-            PDFOptions.EmbeddedFontSource(data: arial, baseName: "Witness"),
+            PDFOptions.EmbeddedFontSource(data: witness, baseName: "Witness"),
         ))
-        for input in bomInputs {
+        for input in ["AB\u{FEFF}CD", "\u{FEFF}HELLO", "\u{FEFF}", "A\u{FEFF}\u{FEFF}B"] {
             let data = try MarkdownPDFRenderer(options: embedded).render(markdown: input)
             #expect(!data.isEmpty)
         }
