@@ -10,6 +10,7 @@ public enum MarkdownBlock: Equatable, Sendable {
     case displayMath(MarkdownMath)
     case table(Table)
     case thematicBreak
+    case pageBreak
     case html(String)
     case footnoteDefinition(label: String, blocks: [MarkdownBlock])
 

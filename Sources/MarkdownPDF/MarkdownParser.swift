@@ -78,11 +78,22 @@ private struct BlockParser {
             } else if isThematicBreak(line) {
                 blocks.append(.thematicBreak)
                 index += 1
+            } else if isPageBreak(line) {
+                blocks.append(.pageBreak)
+                index += 1
             } else if let block = parseHTMLBlock() {
                 blocks.append(block)
             } else {
                 blocks.append(parseParagraph())
             }
+        }
+
+        // A page break is a separator, not content. A trailing one would emit a
+        // blank final page, so it carries no meaning and is dropped here, where
+        // "trailing" is knowable. Leading and consecutive breaks collapse in the
+        // renderer, which skips a break on a page that has drawn nothing.
+        while blocks.last == .pageBreak {
+            blocks.removeLast()
         }
 
         return blocks
@@ -453,6 +464,25 @@ private struct BlockParser {
             return String(line.dropFirst())
         }
         return nil
+    }
+
+    /// An explicit page break, written as an HTML comment so the same document
+    /// stays clean in every other Markdown renderer, where a comment is invisible.
+    ///
+    /// Accepts `<!-- pagebreak -->`, `<!--pagebreak-->`, and `<!-- pageBreak -->`.
+    /// Must be checked before ``parseHTMLBlock()``, which would otherwise swallow
+    /// the comment and draw it as visible text.
+    private func isPageBreak(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("<!--"), trimmed.hasSuffix("-->") else {
+            return false
+        }
+
+        let body = trimmed
+            .dropFirst("<!--".count)
+            .dropLast("-->".count)
+            .trimmingCharacters(in: .whitespaces)
+        return body.lowercased() == "pagebreak"
     }
 
     private func isThematicBreak(_ line: String) -> Bool {

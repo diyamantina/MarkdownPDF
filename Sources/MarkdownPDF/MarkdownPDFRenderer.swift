@@ -135,7 +135,7 @@ private struct FootnoteResolver {
             for item in items.flatMap(\.blocks) {
                 collectDefinitions(in: item, into: &definitions)
             }
-        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .html:
+        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .pageBreak, .html:
             break
         }
     }
@@ -168,7 +168,7 @@ private struct FootnoteResolver {
                     )
                 },
             )
-        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .html:
+        case .heading, .paragraph, .codeBlock, .displayMath, .table, .thematicBreak, .pageBreak, .html:
             return block
         }
     }
@@ -194,7 +194,7 @@ private struct FootnoteResolver {
             for item in table.headers + table.rows.flatMap(\.self) {
                 collectReferences(in: item, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
             }
-        case .codeBlock, .displayMath, .thematicBreak, .html, .footnoteDefinition:
+        case .codeBlock, .displayMath, .thematicBreak, .pageBreak, .html, .footnoteDefinition:
             break
         }
     }
@@ -406,6 +406,14 @@ private struct Layout {
             try renderDisplayMath(math)
         case let .table(table):
             try renderTable(table)
+        case .pageBreak:
+            // Breaking a page that has drawn nothing yet would emit a blank page,
+            // so a leading break and consecutive breaks collapse here.
+            // `y == pageTopY` is the "nothing drawn" witness. Trailing breaks are
+            // already dropped by the parser.
+            if y != pageTopY {
+                startNewPage()
+            }
         case .thematicBreak:
             ensureSpace(18)
             let artifact = beginArtifactIfTagged()
@@ -682,7 +690,7 @@ private struct Layout {
             [.text(items.flatMap(\.blocks).map(plainText).joined(separator: " "))]
         case let .table(table):
             [.text((table.headers + table.rows.flatMap(\.self)).map { plainText($0) }.joined(separator: " "))]
-        case .thematicBreak, .footnoteDefinition:
+        case .thematicBreak, .pageBreak, .footnoteDefinition:
             []
         }
     }
@@ -3521,7 +3529,7 @@ private struct Layout {
             (try? MathParser().parse(math.source))?.linearizedText ?? math.delimitedSource
         case let .table(table):
             (table.headers + table.rows.flatMap(\.self)).map { plainText($0) }.joined(separator: " ")
-        case .thematicBreak:
+        case .thematicBreak, .pageBreak:
             ""
         case let .html(html):
             html
