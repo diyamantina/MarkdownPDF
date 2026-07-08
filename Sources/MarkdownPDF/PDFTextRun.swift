@@ -30,7 +30,13 @@ struct PDFTextRun {
         namedDestination: String? = nil,
         inlineMathBox: MathBox? = nil,
     ) {
-        self.text = text
+        // Strip U+FEFF (byte-order mark / zero-width no-break space) up front. It is
+        // an invisible formatting character with no glyph, and it reaches text runs
+        // from BOMs pasted mid-document. The embedded-font path classified it as an
+        // Arabic presentation form and threw `unsupportedComplexScriptScalar`,
+        // aborting the whole render; the base-14 path drew it as `?`. Removing it
+        // here keeps width, glyphs, and the ActualText span consistent.
+        self.text = text.contains("\u{FEFF}") ? text.replacingOccurrences(of: "\u{FEFF}", with: "") : text
         self.font = font
         self.size = size
         self.color = color

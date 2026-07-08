@@ -460,6 +460,30 @@ struct MarkdownPDFRendererTests {
         #expect(try offPageTextOps(alternating) == 0, "content drawn off the page")
     }
 
+    @Test("A byte-order mark in text does not abort the render")
+    func byteOrderMarkIsStripped() throws {
+        // U+FEFF classified as an Arabic presentation form and threw
+        // `unsupportedComplexScriptScalar` under an embedded font, aborting the whole
+        // render; the base-14 path drew it as `?`. It is invisible formatting and is
+        // stripped before it reaches either path.
+        let bomInputs = ["AB\u{FEFF}CD", "\u{FEFF}HELLO", "\u{FEFF}"]
+
+        // Embedded font: previously threw. Now renders.
+        let arial = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let embedded = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: arial, baseName: "Witness"),
+        ))
+        for input in bomInputs {
+            let data = try MarkdownPDFRenderer(options: embedded).render(markdown: input)
+            #expect(!data.isEmpty)
+        }
+
+        // Base-14: the BOM is not painted as `?`, and the surrounding text survives.
+        let text = try PDFInspector(MarkdownPDFRenderer().render(markdown: "AB\u{FEFF}CD")).text
+        #expect(!text.contains("(?) Tj"))
+        #expect(text.contains("(ABCD)") || text.contains("(AB)"))
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
