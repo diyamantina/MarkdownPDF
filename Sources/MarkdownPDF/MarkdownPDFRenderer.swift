@@ -1858,10 +1858,17 @@ private struct Layout {
     }
 
     private func formatChartNumber(_ value: Double) -> String {
-        if abs(value.rounded() - value) < 0.0001 {
-            return "\(Int(value.rounded()))"
+        guard value.isFinite else {
+            return "-"
         }
         let absValue = abs(value)
+        // `Int(value.rounded())` traps once the magnitude exceeds `Int.max` (~9.22e18).
+        // Keep the plain-integer form for values that fit; render an integer-valued
+        // magnitude too large for `Int` with a compact `%g` instead of trapping. The
+        // 9.2e18 bound stays safely under `Int.max` and covers every realistic count.
+        if abs(value.rounded() - value) < 0.0001 {
+            return absValue < 9.2e18 ? "\(Int(value.rounded()))" : String(format: "%g", value)
+        }
         if absValue >= 10 {
             return String(format: "%.1f", value)
         }

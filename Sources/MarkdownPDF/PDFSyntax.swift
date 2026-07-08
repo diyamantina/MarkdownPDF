@@ -126,6 +126,14 @@ enum PDFSyntax {
         }
 
         var serialized: String {
+            // `String(format: "%.3f", .nan)` is `"nan"` and `.infinity` is `"inf"`,
+            // neither a valid PDF numeric token: a single such operand makes the
+            // whole content stream unparseable. A non-finite coordinate only reaches
+            // here through a bug upstream, so collapse it to a harmless 0 rather than
+            // emit a token no reader can consume.
+            guard rawValue.isFinite else {
+                return "0"
+            }
             let rounded = (rawValue * 1000).rounded() / 1000
             return String(format: "%.3f", locale: PDFSyntax.serializationLocale, rounded)
                 .replacingOccurrences(of: ".000", with: "")
