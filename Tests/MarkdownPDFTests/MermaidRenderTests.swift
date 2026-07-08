@@ -23,6 +23,24 @@ struct MermaidRenderTests {
         """)
     }
 
+    @Test("A trailing figure does not claim a page for whitespace it cannot use")
+    func trailingFigureDoesNotForceAPageBreak() throws {
+        // `ensureSpace` must reserve only what the figure draws. Reserving the
+        // trailing gap too would push a figure that fits onto the next page for
+        // the sake of whitespace with nothing after it.
+        let fence = "```"
+        let diagram = "\(fence)mermaid\nflowchart LR\n    A[Apps] --> B[Features]\n\(fence)\n"
+
+        func pageCount(fillerParagraphs: Int) throws -> Int {
+            let markdown = String(repeating: "Filler.\n\n", count: fillerParagraphs) + diagram
+            return try PDFInspector(MarkdownPDFRenderer().render(markdown: markdown)).pageCount
+        }
+
+        // 34 paragraphs plus the diagram is the last layout that fits one page.
+        #expect(try pageCount(fillerParagraphs: 34) == 1)
+        #expect(try pageCount(fillerParagraphs: 35) == 2)
+    }
+
     /// Both figure paths draw a frame, then advance `y`. Without
     /// `figureTrailingSpacing` the following paragraph's ascender lands on that
     /// frame, so assert the gap is the block model's spacing, not the bare 12pt
@@ -55,7 +73,8 @@ struct MermaidRenderTests {
             "no paragraph after the \(fenceInfo) figure",
         )
 
-        let paragraphSpacing = 11 * PDFOptions.Theme.default.style(for: .paragraph).spacingAfterMultiplier
+        let baseFontSize = PDFOptions().baseFontSize
+        let paragraphSpacing = baseFontSize * PDFOptions.Theme.default.style(for: .paragraph).spacingAfterMultiplier
         #expect(abs((frameBottom - belowBaseline) - (12 + paragraphSpacing)) < 0.01)
         #expect(frameBottom - belowBaseline > 12)
     }

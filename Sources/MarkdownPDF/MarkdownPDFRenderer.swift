@@ -364,7 +364,7 @@ private struct Layout {
             y -= size * style.spacingAfterMultiplier
         case let .paragraph(content):
             if try renderStandaloneImage(content) {
-                y -= 12
+                y -= figureTrailingSpacing
             } else {
                 let element = beginStructureElement(.paragraph)
                 defer { endStructureElement(element) }
@@ -1072,8 +1072,7 @@ private struct Layout {
         case let .diagram(diagram):
             switch try mermaidRenderPlan(for: diagram) {
             case let .plan(plan):
-                let trailingSpacing = figureTrailingSpacing
-                ensureSpace(plan.height + trailingSpacing)
+                ensureSpace(plan.height + 12)
                 let figureElement = beginStructureElement(
                     .figure,
                     attributes: PDFTaggedContent.Attributes(alternateDescription: "Mermaid diagram"),
@@ -1082,7 +1081,7 @@ private struct Layout {
                 try drawMermaidPlan(plan)
                 endMarkedContentIfNeeded(marked)
                 endStructureElement(figureElement)
-                y -= plan.height + trailingSpacing
+                y -= plan.height + figureTrailingSpacing
             case let .fallback(reason):
                 try renderUnsupportedMermaid(reason: reason, code: code)
             }
@@ -1111,7 +1110,7 @@ private struct Layout {
     ) throws {
         switch try chartRenderPlan(for: chart) {
         case let .plan(plan):
-            ensureSpace(plan.height + figureTrailingSpacing)
+            ensureSpace(plan.height + 12)
             switch try chartRenderPlan(for: chart) {
             case let .plan(positionedPlan):
                 let figureElement = beginStructureElement(
@@ -3563,13 +3562,18 @@ private struct Layout {
         return fontSize(for: role) * style(for: role).lineHeightMultiplier
     }
 
-    /// Vertical space a figure (Mermaid diagram or native chart) leaves beneath
-    /// itself.
+    /// Vertical space a figure (Mermaid diagram, native chart, standalone image)
+    /// leaves beneath itself.
     ///
-    /// The 12pt is the figure's own padding inside its frame. A following
-    /// paragraph's ascender consumes most of it, so the next line would sit on the
-    /// frame. Every other block separates itself with ``paragraphSpacing``; a
-    /// figure must too.
+    /// `plan.height` covers the drawn frame, including its own internal padding.
+    /// The 12pt sits entirely below that frame, and a following paragraph's
+    /// ascender consumes most of it, so the next line reads as touching the frame.
+    /// Add the block model's ``paragraphSpacing`` on top, the same separation a
+    /// paragraph leaves behind it.
+    ///
+    /// Only the drawn height is reserved with `ensureSpace`; this trailing gap is
+    /// applied to `y` afterwards. Reserving it would push a figure that fits onto
+    /// the next page for the sake of whitespace that may have nothing after it.
     private var figureTrailingSpacing: Double {
         12 + paragraphSpacing
     }
