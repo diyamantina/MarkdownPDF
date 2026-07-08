@@ -10,6 +10,32 @@ import Testing
 
 @Suite("PDF renderer")
 struct MarkdownPDFRendererTests {
+    @Test("Unordered lists draw a themed bullet, and degrade when the font lacks one")
+    func unorderedListsDrawMarkers() throws {
+        // Base-14 profile: WinAnsiEncoding maps U+2022 to 0x95, so each item
+        // paints a bullet through the `.listMarker` role.
+        let data = try MarkdownPDFRenderer().render(markdown: "- alpha\n- beta\n")
+        let inspector = PDFInspector(data)
+        #expect(inspector.text.components(separatedBy: "(\\225) Tj").count - 1 == 2)
+
+        // Ordered lists keep their numeric markers.
+        let ordered = try MarkdownPDFRenderer().render(markdown: "1. alpha\n2. beta\n")
+        #expect(PDFInspector(ordered).text.contains("(1.) Tj"))
+
+        // An embedded font may carry neither U+2022 nor "-". The RTL witness
+        // ships Hebrew, Arabic, Latin capitals and a little punctuation, and
+        // none of it is a bullet. Mapping one through it would throw
+        // `TrueTypeGlyphMappingError.missingGlyph`, so the marker is omitted
+        // and the document still renders.
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .rtlWitness, includeGlyphOutlines: true)
+        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "MarkdownPDF RTL Witness")
+        let embedded = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: .allRoles(source)))
+            .render(markdown: "- ALPHA\n")
+        let embeddedInspector = PDFInspector(embedded)
+        #expect(!embeddedInspector.text.contains("(\\225) Tj"))
+        #expect(embeddedInspector.hasValidXrefOffsets())
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))

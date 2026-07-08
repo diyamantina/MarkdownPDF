@@ -727,6 +727,28 @@ private struct Layout {
                 let labelElement = beginStructureElement(.listLabel)
                 drawTaskCheckbox(checkbox, x: options.margins.left, baselineY: y)
                 endStructureElement(labelElement)
+            } else {
+                // Unordered item. Draw the bullet through the same `.listMarker`
+                // role the ordered branch uses, so a theme styles both alike.
+                let markerStyle = style(for: .listMarker)
+                let markerFont = standardFont(for: markerStyle.fontRole)
+                if let marker = unorderedMarkerText(for: markerFont) {
+                    let labelElement = beginStructureElement(.listLabel)
+                    try drawRuns(
+                        [
+                            PDFTextRun(
+                                text: marker,
+                                font: markerFont,
+                                size: fontSize(for: .listMarker),
+                                color: markerStyle.color,
+                            ),
+                        ],
+                        x: options.margins.left,
+                        y: y,
+                        applyBidi: false,
+                    )
+                    endStructureElement(labelElement)
+                }
             }
             let savedLeft = options.margins.left
             options.margins.left += 24
@@ -739,6 +761,35 @@ private struct Layout {
             endStructureElement(itemElement)
         }
         y -= listTrailingSpacing
+    }
+
+    /// The unordered-list marker the font bound to `font` can actually draw, or
+    /// `nil` when it can draw none of the candidates.
+    ///
+    /// U+2022 is the intended marker, with an ASCII hyphen as the fallback. The
+    /// two font profiles disagree about who is authoritative:
+    ///
+    /// - Base-14 (no embedded entry): WinAnsiEncoding maps U+2022 to `0x95`, so
+    ///   the bullet is drawable. `PDFEmbeddedFontCatalog.covers` answers `false`
+    ///   here because there is no embedded entry at all, so it must not be the
+    ///   authority on this path. `PDFTextEncoding` is.
+    /// - Embedded TrueType: the caller's font may lack both glyphs. A font
+    ///   carrying only Hebrew, Arabic, Latin capitals and a little punctuation
+    ///   has neither U+2022 nor `-`, and mapping either through it throws
+    ///   `TrueTypeGlyphMappingError.missingGlyph`.
+    ///
+    /// Returning `nil` keeps the item's 24pt indent and omits only the
+    /// decorative glyph, which is what the renderer did for every unordered
+    /// list before markers existed. A marker is presentation, not content: the
+    /// list is still tagged `/L`, so assistive technology is unaffected.
+    private func unorderedMarkerText(for font: StandardFont) -> String? {
+        let candidates = ["\u{2022}", "-"]
+        guard embeddedFonts.entry(for: font) != nil else {
+            return candidates.first { candidate in
+                candidate.unicodeScalars.allSatisfy(PDFTextEncoding.isRepresentable)
+            }
+        }
+        return candidates.first { embeddedFonts.covers($0, font: font) }
     }
 
     private mutating func drawTaskCheckbox(
