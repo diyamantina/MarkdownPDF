@@ -49,13 +49,26 @@ struct PDFEmbeddedFontCatalog {
         return try shapedMapping(for: run, entry: entry).totalAdvance
     }
 
+    /// Maps a run to glyphs for drawing under the `.useNotdef` policy, so a single
+    /// scalar the font's cmap lacks (an emoji, a stray combining mark, a CJK glyph
+    /// the subset omits) renders as that font's `.notdef` glyph for that one scalar
+    /// instead of aborting the whole document with `missingGlyph`. The subset
+    /// always retains glyph 0, and the mapping keeps the original scalar so the
+    /// `/ToUnicode` span still recovers the real character on copy. The strict
+    /// `.reject` probe stays in ``covers(_:font:)``, which decides math-symbol
+    /// transliteration and must still detect a missing glyph rather than mask it as
+    /// notdef.
     func mapping(for run: PDFTextRun, entry: Entry) throws -> TrueTypeGlyphMapper.TextMapping {
-        try entry.mapper.map(text: run.text, fontSize: run.size)
+        var mapper = entry.mapper
+        mapper.missingGlyphPolicy = .useNotdef
+        return try mapper.map(text: run.text, fontSize: run.size)
     }
 
     func shapedMapping(for run: PDFTextRun, entry: Entry) throws -> ShapedTextMapping {
         if OpenTypeShaper.canShapeLatinIncrement(run.text) {
-            return try entry.shaper.shape(text: run.text, fontSize: run.size)
+            var shaper = entry.shaper
+            shaper.missingGlyphPolicy = .useNotdef
+            return try shaper.shape(text: run.text, fontSize: run.size)
         }
         if let scalar = run.text.unicodeScalars.first(where: Self.requiresExplicitShapingSupport) {
             throw PDFEmbeddedFontError.unsupportedComplexScriptScalar(scalar: scalar)

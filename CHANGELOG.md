@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A visible scalar the embedded font's cmap lacks (an emoji, a CJK glyph the
+  subset omits, a stray combining mark) no longer aborts the whole document. The
+  glyph mapper's default `.reject` policy threw `missingGlyph` and dropped every
+  page; the render path now maps that one scalar to the font's `.notdef` glyph
+  while the strict `.reject` probe stays in `covers(_:font:)` so math-symbol
+  transliteration is unchanged. Because every `.notdef` occurrence shares PDF
+  character code 0, distinct missing scalars no longer collide in the `/ToUnicode`
+  CMap: a `.notdef` glyph contributes no mapping, so the unrenderable scalar drops
+  from text extraction while the rest of the page is preserved
+  ([#33](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/33)).
 - Invisible default-ignorable format controls no longer abort an embedded-font
   render or paint `?` on the base-14 path. A zero-width space, joiner, non-joiner,
   word joiner, soft hyphen, variation selector, Hangul filler, or tag character

@@ -23,7 +23,7 @@ struct PDFEmbeddedFontUsage: Equatable {
         glyphs.append(contentsOf: mappedGlyphs.map(\.glyph))
         toUnicodeMappings = try Self.mergedMappings(
             existing: toUnicodeMappings,
-            newMappings: mappedGlyphs.map(\.toUnicodeMapping),
+            newMappings: mappedGlyphs.compactMap(\.toUnicodeMapping),
         )
     }
 
@@ -33,6 +33,17 @@ struct PDFEmbeddedFontUsage: Equatable {
             let unicodeSequences = try toUnicodeSequences(for: cluster)
             for (glyph, unicodeScalars) in zip(cluster.glyphs, unicodeSequences) {
                 let unicode = string(from: unicodeScalars)
+                // A scalar the font cannot draw resolves to the .notdef glyph (id 0).
+                // Every such scalar shares code 0, so it cannot carry a unique
+                // ToUnicode value: emit no mapping rather than collide (distinct
+                // missing scalars would otherwise conflict at code 0). That one
+                // unrenderable scalar then does not extract as text, which is the
+                // honest degradation; the rest of the page, including the real
+                // glyphs' ToUnicode, is preserved instead of the whole document
+                // aborting with `missingGlyph`.
+                let toUnicodeMapping = glyph.glyphID == 0
+                    ? nil
+                    : PDFToUnicodeCMap.Mapping(code: glyph.pdfCharacterCode, unicode: unicode)
                 mappedGlyphs.append(
                     MappedGlyph(
                         glyph: TrueTypeGlyphMapper.Glyph(
@@ -46,10 +57,7 @@ struct PDFEmbeddedFontUsage: Equatable {
                             advanceWidth: glyph.advanceWidth,
                             width: glyph.advance,
                         ),
-                        toUnicodeMapping: PDFToUnicodeCMap.Mapping(
-                            code: glyph.pdfCharacterCode,
-                            unicode: unicode,
-                        ),
+                        toUnicodeMapping: toUnicodeMapping,
                     ),
                 )
             }
@@ -131,6 +139,6 @@ struct PDFEmbeddedFontUsage: Equatable {
 
     private struct MappedGlyph {
         var glyph: TrueTypeGlyphMapper.Glyph
-        var toUnicodeMapping: PDFToUnicodeCMap.Mapping
+        var toUnicodeMapping: PDFToUnicodeCMap.Mapping?
     }
 }

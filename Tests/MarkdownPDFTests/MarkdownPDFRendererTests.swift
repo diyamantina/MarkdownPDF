@@ -570,6 +570,62 @@ struct MarkdownPDFRendererTests {
         }
     }
 
+    @Test("A visible scalar the embedded font lacks renders as notdef, not a whole-document abort", arguments: [
+        "\u{1F600}", // GRINNING FACE (emoji the witness font has no glyph for)
+        "\u{4E2D}", // CJK 中
+        "\u{2211}", // N-ARY SUMMATION
+    ])
+    func missingVisibleGlyphFallsBackToNotdef(_ missing: String) throws {
+        // Under an embedded font whose cmap lacks the scalar, `TrueTypeGlyphMapper`
+        // with the default `.reject` policy threw `missingGlyph` and dropped the
+        // whole document. The render path now maps that one scalar to the font's
+        // `.notdef` glyph so the rest of the page survives.
+        let witness = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let source = PDFOptions.EmbeddedFontSource(data: witness, baseName: "Witness")
+        let embedded = PDFOptions(embeddedFonts: .allRoles(source))
+
+        let data = try MarkdownPDFRenderer(options: embedded).render(markdown: "AB\(missing)CD")
+        #expect(!data.isEmpty)
+
+        // The surrounding text and the ToUnicode span survive, so the page is a real
+        // document, not an aborted stub.
+        let inspector = try PDFInspector(data)
+        #expect(inspector.text.contains("/ToUnicode"))
+    }
+
+    @Test("Several distinct missing scalars in one run do not collide at notdef's code 0")
+    func multipleMissingScalarsShareNotdefWithoutToUnicodeConflict() throws {
+        // Every missing scalar resolves to the .notdef glyph (id 0) and so shares
+        // PDF character code 0. Because distinct missing scalars carry distinct
+        // Unicode values, emitting a ToUnicode entry for each threw
+        // `conflictingToUnicodeMapping(code: 0, ...)`. The notdef glyphs must
+        // contribute no ToUnicode mapping. The witness font is uppercase-only, so
+        // the lowercase letters and the emoji and the CJK glyph are all missing.
+        let witness = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let embedded = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: witness, baseName: "Witness"),
+        ))
+        let data = try MarkdownPDFRenderer(options: embedded).render(markdown: "AB\u{1F600}CD emoji then \u{4E2D} cjk tail")
+        #expect(!data.isEmpty)
+
+        // The uppercase letters the font does draw still recover through ToUnicode.
+        let inspector = try PDFInspector(data)
+        #expect(inspector.text.contains("/ToUnicode"))
+    }
+
+    @Test("The notdef render fallback does not weaken the strict coverage probe")
+    func notdefFallbackKeepsCoverageProbeStrict() throws {
+        // covers() drives math-symbol transliteration and must keep reporting a
+        // missing glyph as uncovered even though the render path now tolerates it.
+        let witness = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let source = PDFOptions.EmbeddedFontSource(data: witness, baseName: "Witness")
+        let catalog = try PDFEmbeddedFontCatalog(fonts: PDFOptions.EmbeddedFonts(regular: source))
+
+        #expect(catalog.covers("A", font: .helvetica))
+        #expect(!catalog.covers("\u{1F600}", font: .helvetica))
+        #expect(!catalog.covers("\u{2211}", font: .helvetica))
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
