@@ -259,6 +259,7 @@ private struct Layout {
     var markedContentDepth = 0
     var y: Double
     var listDepth = 0
+    var blockQuoteDepth = 0
     var footnotesByLabelKey: [String: ResolvedFootnote] = [:]
     var registeredNamedDestinations = Set<String>()
 
@@ -385,9 +386,26 @@ private struct Layout {
             let savedLeft = options.margins.left
             options.margins.left += 14
             y -= blockQuoteTopSpacing
+
+            let quoteStyle = style(for: .blockQuote)
+            let firstPage = currentPageIndex
+            let topY = y
+
+            blockQuoteDepth += 1
             for nested in blocks {
                 try render(nested)
             }
+            blockQuoteDepth -= 1
+
+            drawBlockQuoteRule(
+                color: quoteStyle.borderColor,
+                x: savedLeft + 3,
+                firstPage: firstPage,
+                topY: topY,
+                lastPage: currentPageIndex,
+                bottomY: y,
+            )
+
             y -= blockQuoteBottomSpacing
             options.margins.left = savedLeft
         case let .unorderedList(items):
@@ -834,6 +852,45 @@ private struct Layout {
         let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
         let scale = min(1, maxWidth / Double(image.width), maxHeight / Double(image.height))
         return Double(image.height) * scale
+    }
+
+    /// Strokes a block quote's left rule down every page the quote occupies.
+    ///
+    /// Drawn after the quote's content rather than before it, which is safe: the
+    /// rule sits in the 14pt gutter the quote opened, so it can never paint over
+    /// text. A background fill could not be handled this way, because it would
+    /// cover what is already drawn, and is therefore still ignored.
+    ///
+    /// A quote spanning pages gets one segment per page: from `topY` on the first
+    /// and from the top margin on later ones, down to `bottomY` on the last and to
+    /// the bottom margin on earlier ones.
+    private func drawBlockQuoteRule(
+        color: PDFColor?,
+        x: Double,
+        firstPage: Int,
+        topY: Double,
+        lastPage: Int,
+        bottomY: Double,
+    ) {
+        guard let color, firstPage <= lastPage else {
+            return
+        }
+
+        for page in firstPage ... lastPage {
+            let segmentTop = page == firstPage ? topY : pageTopY
+            let segmentBottom = page == lastPage ? bottomY : options.margins.bottom
+            guard segmentTop > segmentBottom else {
+                continue
+            }
+            pages[page].drawLine(
+                x1: x,
+                y1: segmentTop,
+                x2: x,
+                y2: segmentBottom,
+                width: 2,
+                color: color,
+            )
+        }
     }
 
     private mutating func drawTaskCheckbox(
@@ -3386,7 +3443,18 @@ private struct Layout {
     }
 
     private func style(for role: PDFOptions.ElementRole) -> PDFOptions.ElementStyle {
-        options.theme.style(for: role)
+        var resolved = options.theme.style(for: role)
+        // Inside a block quote, the quote's own role supplies the body face and
+        // color. Nested blocks otherwise render with `.paragraph` / `.list`, which
+        // is why `.blockQuote`'s `fontRole` and `color` had no effect at all.
+        // Headings, code, and tables keep their own roles: a quote restyles prose,
+        // not everything it contains.
+        if blockQuoteDepth > 0, role == .paragraph || role == .list {
+            let quote = options.theme.style(for: .blockQuote)
+            resolved.fontRole = quote.fontRole
+            resolved.color = quote.color
+        }
+        return resolved
     }
 
     private func fontSize(for role: PDFOptions.ElementRole) -> Double {
