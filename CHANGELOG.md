@@ -81,6 +81,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#10](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/10)).
 
 ### Fixed
+- A byte-order mark (U+FEFF) in text no longer aborts the render. The embedded-font
+  path classified it as an Arabic presentation form and threw
+  `unsupportedComplexScriptScalar`; the base-14 path drew it as `?`. It is invisible
+  formatting and is stripped, at the scalar level, from drawn page text on both
+  paths (document metadata such as outline titles is a separate encoding path)
+  ([#27](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/27)).
 
 - A run of unmatched inline openers (`[[[…`, `![![…`, `<<<…`, `[a]([a](…`) no longer
   parses in O(n^2) time. Each failed opener scanned to the end of the source while

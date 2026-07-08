@@ -102,7 +102,7 @@ struct PDFEmbeddedFontCatalog {
              0x0E00 ... 0x0E7F, // Thai
              0x1780 ... 0x17FF, // Khmer
              0xFB1D ... 0xFDFF, // Hebrew and Arabic presentation forms
-             0xFE70 ... 0xFEFF: // Arabic presentation forms
+             0xFE70 ... 0xFEFE: // Arabic Presentation Forms-B (U+FEFF is the BOM, not a letter)
             true
         default:
             false
