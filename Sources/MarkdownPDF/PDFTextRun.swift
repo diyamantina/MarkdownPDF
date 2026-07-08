@@ -30,18 +30,17 @@ struct PDFTextRun {
         namedDestination: String? = nil,
         inlineMathBox: MathBox? = nil,
     ) {
-        // Strip U+FEFF (byte-order mark / zero-width no-break space) up front. It is
-        // an invisible formatting character with no glyph, and it reaches text runs
-        // from BOMs pasted mid-document. The embedded-font path classified it as an
-        // Arabic presentation form and threw `unsupportedComplexScriptScalar`,
-        // aborting the whole render; the base-14 path drew it as `?`. Removing it
-        // here keeps width, glyphs, and the ActualText span consistent.
-        // Filter at the scalar level. `replacingOccurrences(of: "\u{FEFF}")` uses a
-        // grapheme-aware search that will not match a BOM fused into a composed
-        // sequence (`\u{FEFF}\u{0301}`), leaving it to abort downstream.
-        self.text = text.unicodeScalars.contains("\u{FEFF}")
-            ? String(String.UnicodeScalarView(text.unicodeScalars.filter { $0 != "\u{FEFF}" }))
-            : text
+        // Strip the invisible default-ignorable format controls up front (the BOM,
+        // the zero-width joiners, the word joiner, the soft hyphen, the bidi
+        // controls, the variation selectors, ...). They carry no glyph, and they
+        // reach text runs pasted from web pages mid-document. On the embedded path
+        // a cmap that omits them aborts the whole render with `missingGlyph`; the
+        // base-14 path drew them as `?`. Removing them here keeps width, glyphs,
+        // and the ActualText span consistent. The filter works at the scalar level,
+        // so a control fused into a composed grapheme (`\u{FEFF}\u{0301}`) is
+        // removed too, where a grapheme-aware replace would leave it to abort
+        // downstream.
+        self.text = PDFTextEncoding.strippingInvisibleFormatControls(text)
         self.font = font
         self.size = size
         self.color = color
