@@ -1072,7 +1072,8 @@ private struct Layout {
         case let .diagram(diagram):
             switch try mermaidRenderPlan(for: diagram) {
             case let .plan(plan):
-                ensureSpace(plan.height + 12)
+                let trailingSpacing = figureTrailingSpacing
+                ensureSpace(plan.height + trailingSpacing)
                 let figureElement = beginStructureElement(
                     .figure,
                     attributes: PDFTaggedContent.Attributes(alternateDescription: "Mermaid diagram"),
@@ -1081,7 +1082,7 @@ private struct Layout {
                 try drawMermaidPlan(plan)
                 endMarkedContentIfNeeded(marked)
                 endStructureElement(figureElement)
-                y -= plan.height + 12
+                y -= plan.height + trailingSpacing
             case let .fallback(reason):
                 try renderUnsupportedMermaid(reason: reason, code: code)
             }
@@ -1110,7 +1111,7 @@ private struct Layout {
     ) throws {
         switch try chartRenderPlan(for: chart) {
         case let .plan(plan):
-            ensureSpace(plan.height + 12)
+            ensureSpace(plan.height + figureTrailingSpacing)
             switch try chartRenderPlan(for: chart) {
             case let .plan(positionedPlan):
                 let figureElement = beginStructureElement(
@@ -1123,7 +1124,7 @@ private struct Layout {
                 try drawChartPlan(positionedPlan)
                 endMarkedContentIfNeeded(marked)
                 endStructureElement(figureElement)
-                y -= positionedPlan.height + 12
+                y -= positionedPlan.height + figureTrailingSpacing
             case let .fallback(reason):
                 try renderCodeBlock("\(fallbackPrefix): \(reason)\n\(sourceCode)")
             }
@@ -3560,6 +3561,17 @@ private struct Layout {
     private var bodyLineHeight: Double {
         let role: PDFOptions.ElementRole = listDepth > 0 ? .list : .paragraph
         return fontSize(for: role) * style(for: role).lineHeightMultiplier
+    }
+
+    /// Vertical space a figure (Mermaid diagram or native chart) leaves beneath
+    /// itself.
+    ///
+    /// The 12pt is the figure's own padding inside its frame. A following
+    /// paragraph's ascender consumes most of it, so the next line would sit on the
+    /// frame. Every other block separates itself with ``paragraphSpacing``; a
+    /// figure must too.
+    private var figureTrailingSpacing: Double {
+        12 + paragraphSpacing
     }
 
     private var paragraphSpacing: Double {
