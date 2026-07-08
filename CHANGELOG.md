@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `MarkdownBlock.pageBreak`, written as `<!-- pagebreak -->`, starts a new page.
+  An HTML comment keeps the directive invisible in other Markdown renderers.
+  Trailing breaks are dropped by the parser and leading or consecutive breaks
+  collapse in the renderer, so a break can never emit a blank page. Any other
+  HTML comment keeps its existing visible-text rendering.
+
 ### Fixed
 
 - Unordered list items now draw a bullet through the `.listMarker` theme role.
