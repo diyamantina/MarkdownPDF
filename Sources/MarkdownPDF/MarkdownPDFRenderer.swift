@@ -259,7 +259,25 @@ private struct Layout {
     var markedContentDepth = 0
     var y: Double
     var listDepth = 0
-    var blockQuoteDepth = 0
+
+    /// One entry per open block quote, innermost last.
+    ///
+    /// `hasDrawn` distinguishes "the quote started on this page" from "the quote's
+    /// first block broke the page before drawing anything". Only in the second case
+    /// may the origin move, which is what keeps a rule off a page that carries no
+    /// quote content.
+    struct BlockQuoteFrame {
+        var page: Int
+        var top: Double
+        var hasDrawn = false
+    }
+
+    var blockQuoteFrames: [BlockQuoteFrame] = []
+
+    var blockQuoteDepth: Int {
+        blockQuoteFrames.count
+    }
+
     var footnotesByLabelKey: [String: ResolvedFootnote] = [:]
     var registeredNamedDestinations = Set<String>()
 
@@ -382,37 +400,36 @@ private struct Layout {
         case let .blockQuote(blocks):
             let element = beginStructureElement(.blockQuote)
             defer { endStructureElement(element) }
-            // Reserve what the quote's first block actually needs. Reserving a flat
-            // 24 lets a heading or a code fence break the page after `topY` was
-            // captured, leaving a rule on a page with no quote content on it.
-            ensureSpace(blockQuoteLeadingHeight(of: blocks.first))
+            ensureSpace(24)
             let savedLeft = options.margins.left
             options.margins.left += 14
             y -= blockQuoteTopSpacing
 
             let quoteStyle = style(for: .blockQuote)
-            let firstPage = currentPageIndex
-            let topY = y
-
-            blockQuoteDepth += 1
+            // The origin is provisional. `y` is the first line's baseline, so the
+            // rule starts an ascender above it, at the top of that line's box.
+            // If the first block breaks the page before drawing, `startNewPage`
+            // moves this origin to the new page. See `BlockQuoteFrame`.
+            blockQuoteFrames.append(BlockQuoteFrame(
+                page: currentPageIndex,
+                top: min(pageTopY, y + fontSize(for: .paragraph) * 0.75),
+            ))
+            let frame: BlockQuoteFrame
             do {
                 for nested in blocks {
                     try render(nested)
                 }
+                frame = blockQuoteFrames.removeLast()
             } catch {
-                blockQuoteDepth -= 1
+                blockQuoteFrames.removeLast()
                 throw error
             }
-            blockQuoteDepth -= 1
 
             drawBlockQuoteRule(
                 color: quoteStyle.borderColor,
                 x: savedLeft + 3,
-                firstPage: firstPage,
-                // `topY` is the first line's baseline. The rule must start at the
-                // top of that line's box, or it hangs a full ascender below the
-                // text it decorates.
-                topY: min(pageTopY, topY + fontSize(for: .paragraph) * 0.75),
+                firstPage: frame.page,
+                topY: frame.top,
                 lastPage: currentPageIndex,
                 // `y` already carries the last block's trailing spacing, which can
                 // legally dip below the bottom margin without forcing a page break.
@@ -447,6 +464,7 @@ private struct Layout {
             }
         case .thematicBreak:
             ensureSpace(18)
+            markBlockQuoteContentDrawn()
             let artifact = beginArtifactIfTagged()
             defer { endMarkedContentIfNeeded(artifact) }
             currentPage.drawLine(
@@ -867,26 +885,6 @@ private struct Layout {
         return Double(image.height) * scale
     }
 
-    /// Space the quote's first block needs before it will draw, so the page break,
-    /// if any, happens before the rule's starting point is captured.
-    ///
-    /// Mirrors each block's own `ensureSpace` call. Blocks that reserve per line as
-    /// they wrap (paragraphs, lists) need only one line.
-    private func blockQuoteLeadingHeight(of block: MarkdownBlock?) -> Double {
-        let minimum = 24.0
-        switch block {
-        case let .heading(level, _):
-            let size = headingSize(level)
-            return max(minimum, size * 1.8 + headingTopSpacing(level))
-        case let .codeBlock(_, code):
-            let lines = max(1, code.split(separator: "\n", omittingEmptySubsequences: false).count)
-            let lineHeight = fontSize(for: .codeBlock) * style(for: .codeBlock).lineHeightMultiplier
-            return max(minimum, Double(min(lines, 3)) * lineHeight + codeBlockPadding * 2)
-        default:
-            return minimum
-        }
-    }
-
     /// Strokes a block quote's left rule down every page the quote occupies.
     ///
     /// Drawn after the quote's content rather than before it, which is safe: the
@@ -936,11 +934,23 @@ private struct Layout {
         }
     }
 
+    /// Records that content has been drawn inside every currently open quote, so
+    /// their rule origins stop following page breaks.
+    private mutating func markBlockQuoteContentDrawn() {
+        guard !blockQuoteFrames.isEmpty else {
+            return
+        }
+        for index in blockQuoteFrames.indices where !blockQuoteFrames[index].hasDrawn {
+            blockQuoteFrames[index].hasDrawn = true
+        }
+    }
+
     private mutating func drawTaskCheckbox(
         _ checkbox: MarkdownBlock.ListItem.Checkbox,
         x: Double,
         baselineY: Double,
     ) {
+        markBlockQuoteContentDrawn()
         let size = max(7, options.baseFontSize * 0.72)
         let boxX = x + max(0, (16 - size) / 2)
         let boxY = baselineY - size * 0.2
@@ -1065,6 +1075,7 @@ private struct Layout {
         x: Double,
         baselineY: Double,
     ) throws {
+        markBlockQuoteContentDrawn()
         let marked = beginMarkedContentForCurrentElement()
         defer { endMarkedContentIfNeeded(marked) }
 
@@ -1407,6 +1418,7 @@ private struct Layout {
     }
 
     private mutating func drawChartPlan(_ plan: ChartRenderPlan) throws {
+        markBlockQuoteContentDrawn()
         let topY = y
         currentPage.drawRectangle(
             x: options.margins.left - 4,
@@ -2046,6 +2058,7 @@ private struct Layout {
     }
 
     private mutating func drawMermaidPlan(_ plan: MermaidRenderPlan) throws {
+        markBlockQuoteContentDrawn()
         let topY = y
         currentPage.drawRectangle(
             x: options.margins.left - 4,
@@ -2528,6 +2541,7 @@ private struct Layout {
         let drawHeight = Double(image.height) * scale
 
         ensureSpace(drawHeight)
+        markBlockQuoteContentDrawn()
         let figureElement = beginStructureElement(
             .figure,
             attributes: PDFTaggedContent.Attributes(
@@ -2927,6 +2941,7 @@ private struct Layout {
         lineHeight: Double,
         padding: Double,
     ) throws {
+        markBlockQuoteContentDrawn()
         let topY = y
         let height = Double(lines.count) * lineHeight + padding * 2
         let codeStyle = style(for: .codeBlock)
@@ -3188,6 +3203,7 @@ private struct Layout {
         guard !runs.isEmpty else {
             return
         }
+        markBlockQuoteContentDrawn()
 
         let marked = beginMarkedContentForCurrentElement()
         defer { endMarkedContentIfNeeded(marked) }
@@ -3527,6 +3543,12 @@ private struct Layout {
         pages.append(PDFPageCanvas())
         drawPageBackgroundIfNeeded()
         y = pageTopY
+        // A quote whose first block broke the page before drawing anything has not
+        // started yet. Move its origin, or it leaves a rule beside empty space.
+        for index in blockQuoteFrames.indices where !blockQuoteFrames[index].hasDrawn {
+            blockQuoteFrames[index].page = pages.count - 1
+            blockQuoteFrames[index].top = pageTopY
+        }
     }
 
     private mutating func drawPageBackgroundIfNeeded() {
