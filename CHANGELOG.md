@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Unordered list items now draw a bullet through the `.listMarker` theme role.
+  Previously only ordered items and task checkboxes drew a marker, so bullet
+  lists rendered as bare indented lines ([#2](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/2)).
+- The marker is chosen per bound font: U+2022 where the font can draw it, an
+  ASCII hyphen as fallback, and no marker at all when an embedded font can draw
+  neither. A base-14 marker is also omitted under `PDFOptions.Conformance`,
+  where an unembedded base-14 font would otherwise fail `validateConformance`
+  and reject a document that rendered before.
+- `renderList` now reserves the height of a list item's first block rather than
+  a single text line, so an item whose body is a standalone image no longer
+  strands its marker at the bottom of the previous page.
+
 ## [0.6.0] - 2026-06-26
 
 ### Added

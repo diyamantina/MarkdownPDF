@@ -10,30 +10,102 @@ import Testing
 
 @Suite("PDF renderer")
 struct MarkdownPDFRendererTests {
-    @Test("Unordered lists draw a themed bullet, and degrade when the font lacks one")
+    @Test("Unordered lists draw a bullet the bound font can actually paint")
     func unorderedListsDrawMarkers() throws {
-        // Base-14 profile: WinAnsiEncoding maps U+2022 to 0x95, so each item
-        // paints a bullet through the `.listMarker` role.
-        let data = try MarkdownPDFRenderer().render(markdown: "- alpha\n- beta\n")
-        let inspector = PDFInspector(data)
-        #expect(inspector.text.components(separatedBy: "(\\225) Tj").count - 1 == 2)
+        func embedded(_ profile: SyntheticTrueTypeFont.GlyphProfile) -> PDFOptions.EmbeddedFonts {
+            let data = SyntheticTrueTypeFont.data(glyphProfile: profile, includeGlyphOutlines: true)
+            return .allRoles(PDFOptions.EmbeddedFontSource(data: data, baseName: "Marker Witness"))
+        }
+        /// Embedded text is emitted as CID hex (`<0010> Tj`), never as a literal
+        /// string, so counting text-showing operators is the only way to tell a
+        /// drawn marker from an omitted one on that path.
+        func showOperators(_ data: Data) -> Int {
+            PDFInspector(data).text.components(separatedBy: " Tj").count - 1
+        }
 
-        // Ordered lists keep their numeric markers.
-        let ordered = try MarkdownPDFRenderer().render(markdown: "1. alpha\n2. beta\n")
-        #expect(PDFInspector(ordered).text.contains("(1.) Tj"))
+        // Base-14: WinAnsiEncoding maps U+2022 to 0x95, so each item paints a bullet.
+        let base14 = try MarkdownPDFRenderer().render(markdown: "- alpha\n- beta\n")
+        #expect(PDFInspector(base14).text.components(separatedBy: "(\\225) Tj").count - 1 == 2)
 
-        // An embedded font may carry neither U+2022 nor "-". The RTL witness
-        // ships Hebrew, Arabic, Latin capitals and a little punctuation, and
-        // none of it is a bullet. Mapping one through it would throw
-        // `TrueTypeGlyphMappingError.missingGlyph`, so the marker is omitted
-        // and the document still renders.
-        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .rtlWitness, includeGlyphOutlines: true)
-        let source = PDFOptions.EmbeddedFontSource(data: fontData, baseName: "MarkdownPDF RTL Witness")
-        let embedded = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: .allRoles(source)))
+        // Ordered lists keep a numeric marker per item.
+        let ordered = try PDFInspector(MarkdownPDFRenderer().render(markdown: "1. alpha\n2. beta\n")).text
+        #expect(ordered.contains("(1.) Tj"))
+        #expect(ordered.contains("(2.) Tj"))
+
+        // Task items take the checkbox branch and must not also grow a bullet.
+        let task = try MarkdownPDFRenderer().render(markdown: "- [x] done\n")
+        #expect(!PDFInspector(task).text.contains("(\\225) Tj"))
+
+        // Embedded font covering U+2022: marker plus body are two text objects.
+        let withBullet = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: embedded(.bulletWitness)))
             .render(markdown: "- ALPHA\n")
-        let embeddedInspector = PDFInspector(embedded)
-        #expect(!embeddedInspector.text.contains("(\\225) Tj"))
-        #expect(embeddedInspector.hasValidXrefOffsets())
+        #expect(showOperators(withBullet) == 2)
+
+        // Embedded font covering `-` but not U+2022: the hyphen fallback draws,
+        // so there are still two text objects, and the hyphen is a base-14-free
+        // CID glyph rather than a literal.
+        let withHyphen = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: embedded(.hyphenWitness)))
+            .render(markdown: "- ALPHA\n")
+        #expect(showOperators(withHyphen) == 2)
+
+        // Embedded font covering neither: the marker is omitted rather than
+        // throwing missingGlyph, so exactly one text object remains, the body.
+        let rtl = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: embedded(.rtlWitness)))
+            .render(markdown: "- ALPHA\n")
+        #expect(showOperators(rtl) == 1)
+        #expect(PDFInspector(rtl).hasValidXrefOffsets())
+    }
+
+    @Test("A list marker never separates from an image body across a page break")
+    func unorderedMarkerStaysWithImageBody() throws {
+        // renderStandaloneImage calls ensureSpace(drawHeight) of its own, so an item
+        // whose body is a lone image can break the page after its marker is already
+        // painted. renderList must reserve the figure's real height, not one line.
+        let directory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/wwdc-2019-613-ray-tracing-with-metal/assets")
+        let filler = String(repeating: "Filler paragraph.\n\n", count: 30)
+        let markdown = filler + "- ![figure](2019_613_page-086.png)\n"
+
+        let data = try MarkdownPDFRenderer().render(markdown: markdown, assetsBaseURL: directory)
+        let inspector = PDFInspector(data)
+        // The filler must actually push the figure onto a second page, otherwise
+        // this test proves nothing.
+        #expect(inspector.pageCount == 2)
+
+        let bulletStreams = inspector.streams.filter { $0.body.contains("(\\225) Tj") }
+        try #require(bulletStreams.count == 1, "expected exactly one bullet")
+        // Same content stream means same page: the marker travelled with its figure.
+        #expect(bulletStreams[0].body.contains(" Do"))
+    }
+
+    @Test("A base-14 marker is omitted rather than failing a conformance profile")
+    func unorderedMarkerRespectsConformance() throws {
+        let arial = SyntheticTrueTypeFont.data(glyphProfile: .bulletWitness, includeGlyphOutlines: true)
+        // Only the regular role is embedded. A theme that draws the marker in bold
+        // would reach for base-14 Helvetica-Bold, which PDF/UA-1 and PDF/A-2a forbid.
+        let fonts = PDFOptions.EmbeddedFonts(regular: PDFOptions.EmbeddedFontSource(data: arial, baseName: "Witness"))
+        var theme = PDFOptions.Theme.default
+        var marker = theme.style(for: .listMarker)
+        marker.fontRole = .bold
+        theme.elements[.listMarker] = marker
+
+        let conforming = PDFOptions(
+            embeddedFonts: fonts,
+            title: "Conformance",
+            theme: theme,
+            taggedPDF: .enabled,
+            conformance: .pdfUA1AndPDFA2A,
+        )
+        // Renders at all: before the marker existed this document was valid, and a
+        // decorative glyph must not be able to invalidate it.
+        let data = try MarkdownPDFRenderer(options: conforming).render(markdown: "ALPHA\n\n- BETA\n")
+        #expect(!PDFInspector(data).text.contains("(\\225) Tj"))
+
+        // Without a conformance profile the same setup happily draws the base-14 bullet.
+        let relaxed = PDFOptions(embeddedFonts: fonts, theme: theme)
+        let plain = try MarkdownPDFRenderer(options: relaxed).render(markdown: "ALPHA\n\n- BETA\n")
+        #expect(PDFInspector(plain).text.contains("(\\225) Tj"))
     }
 
     @Test("Named page sizes set the page MediaBox")
