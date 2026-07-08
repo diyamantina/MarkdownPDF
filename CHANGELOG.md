@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Trailing breaks are dropped by the parser and leading or consecutive breaks
   collapse in the renderer, so a break can never emit a blank page. Any other
   HTML comment keeps its existing visible-text rendering.
+- Block quotes honor their `.blockQuote` theme role: `fontRole` and `color` style
+  the quoted prose, and `borderColor` strokes a left rule down every page the
+  quote occupies. Previously only the spacing multipliers had any effect
+  ([#4](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/4)). No built-in
+  theme sets `borderColor`, so default output is unchanged. `backgroundColor`
+  remains unhonored for quotes
+  ([#10](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/10)).
 
 ### Fixed
 

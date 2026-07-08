@@ -259,6 +259,7 @@ private struct Layout {
     var markedContentDepth = 0
     var y: Double
     var listDepth = 0
+    var blockQuoteDepth = 0
     var footnotesByLabelKey: [String: ResolvedFootnote] = [:]
     var registeredNamedDestinations = Set<String>()
 
@@ -381,13 +382,43 @@ private struct Layout {
         case let .blockQuote(blocks):
             let element = beginStructureElement(.blockQuote)
             defer { endStructureElement(element) }
-            ensureSpace(24)
+            // Reserve what the quote's first block actually needs. Reserving a flat
+            // 24 lets a heading or a code fence break the page after `topY` was
+            // captured, leaving a rule on a page with no quote content on it.
+            ensureSpace(blockQuoteLeadingHeight(of: blocks.first))
             let savedLeft = options.margins.left
             options.margins.left += 14
             y -= blockQuoteTopSpacing
-            for nested in blocks {
-                try render(nested)
+
+            let quoteStyle = style(for: .blockQuote)
+            let firstPage = currentPageIndex
+            let topY = y
+
+            blockQuoteDepth += 1
+            do {
+                for nested in blocks {
+                    try render(nested)
+                }
+            } catch {
+                blockQuoteDepth -= 1
+                throw error
             }
+            blockQuoteDepth -= 1
+
+            drawBlockQuoteRule(
+                color: quoteStyle.borderColor,
+                x: savedLeft + 3,
+                firstPage: firstPage,
+                // `topY` is the first line's baseline. The rule must start at the
+                // top of that line's box, or it hangs a full ascender below the
+                // text it decorates.
+                topY: min(pageTopY, topY + fontSize(for: .paragraph) * 0.75),
+                lastPage: currentPageIndex,
+                // `y` already carries the last block's trailing spacing, which can
+                // legally dip below the bottom margin without forcing a page break.
+                bottomY: max(y + paragraphSpacing, options.margins.bottom),
+            )
+
             y -= blockQuoteBottomSpacing
             options.margins.left = savedLeft
         case let .unorderedList(items):
@@ -834,6 +865,75 @@ private struct Layout {
         let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
         let scale = min(1, maxWidth / Double(image.width), maxHeight / Double(image.height))
         return Double(image.height) * scale
+    }
+
+    /// Space the quote's first block needs before it will draw, so the page break,
+    /// if any, happens before the rule's starting point is captured.
+    ///
+    /// Mirrors each block's own `ensureSpace` call. Blocks that reserve per line as
+    /// they wrap (paragraphs, lists) need only one line.
+    private func blockQuoteLeadingHeight(of block: MarkdownBlock?) -> Double {
+        let minimum = 24.0
+        switch block {
+        case let .heading(level, _):
+            let size = headingSize(level)
+            return max(minimum, size * 1.8 + headingTopSpacing(level))
+        case let .codeBlock(_, code):
+            let lines = max(1, code.split(separator: "\n", omittingEmptySubsequences: false).count)
+            let lineHeight = fontSize(for: .codeBlock) * style(for: .codeBlock).lineHeightMultiplier
+            return max(minimum, Double(min(lines, 3)) * lineHeight + codeBlockPadding * 2)
+        default:
+            return minimum
+        }
+    }
+
+    /// Strokes a block quote's left rule down every page the quote occupies.
+    ///
+    /// Drawn after the quote's content rather than before it, which is safe: the
+    /// rule sits in the 14pt gutter the quote opened, so it can never paint over
+    /// text. A background fill could not be handled this way, because it would
+    /// cover what is already drawn, and is therefore still ignored.
+    ///
+    /// A quote spanning pages gets one segment per page: from `topY` on the first
+    /// and from the top margin on later ones, down to `bottomY` on the last and to
+    /// the bottom margin on earlier ones.
+    private func drawBlockQuoteRule(
+        color: PDFColor?,
+        x: Double,
+        firstPage: Int,
+        topY: Double,
+        lastPage: Int,
+        bottomY: Double,
+    ) {
+        guard let color, firstPage <= lastPage else {
+            return
+        }
+
+        let isTagged = taggedContentBuilder != nil
+        for page in firstPage ... lastPage {
+            let segmentTop = page == firstPage ? topY : pageTopY
+            let segmentBottom = page == lastPage ? bottomY : options.margins.bottom
+            guard segmentTop > segmentBottom else {
+                continue
+            }
+            // Decoration, not content. `beginArtifactIfTagged` only ever marks
+            // `currentPage`, and this rule is stroked onto earlier pages too, so
+            // mark each page directly. Untagged, it would fail PDF/UA-1.
+            if isTagged {
+                pages[page].beginArtifact()
+            }
+            pages[page].drawLine(
+                x1: x,
+                y1: segmentTop,
+                x2: x,
+                y2: segmentBottom,
+                width: 2,
+                color: color,
+            )
+            if isTagged {
+                pages[page].endMarkedContent()
+            }
+        }
     }
 
     private mutating func drawTaskCheckbox(
@@ -3386,7 +3486,18 @@ private struct Layout {
     }
 
     private func style(for role: PDFOptions.ElementRole) -> PDFOptions.ElementStyle {
-        options.theme.style(for: role)
+        var resolved = options.theme.style(for: role)
+        // Inside a block quote, the quote's own role supplies the body face and
+        // color. Nested blocks otherwise render with `.paragraph` / `.list`, which
+        // is why `.blockQuote`'s `fontRole` and `color` had no effect at all.
+        // Headings, code, and tables keep their own roles: a quote restyles prose,
+        // not everything it contains.
+        if blockQuoteDepth > 0, role == .paragraph || role == .list {
+            let quote = options.theme.style(for: .blockQuote)
+            resolved.fontRole = quote.fontRole
+            resolved.color = quote.color
+        }
+        return resolved
     }
 
     private func fontSize(for role: PDFOptions.ElementRole) -> Double {

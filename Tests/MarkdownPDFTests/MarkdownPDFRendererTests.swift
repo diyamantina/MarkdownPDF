@@ -138,6 +138,142 @@ struct MarkdownPDFRendererTests {
         #expect(try pageCount("A\n\n<!-- note -->\n\nB\n") == 1)
     }
 
+    @Test("A block quote honors its theme role")
+    func blockQuoteHonorsTheme() throws {
+        let markdown = "Before.\n\n> quoted prose\n\nAfter.\n"
+
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.fontRole = .italic
+        quote.color = PDFColor(red: 0.01, green: 0, blue: 0.27)
+        quote.borderColor = PDFColor(red: 0, green: 0.82, blue: 0.59)
+        theme.elements[.blockQuote] = quote
+
+        let text = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: theme))
+            .render(markdown: markdown)).text
+
+        // Body face and color come from the quote's own role.
+        #expect(text.contains("/F3 11 Tf"))
+        #expect(text.contains("0.010 0 0.270 rg"))
+        // The left rule is stroked in the gutter the quote opens, 3pt in from the
+        // page margin, well clear of the text at margin + 14.
+        #expect(text.contains("0 0.820 0.590 RG"))
+        #expect(text.contains("2 w 57 "))
+
+        // Prose outside the quote keeps the body style.
+        #expect(text.contains("0 0 0 rg"))
+    }
+
+    @Test("A themeless block quote draws no rule and no recolor")
+    func blockQuoteWithoutThemeIsUnchanged() throws {
+        // The built-in themes set no `borderColor`, so default output must not
+        // gain a stroke. This is the byte-stability guarantee for existing users.
+        let markdown = "Before.\n\n> quoted prose\n\nAfter.\n"
+        let text = try PDFInspector(MarkdownPDFRenderer().render(markdown: markdown)).text
+
+        #expect(!text.contains(" RG"))
+        #expect(!text.contains(" l S"))
+        // Regular face throughout: no italic switch.
+        #expect(!text.contains("/F3"))
+    }
+
+    @Test("The quote rule brackets its text, stays inside the margin, and never orphans")
+    func blockQuoteRuleGeometry() throws {
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.borderColor = PDFColor(red: 1, green: 0, blue: 0)
+        theme.elements[.blockQuote] = quote
+        let options = PDFOptions(theme: theme)
+
+        func ruleSegments(_ body: String) -> [(top: Double, bottom: Double)] {
+            body.split(separator: "\n").compactMap { line in
+                let parts = line.split(separator: " ")
+                // `2 w 57 787.890 m 57 769.300 l S`
+                guard parts.count == 9, parts[1] == "w", parts[4] == "m",
+                      parts[7] == "l", parts[8] == "S",
+                      let top = Double(parts[3]), let bottom = Double(parts[6])
+                else { return nil }
+                return (top, bottom)
+            }
+        }
+
+        // The rule starts at the top of the first line's box, not at its baseline.
+        // Starting at the baseline hangs the whole ascender above the rule.
+        let single = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: "> quoted prose\n"))
+        let baseline = 782.94
+        let segment = try #require(ruleSegments(single.text).first)
+        #expect(segment.top > baseline)
+
+        // `y` carries the last block's trailing spacing, which can dip below the
+        // bottom margin without forcing a page break. The rule must not follow it.
+        let deep = String(repeating: "Filler.\n\n", count: 28)
+            + "```\n" + String(repeating: "code\n", count: 9) + "```\n\n> one\n>\n> two\n"
+        let clamped = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: deep))
+        for segment in ruleSegments(clamped.text) {
+            #expect(segment.bottom >= PDFOptions.Margins.standard.bottom)
+        }
+
+        // A quote whose first block reserves more than one line (a heading, a code
+        // fence) must not break the page after the rule's origin was captured, or
+        // page 1 keeps a rule with no quote content beside it.
+        for opening in ["# Quoted Heading", "```\n> code\n> code\n> ```"] {
+            let markdown = String(repeating: "Filler.\n\n", count: 36)
+                + "> \(opening)\n>\n> quoted body\n"
+            let inspector = try PDFInspector(MarkdownPDFRenderer(options: options).render(markdown: markdown))
+            let pages = inspector.streams.filter { $0.body.contains(" Tj") || $0.body.contains(" l S") }
+            for page in pages {
+                let hasRule = page.body.contains(" l S")
+                let hasQuote = page.body.lowercased().contains("(quoted")
+                #expect(!hasRule || hasQuote, "a rule was drawn on a page with no quote content")
+            }
+        }
+    }
+
+    @Test("Nested quotes stack their rules, and the rule is a tagged artifact")
+    func blockQuoteRuleNestsAndIsAnArtifact() throws {
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.borderColor = PDFColor(red: 0, green: 0.82, blue: 0.59)
+        theme.elements[.blockQuote] = quote
+
+        // Each quote opens a fresh 14pt gutter, so the inner rule sits 14pt right
+        // of the outer one: 54+3 and 68+3.
+        let nested = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: theme))
+            .render(markdown: "> outer\n>\n> > inner\n")).text
+        #expect(nested.contains("2 w 57 "))
+        #expect(nested.contains("2 w 71 "))
+
+        // The rule is decoration. Under a tagged PDF it must be an artifact, or it
+        // becomes untagged page content and fails PDF/UA-1.
+        let tagged = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(
+            title: "Quote",
+            theme: theme,
+            taggedPDF: .enabled,
+        )).render(markdown: "> quoted\n")).text
+        #expect(tagged.contains("/Artifact BMC"))
+    }
+
+    @Test("A block quote rule follows the quote across a page break")
+    func blockQuoteRuleSpansPages() throws {
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.borderColor = PDFColor(red: 1, green: 0, blue: 0)
+        theme.elements[.blockQuote] = quote
+
+        let body = (1 ... 60).map { "quoted line \($0)" }.joined(separator: "\n\n> ")
+        let markdown = "> \(body)\n"
+        let data = try MarkdownPDFRenderer(options: PDFOptions(theme: theme)).render(markdown: markdown)
+        let inspector = PDFInspector(data)
+        try #require(inspector.pageCount >= 2, "the quote must span pages for this test to mean anything")
+
+        // One rule segment per page the quote touches, never zero on a later page.
+        let segments = inspector.streams
+            .filter { $0.body.contains(" Tj") }
+            .map { $0.body.components(separatedBy: " l S").count - 1 }
+        #expect(segments.allSatisfy { $0 >= 1 })
+        #expect(segments.count == inspector.pageCount)
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
