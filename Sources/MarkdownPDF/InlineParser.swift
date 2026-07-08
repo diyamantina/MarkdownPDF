@@ -20,10 +20,15 @@ struct InlineParser {
         /// `consumeText` then advances a single character, so a run of unmatched
         /// openers (`[[[…`, `<<<…`, `[a]([a](…`) re-scanned the whole tail per
         /// character: O(n^2), a few KB of one byte wedging the parser for seconds.
-        /// A close char absent from index i is absent from every j > i (the scans
-        /// only ever start on opener characters, never inside a backslash run, so
-        /// escape parity past j is identical whether measured from i or j), so one
-        /// recorded absence short-circuits every later scan.
+        /// A close char absent from index i is absent from every j > i, so one
+        /// recorded absence short-circuits every later scan. Soundness for the
+        /// escape-aware `]` scan: two starts i < j can disagree on whether a given
+        /// `]` is escaped only if j lands strictly inside the backslash run before
+        /// it, i.e. the character before j is `\`. Every scan start is one or two
+        /// positions past an opener, so the character before it is always `[`, `^`,
+        /// `(`, `<`, or a backtick, never `\`. Escape parity past j is therefore
+        /// start-invariant. The other three scans are plain substring searches, for
+        /// which absence is trivially monotone.
         private var absentCloseFrom: [Character: String.Index] = [:]
 
         init(source: String, options: MarkdownParser.Options) {

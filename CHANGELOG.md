@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Block quotes honor `backgroundColor` from their `.blockQuote` theme role. The
   fill is inserted just above the page background rather than appended, because a
   quote's height is unknown until its blocks have rendered and its text is already
@@ -40,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#10](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/10)).
 
 ### Fixed
+
 - A run of unmatched inline openers (`[[[…`, `![![…`, `<<<…`, `[a]([a](…`) no longer
   parses in O(n^2) time. Each failed opener scanned to the end of the source while
   the loop advanced one character, so a few KB of one byte wedged the parser for
@@ -51,8 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is now taken only from a distinct opening quote before the closing one; otherwise
   the quote belongs to the destination
   ([#19](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/19)).
-
-
 
 - A block quote's left rule now takes its origin from the first drawing inside the
   quote, not from the cursor when the quote opened. A first block that broke the
@@ -72,8 +72,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drawn from the same `.listMarker` color. The built-in themes give `.blockQuote`
   and `.listMarker` the same `bodyColor`, so their output is unchanged.
 
-
-
 - Unordered list items now draw a bullet through the `.listMarker` theme role.
   Previously only ordered items and task checkboxes drew a marker, so bullet
   lists rendered as bare indented lines ([#2](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/2)).
@@ -91,7 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#7](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/7)). The trailing
   gap is applied to the cursor, not reserved, so a figure that fits on the page
   still fits.
-
 
 ## [0.6.0] - 2026-06-26
 
