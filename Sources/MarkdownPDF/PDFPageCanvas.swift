@@ -386,12 +386,18 @@ final class PDFPageCanvas {
         endAngle: Double,
     ) -> [PDFContentStream.Operator] {
         let sweep = endAngle - startAngle
-        guard sweep != 0 else {
+        // A non-finite sweep reaches here when a caller's angle math overflowed,
+        // e.g. a pie slice value large enough that `2 * pi * value` is +Inf and the
+        // total is Inf, giving `Inf / Inf = NaN`. `Int(NaN)`/`Int(Inf)` traps and
+        // aborts the whole render, so draw nothing for a degenerate arc.
+        guard sweep.isFinite, sweep != 0 else {
             return []
         }
 
         let direction = sweep > 0 ? 1.0 : -1.0
-        let segmentCount = max(1, Int(ceil(abs(sweep) / (Double.pi / 2))))
+        // A quarter-turn per Bezier segment, capped so an implausibly large sweep
+        // cannot request an unbounded number of segments.
+        let segmentCount = max(1, min(64, Int(ceil(abs(sweep) / (Double.pi / 2)))))
         let segmentSweep = sweep / Double(segmentCount)
         var angle = startAngle
         var operators: [PDFContentStream.Operator] = []
