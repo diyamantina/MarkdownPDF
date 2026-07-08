@@ -164,6 +164,26 @@ struct MarkdownPDFRendererTests {
         #expect(text.contains("0 0 0 rg"))
     }
 
+    @Test("A quoted list marker takes the quote's color but keeps its own face")
+    func quotedListMarkerTakesQuoteColor() throws {
+        var theme = PDFOptions.Theme.default
+        var quote = theme.style(for: .blockQuote)
+        quote.fontRole = .italic
+        quote.color = PDFColor(red: 0.01, green: 0, blue: 0.27)
+        theme.elements[.blockQuote] = quote
+
+        let text = try PDFInspector(MarkdownPDFRenderer(options: PDFOptions(theme: theme))
+            .render(markdown: "> - item\n\n- outside\n")).text
+
+        // The quoted bullet: quote color, regular face. Italicising a quote must not
+        // italicise its bullets.
+        #expect(text.contains("0.010 0 0.270 rg\nBT /F1 11 Tf 68 "))
+        // The quoted item text: quote color, italic face.
+        #expect(text.contains("0.010 0 0.270 rg\nBT /F3 11 Tf 92 "))
+        // A bullet outside the quote is untouched.
+        #expect(text.contains("0 0 0 rg\nBT /F1 11 Tf 54 "))
+    }
+
     @Test("A themeless block quote draws no rule and no recolor")
     func blockQuoteWithoutThemeIsUnchanged() throws {
         // The built-in themes set no `borderColor`, so default output must not

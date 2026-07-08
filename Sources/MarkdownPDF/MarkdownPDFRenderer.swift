@@ -3506,12 +3506,23 @@ private struct Layout {
         // Inside a block quote, the quote's own role supplies the body face and
         // color. Nested blocks otherwise render with `.paragraph` / `.list`, which
         // is why `.blockQuote`'s `fontRole` and `color` had no effect at all.
-        // Headings, code, and tables keep their own roles: a quote restyles prose,
-        // not everything it contains.
-        if blockQuoteDepth > 0, role == .paragraph || role == .list {
+        //
+        // The bullet is part of the quoted prose, so it takes the quote's color, but
+        // keeps its own face: a quote in italics should not italicise its bullets.
+        // Headings, code, and tables keep their roles entirely. A quote restyles
+        // prose; a table is tabular data that happens to sit inside one, and its
+        // header background and borders are set by the table's own roles.
+        if blockQuoteDepth > 0 {
             let quote = options.theme.style(for: .blockQuote)
-            resolved.fontRole = quote.fontRole
-            resolved.color = quote.color
+            switch role {
+            case .paragraph, .list:
+                resolved.fontRole = quote.fontRole
+                resolved.color = quote.color
+            case .listMarker:
+                resolved.color = quote.color
+            default:
+                break
+            }
         }
         return resolved
     }

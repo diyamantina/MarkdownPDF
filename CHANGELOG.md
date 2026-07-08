@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list, an indented code block, or a continuation line could not survive being
   quoted ([#17](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/17)). The
   marker is now up to three spaces, a `>`, and at most one space.
+- A list marker inside a themed block quote now takes the quote's color, while
+  keeping its own font face, so italicising a quote no longer leaves black bullets
+  beside quote-colored text
+  ([#12](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/12)).
 
 ### Added
 
