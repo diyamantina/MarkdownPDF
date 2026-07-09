@@ -7,6 +7,7 @@ struct PDFEmbeddedFontCatalog {
         var mapper: TrueTypeGlyphMapper
         var shaper: OpenTypeShaper
         var arabicShaper: ArabicShaper
+        var hebrewShaper: HebrewShaper
         var mathMetrics: MathLayoutMetrics?
     }
 
@@ -130,6 +131,7 @@ struct PDFEmbeddedFontCatalog {
             mapper: TrueTypeGlyphMapper(data: source.data, metadata: metadata),
             shaper: OpenTypeShaper(data: source.data, metadata: metadata),
             arabicShaper: ArabicShaper(fontData: source.data, metadata: metadata),
+            hebrewShaper: HebrewShaper(fontData: source.data, metadata: metadata),
             mathMetrics: metadata.math.map {
                 MathLayoutMetrics.openType(constants: $0.constants, unitsPerEm: metadata.head.unitsPerEm)
             },

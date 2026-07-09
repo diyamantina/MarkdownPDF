@@ -254,69 +254,18 @@ struct ArabicShaper {
         return glyphs
     }
 
-    /// Places combining marks on their base and on preceding marks via GPOS. The
-    /// `mark` feature attaches each mark to the nearest preceding non-mark (its base);
-    /// the `mkmk` feature then attaches each mark to the nearest preceding mark,
-    /// stacking on top of that mark's already-computed placement. The offset stored is
-    /// `targetAnchor - markAnchor` in font units: in the drawn (visual) order a mark
-    /// sits at the same pen as its base (marks do not advance), so that offset aligns
-    /// the two anchors. Requires GDEF to tell marks from bases; without GPOS/GDEF the
-    /// marks keep their nominal positions.
+    /// Places combining marks on their base and on preceding marks via the shared GPOS
+    /// mark positioner. Requires GPOS/GDEF; without them the marks keep their nominal
+    /// positions.
     private func applyMarkPositioning(_ glyphs: inout [ShapedGlyph]) {
         guard let gpos, gpos.hasMarkPositioning, let gdef else {
             return
         }
-        let isMark = glyphs.map { gdef.isMark($0.glyphID) }
-
-        // MARK: - to-base: attach each mark to the nearest preceding base glyph.
-
-        let markLookups = gpos.orderedLookupIndices(feature: "mark")
-        if !markLookups.isEmpty {
-            for index in glyphs.indices where isMark[index] {
-                guard let baseIndex = (0 ..< index).last(where: { !isMark[$0] }) else {
-                    continue
-                }
-                if let offset = attachmentOffset(markLookups, mark: glyphs[index].glyphID, target: glyphs[baseIndex].glyphID, gpos: gpos) {
-                    glyphs[index].xOffset = offset.x
-                    glyphs[index].yOffset = offset.y
-                }
-            }
+        let placements = GPOSMarkPositioner.placements(for: glyphs.map(\.glyphID), gpos: gpos, gdef: gdef)
+        for index in glyphs.indices {
+            glyphs[index].xOffset = placements[index].xOffset
+            glyphs[index].yOffset = placements[index].yOffset
         }
-
-        // MARK: - to-mark: attach each mark to the mark immediately before it, adding that
-
-        // mark's placement so it stacks above. Only the immediately preceding glyph is
-        // a candidate: a base between two marks means they sit on different letters
-        // (each attached its own base), not stacked, so mkmk must not reach across it.
-        let mkmkLookups = gpos.orderedLookupIndices(feature: "mkmk")
-        if !mkmkLookups.isEmpty {
-            for index in glyphs.indices where isMark[index] && index > 0 && isMark[index - 1] {
-                let priorMark = index - 1
-                if let offset = attachmentOffset(mkmkLookups, mark: glyphs[index].glyphID, target: glyphs[priorMark].glyphID, gpos: gpos) {
-                    glyphs[index].xOffset = glyphs[priorMark].xOffset + offset.x
-                    glyphs[index].yOffset = glyphs[priorMark].yOffset + offset.y
-                }
-            }
-        }
-    }
-
-    /// The placement offset of `mark` onto `target` across `lookups` in order (the
-    /// first lookup that attaches them wins), or nil when none does.
-    private func attachmentOffset(
-        _ lookups: [UInt16],
-        mark: UInt16,
-        target: UInt16,
-        gpos: GPOSTable,
-    ) -> (x: Int, y: Int)? {
-        for lookupIndex in lookups {
-            if let attachment = gpos.attachment(lookupIndex: lookupIndex, mark: mark, target: target) {
-                return (
-                    x: Int(attachment.targetAnchor.x) - Int(attachment.markAnchor.x),
-                    y: Int(attachment.targetAnchor.y) - Int(attachment.markAnchor.y),
-                )
-            }
-        }
-        return nil
     }
 
     /// Applies every lookup of `feature`, in LookupList (apply) order, over the glyph

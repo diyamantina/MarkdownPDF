@@ -3423,6 +3423,25 @@ private struct Layout {
             )]
         }
 
+        // A pointed Hebrew run is shaped as a whole so its niqqud are placed on their
+        // letters by GPOS. Hebrew does not join, but the per-character path below would
+        // draw each mark at its nominal position; shaping keeps the mapping logical
+        // (correct `/ToUnicode`) and an RTL run draws its glyphs reversed.
+        if HebrewShaper.containsPointedHebrew(run.sourceText),
+           let entry = embeddedFonts.entry(for: template.font),
+           entry.hebrewShaper.canPositionHebrewMarks
+        {
+            let mapping = try entry.hebrewShaper.shapedMapping(text: run.sourceText, fontSize: template.size)
+            return [BidiPositionedRun(
+                sourceTextRun: template.withText(run.sourceText),
+                displayText: run.sourceText,
+                x: x,
+                sourceScalarOffset: run.sourceScalarRange.lowerBound,
+                preShapedMapping: mapping,
+                isRightToLeft: run.direction == .rightToLeft,
+            )]
+        }
+
         let sourceCharacters = Array(run.sourceText)
         let displayCharacters = Array(run.displayText)
         let sourceScalarOffsets = scalarOffsetsByCharacter(in: run.sourceText)

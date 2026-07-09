@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Hebrew niqqud positioning. Hebrew vowel points, dagesh, and cantillation marks now sit
+  on their letters by GPOS instead of at their nominal positions. A new Hebrew shaper maps
+  the letters (Hebrew does not join) and attaches the marks through the GPOS mark-to-base
+  and mark-to-mark lookups of the `hebr` script, reusing the same positioner as Arabic; a
+  pointed run is shaped as a whole and drawn right-to-left, with `/ToUnicode` preserved. A
+  run without points stays on the ordinary path, unchanged. Verified against `hb-shape`:
+  every mark hb positions, the shaper positions at the same offset. Hebrew GSUB presentation
+  composition (e.g. vav+holam into one glyph) is a tracked follow-up; the marks render
+  correctly in place without it
+  ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
 - Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
   tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a
   vowel), they are reordered by combining class before shaping so they stack the way the
