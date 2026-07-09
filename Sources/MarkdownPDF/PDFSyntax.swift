@@ -46,7 +46,17 @@ enum PDFSyntax {
 
         var serialized: String {
             var output = "("
-            for scalar in rawValue.unicodeScalars {
+            // NFC-normalize at the single WinAnsi byte-emission boundary. Every text
+            // string the writer emits, page content and `/ActualText` as well as the
+            // outline and Info `/Title`, named destinations, and tagged `Alt`, is a
+            // LiteralString, and `/WinAnsiEncoding` has precomposed accented letters
+            // but no combining marks. Folding here means a decomposed diacritic
+            // (`e` + U+0301) is drawn and stored as its single precomposed byte
+            // everywhere, so bookmarks and metadata stay consistent with the page.
+            // NFC is idempotent, so the already-normalized page-content path is
+            // unchanged, and ASCII (dates, the `/ID` hex string uses HexString, not
+            // this) is untouched.
+            for scalar in rawValue.precomposedStringWithCanonicalMapping.unicodeScalars {
                 let byte = PDFTextEncoding.encodedByte(for: scalar)
                 switch byte {
                 case 0x08:

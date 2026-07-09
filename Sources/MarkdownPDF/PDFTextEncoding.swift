@@ -2,20 +2,18 @@ import Foundation
 
 enum PDFTextEncoding {
     /// Text used for the page's `/ActualText` span and as the source string the
-    /// base-14 content-stream encoder walks, normalized to NFC (precomposed form).
+    /// base-14 content-stream encoder walks. It is the original Unicode, unchanged,
+    /// so extraction and copy recover the real characters even where the drawn glyph
+    /// is a fallback. (Formerly this substituted "?" for non-ASCII.)
     ///
-    /// The base-14 fonts draw through `/WinAnsiEncoding`, which has precomposed
-    /// accented letters (`é`, `ñ`, `š`, ...) but no combining marks. Without
-    /// normalization a decomposed sequence (`e` + U+0301, the form macOS and many
-    /// web sources hand back) draws the base letter and then the combining mark as
-    /// `?`. NFC folds it back to the single precomposed scalar, which is one WinAnsi
-    /// byte, so it both draws and extracts correctly. NFC is canonical-equivalent,
-    /// so copy still recovers the real characters. Characters with no WinAnsi
-    /// precomposed form (Croatian `č`/`ć`/`đ`, ...) still fall back to `?` on this
-    /// path; they need an embedded font, whose shaper attaches the marks itself and
-    /// reads `run.text` directly, unaffected by this normalization.
+    /// NFC normalization for the base-14 path is applied downstream, not here: at
+    /// ``PDFSyntax/LiteralString/serialized`` for the emitted WinAnsi bytes (so a
+    /// decomposed diacritic draws as its single precomposed byte) and at
+    /// ``portableScalars(for:)`` for the matching measured width. Keeping this
+    /// faithful means the two consumers each normalize once and the value stays the
+    /// authored text.
     static func portableText(for text: String) -> String {
-        text.precomposedStringWithCanonicalMapping
+        text
     }
 
     /// Removes the Unicode default-ignorable format controls that must render
