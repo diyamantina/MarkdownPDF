@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   make a text extractor place the point before its letter (the composed glyph's
   multi-scalar `/ToUnicode` is reversed with the run); such a run now carries an
   `/ActualText` override so `pdftotext` and `mutool` recover the letter before its point.
+  The override text is stored in visual (reversed) order on purpose: every extractor that
+  honors `/ActualText` re-applies bidi to the replacement text, so logical order would
+  extract fully reversed. Two caveats follow from this. A reader that consumes
+  `/ActualText` verbatim without re-ordering (a strictly spec-conforming consumer, and
+  possibly assistive technology) would read a composed run reversed; this trades a
+  guaranteed-wrong extraction in the common tools for a possible-wrong extraction in a
+  strict one. And `mutool`/PyMuPDF, which do not re-bidi a lone base+mark pair, place the
+  mark before the letter for a single composed cluster on its own (e.g. a bare בּ), and
+  occasionally add a duplicated word or a mid-word space around a composed cluster; both
+  words remain present and searchable after Unicode normalization.
   Two GPOS type-8 contextual-positioning cases remain, off by a small amount and not yet
   applied: holam directly on a consonant (holam haser, 25 font units; holam on vav
   composes and matches), and a vowel together with meteg under one consonant (the two

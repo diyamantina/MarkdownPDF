@@ -90,7 +90,15 @@ struct HebrewShaperTests {
         // extract mark-before-base; the run is wrapped in an /ActualText span so a text
         // extractor recovers the letter before its point.
         let composed = try MarkdownPDFRenderer(options: options).render(markdown: "\u{05D1}\u{05BC}") // בּ
-        #expect(PDFInspector(composed).text.contains("/ActualText"))
+        let composedText = PDFInspector(composed).text
+        #expect(composedText.contains("/ActualText"))
+        // The override must carry the scalars in visual (reversed) order: FEFF BOM then
+        // dagesh U+05BC then bet U+05D1. Every ActualText-honoring extractor re-applies
+        // bidi to the replacement text, so logical order (bet before dagesh) extracts fully
+        // reversed; only visual order round-trips to base-first. Pinning the exact hex keeps
+        // the reversal direction under test, not just the presence of the span.
+        #expect(composedText.uppercased().contains("FEFF05BC05D1"), "ActualText must be visual-order UTF-16BE (dagesh, bet)")
+        #expect(!composedText.uppercased().contains("FEFF05D105BC"), "ActualText must not be logical order (bet, dagesh)")
         // Plain Hebrew (no composition) needs no override.
         let plain = try MarkdownPDFRenderer(options: options).render(markdown: "\u{05E9}\u{05DC}\u{05D5}\u{05DD}") // שלום
         #expect(!PDFInspector(plain).text.contains("/ActualText"))
