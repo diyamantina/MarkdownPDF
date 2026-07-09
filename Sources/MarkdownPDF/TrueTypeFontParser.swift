@@ -128,6 +128,7 @@ struct TrueTypeFontParser {
         embeddingPolicy: EmbeddingPolicy = .requireSubsetting,
         parseMathTable: Bool = false,
         faceIndex: Int = 0,
+        validateChecksums: Bool = false,
     ) throws -> Metadata {
         let bytes = [UInt8](data)
         guard !bytes.isEmpty else {
@@ -162,7 +163,16 @@ struct TrueTypeFontParser {
             }
         }
 
-        try validateTableChecksums(records: records, in: bytes)
+        // Table checksums are advisory and frequently wrong in real fonts (Apple
+        // system fonts in particular ship non-spec `head`/table checksums), and the
+        // embedder subsets and rebuilds the font, so an original checksum mismatch
+        // does not affect the output. Validation is therefore opt-in; the structural
+        // bounds checks and per-table parsers above and below still reject genuinely
+        // corrupt fonts. Callers that specifically want integrity verification pass
+        // `validateChecksums: true`.
+        if validateChecksums {
+            try validateTableChecksums(records: records, in: bytes)
+        }
 
         let head = try parseHead(table(named: "head", recordsByTag: recordsByTag, bytes: bytes))
         let hhea = try parseHorizontalHeader(table(named: "hhea", recordsByTag: recordsByTag, bytes: bytes))

@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#41](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/41)).
 
 ### Fixed
+- Embedding a font with non-spec table checksums no longer fails. Apple system
+  fonts routinely ship incorrect `head`/table checksums, so strict validation
+  rejected them (`invalidTableChecksum`) even though they are structurally valid
+  and the embedder subsets and rebuilds the font anyway. Table-checksum validation
+  is now opt-in (`parse(validateChecksums:)`, default off, matching reference
+  engines); the structural bounds checks and per-table parsers still reject
+  genuinely corrupt fonts. Combined with the collection support, real macOS system
+  fonts (e.g. Apple Symbols, and the Armenian Mshtakan collection) now embed
+  ([#43](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/43)).
 - Heading anchor slugs are stable across Unicode normalization forms, so an
   internal link resolves whether the heading or the link was authored precomposed
   or decomposed. The slug generator kept the ASCII base of a decomposed accent
