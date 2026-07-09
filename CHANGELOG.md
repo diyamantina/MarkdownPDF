@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arabic contextual (GSUB type 5/6) lam-alef refinement. Before, lam-alef collapsed to
+  the canonical single presentation ligature (uniFEFB/uniFEFC); a font like Noto Naskh
+  refines it with a coverage-based contextual `rlig` lookup into its own two-glyph pair.
+  The shaper now runs the `rlig` feature's lookups in LookupList order (the type-5
+  contextual refinement, then the type-4 ligature) over the shaped buffer, so lam-alef
+  (لا لأ لإ لآ) and words like سلام match `hb-shape` glyph for glyph, both in the shaping
+  core and end to end through the renderer, with each output glyph keeping its own source
+  scalar for `/ToUnicode`. A new GDEF glyph-class reader and shared OpenType ClassDef
+  reader back the contextual matcher. Scope: coverage-based (format 3) lookups with
+  nested single substitutions; mark skipping (IgnoreMarks) and contextual formats 1/2
+  (glyph- and class-based, including `ccmp` mark composition) are deferred, so a
+  contextual match across an interposed mark is conservatively missed rather than
+  mis-made ([#48](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48)).
 - Arabic (cursive) shaping core: the joining algorithm plus GSUB positional forms.
   Before, Arabic rendered in disconnected isolated letters. The shaper resolves each
   letter's positional form (isolated/initial/medial/final) from the Unicode joining

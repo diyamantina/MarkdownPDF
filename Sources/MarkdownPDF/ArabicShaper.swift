@@ -2,9 +2,11 @@ import Foundation
 
 /// Arabic (cursive) shaping core: resolves each letter's positional form from the
 /// Unicode joining algorithm, then applies the font's GSUB `isol`/`init`/`medi`/
-/// `fina` single substitutions and the `rlig` ligatures (lam-alef). It produces the
-/// logical-order glyph ids a correct shaper (HarfBuzz) produces; RTL visual ordering,
-/// advances, and `/ToUnicode` are the caller's job and are not done here.
+/// `fina` single substitutions and the `rlig` lookups in order, a coverage-based
+/// contextual (type 5/6) refinement (e.g. the lam-alef glyph pair) followed by the
+/// type-4 ligature. It produces the logical-order glyph ids a correct shaper
+/// (HarfBuzz) produces; RTL visual ordering, advances, and `/ToUnicode` are the
+/// caller's job and are not done here.
 struct ArabicShaper {
     struct ShapedGlyph: Equatable {
         var glyphID: UInt16
@@ -202,10 +204,147 @@ struct ArabicShaper {
                 }
                 glyphs[index].glyphID = gsub.singleSubstitute(feature: feature, glyph: glyphs[index].glyphID)
             }
-            // rlig ligatures (lam-alef, ...) over the positional glyphs.
-            glyphs = applyLigatures(gsub.ligatureRules(feature: "rlig"), to: glyphs)
+            // rlig: apply its lookups in LookupList order (a contextual refinement of
+            // type 5/6, then the lam-alef ligature of type 4). Running the contextual
+            // lookup first lets the font swap in its exact contextual glyph pair, so
+            // the ligature that follows is the font's intended one rather than only the
+            // canonical presentation form.
+            glyphs = applyFeatureLookups("rlig", to: glyphs, gsub: gsub)
         }
         return glyphs
+    }
+
+    /// Applies every lookup of `feature`, in LookupList (apply) order, over the glyph
+    /// buffer. Single and ligature lookups substitute as on the direct paths;
+    /// contextual lookups (type 5/6) match a window and run their nested lookups.
+    private func applyFeatureLookups(
+        _ feature: String,
+        to glyphs: [ShapedGlyph],
+        gsub: GSUBTable,
+    ) -> [ShapedGlyph] {
+        var buffer = glyphs
+        for lookupIndex in gsub.orderedLookupIndices(feature: feature) {
+            guard let lookup = gsub.parsedLookup(at: lookupIndex) else {
+                continue
+            }
+            buffer = applyLookup(lookup, to: buffer, gsub: gsub)
+        }
+        return buffer
+    }
+
+    private func applyLookup(
+        _ lookup: GSUBTable.ParsedLookup,
+        to glyphs: [ShapedGlyph],
+        gsub: GSUBTable,
+    ) -> [ShapedGlyph] {
+        switch lookup.kind {
+        case let .single(map):
+            glyphs.map { glyph in
+                guard let substitute = map[glyph.glyphID], substitute != 0, substitute < metadata.maxp.numGlyphs else {
+                    return glyph
+                }
+                var updated = glyph
+                updated.glyphID = substitute
+                return updated
+            }
+        case let .ligature(rules):
+            applyLigatures(rules, to: glyphs)
+        case let .contextual(rules):
+            applyContextual(rules, to: glyphs, gsub: gsub)
+        case .unsupported:
+            glyphs
+        }
+    }
+
+    /// Applies coverage-based (format 3) contextual rules over the buffer. At each
+    /// position the rule's backtrack, input, and lookahead coverages must all match
+    /// (contiguously: mark skipping via GDEF/lookup flag is a later refinement, so
+    /// contextual matches across an interposed mark are conservatively missed rather
+    /// than mis-made). On a match every nested single substitution named by the rule's
+    /// `SequenceLookupRecord`s is applied at its input position. Nested lookups of
+    /// other types are a documented gap (the Noto rlig/ccmp rules use single subs).
+    private func applyContextual(
+        _ rules: [GSUBContextualRule],
+        to glyphs: [ShapedGlyph],
+        gsub: GSUBTable,
+    ) -> [ShapedGlyph] {
+        guard !rules.isEmpty else {
+            return glyphs
+        }
+        var output = glyphs
+        var index = 0
+        while index < output.count {
+            var advanced = false
+            for rule in rules where Self.matches(rule, in: output, at: index) {
+                applyRecords(rule.lookupRecords, in: &output, inputStart: index, inputCount: rule.input.count, gsub: gsub)
+                index += max(rule.input.count, 1)
+                advanced = true
+                break
+            }
+            if !advanced {
+                index += 1
+            }
+        }
+        return output
+    }
+
+    /// Whether `rule`'s backtrack/input/lookahead coverages all match the buffer with
+    /// the input beginning at `index`. Pure in its arguments (no font state), so the
+    /// backtrack/lookahead index math is unit-testable on its own.
+    static func matches(_ rule: GSUBContextualRule, in glyphs: [ShapedGlyph], at index: Int) -> Bool {
+        let inputEnd = index + rule.input.count
+        guard rule.input.count >= 1, inputEnd <= glyphs.count else {
+            return false
+        }
+        for offset in rule.input.indices where !rule.input[offset].contains(glyphs[index + offset].glyphID) {
+            return false
+        }
+        // Backtrack is stored in text order: the last entry is the glyph immediately
+        // before the input, so entry `k` sits at `index - (count - k)`.
+        guard index >= rule.backtrack.count else {
+            return false
+        }
+        for offset in rule.backtrack.indices {
+            let position = index - (rule.backtrack.count - offset)
+            if !rule.backtrack[offset].contains(glyphs[position].glyphID) {
+                return false
+            }
+        }
+        guard inputEnd + rule.lookahead.count <= glyphs.count else {
+            return false
+        }
+        for offset in rule.lookahead.indices where !rule.lookahead[offset].contains(glyphs[inputEnd + offset].glyphID) {
+            return false
+        }
+        return true
+    }
+
+    /// Applies each record's nested single substitution at its input position. A
+    /// record whose `sequenceIndex` falls outside the matched input window is skipped
+    /// (as HarfBuzz does): a spec-invalid font could otherwise name a position past
+    /// the input and substitute a glyph outside the rule's match, corrupting an
+    /// unrelated cluster.
+    private func applyRecords(
+        _ records: [SequenceLookupRecord],
+        in glyphs: inout [ShapedGlyph],
+        inputStart: Int,
+        inputCount: Int,
+        gsub: GSUBTable,
+    ) {
+        for record in records {
+            let sequenceIndex = Int(record.sequenceIndex)
+            let position = inputStart + sequenceIndex
+            guard sequenceIndex < inputCount,
+                  position < glyphs.count,
+                  let nested = gsub.parsedLookup(at: record.lookupListIndex),
+                  case let .single(map) = nested.kind,
+                  let substitute = map[glyphs[position].glyphID],
+                  substitute != 0, substitute < metadata.maxp.numGlyphs
+            else {
+                continue
+            }
+            glyphs[position].glyphID = substitute
+        }
     }
 
     /// Shapes `text` into a `ShapedTextMapping` in logical order: one cluster per
