@@ -42,6 +42,8 @@ struct HebrewShaperTests {
             "\u{05DE}\u{05B9}\u{05E9}\u{05C1}\u{05B6}\u{05D4}", // מֹשֶׁה (holam haser on mem: GPOS type-8 nudge)
             "\u{05D1}\u{05B7}\u{05BD}", // בַֽ (patah + meteg: type-8 splits the two below-marks)
             "\u{05D1}\u{05B4}\u{05BD}", // בִֽ (hiriq + meteg)
+            "\u{05D2}\u{05BD}\u{059A}", // gimel+meteg+yetiv (two type-8 subtables cover the accent; only the first must apply, not both)
+            "\u{05E2}\u{05B9}\u{05A4}\u{05A5}", // ayin+holam, mahapakh+merkha (nested pair adjusts both accents, not just the first)
         ],
     )
     func composedHebrewMatchesHarfBuzz(_ word: String) throws {

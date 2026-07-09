@@ -77,12 +77,18 @@ struct GPOSTable {
     }
 
     /// A pair-adjustment (type 2) subtable, format 1 (explicit per-glyph pair sets) or
-    /// format 2 (class-based). It returns the value applied to the first glyph of a pair;
-    /// the second glyph's value is unused by the mark-positioning paths that invoke it.
+    /// format 2 (class-based). It returns both value records of a matched pair: the first
+    /// applies to the first glyph, the second to the second glyph.
     struct PairPosSubtable: Equatable {
+        struct PairCell: Equatable {
+            var first: GPOSValueRecord
+            var second: GPOSValueRecord
+        }
+
         struct PairValue: Equatable {
             var secondGlyph: UInt16
             var firstValue: GPOSValueRecord
+            var secondValue: GPOSValueRecord
         }
 
         // Format 1
@@ -91,17 +97,20 @@ struct GPOSTable {
         // Format 2
         var classDef1: [UInt16: Int]
         var classDef2: [UInt16: Int]
-        var classMatrix: [[GPOSValueRecord]]
+        var classMatrix: [[PairCell]]
         var class1Count: Int
         var class2Count: Int
         var isFormat1: Bool
 
-        func firstValue(first: UInt16, second: UInt16) -> GPOSValueRecord? {
+        func pairValues(first: UInt16, second: UInt16) -> PairCell? {
             if isFormat1 {
                 guard let setIndex = coverage[first], setIndex < pairSets.count else {
                     return nil
                 }
-                return pairSets[setIndex].first { $0.secondGlyph == second }?.firstValue
+                guard let record = pairSets[setIndex].first(where: { $0.secondGlyph == second }) else {
+                    return nil
+                }
+                return PairCell(first: record.firstValue, second: record.secondValue)
             }
             guard coverage[first] != nil else {
                 return nil
@@ -316,7 +325,8 @@ struct GPOSTable {
                     let recordOffset = pairSetOffset + 2 + pair * recordSize
                     let secondGlyph = try reader.uint16(at: recordOffset)
                     let firstValue = try readValueRecord(reader: reader, offset: recordOffset + 2, valueFormat: valueFormat1)
-                    values.append(PairPosSubtable.PairValue(secondGlyph: secondGlyph, firstValue: firstValue))
+                    let secondValue = try readValueRecord(reader: reader, offset: recordOffset + 2 + slots1 * 2, valueFormat: valueFormat2)
+                    values.append(PairPosSubtable.PairValue(secondGlyph: secondGlyph, firstValue: firstValue, secondValue: secondValue))
                 }
                 pairSets.append(values)
             }
@@ -333,14 +343,16 @@ struct GPOSTable {
             let classDef1 = try classDefinitionMap(reader: reader, offset: classDef1Offset)
             let classDef2 = try classDefinitionMap(reader: reader, offset: classDef2Offset)
             let recordSize = (slots1 + slots2) * 2
-            var matrix: [[GPOSValueRecord]] = []
+            var matrix: [[PairPosSubtable.PairCell]] = []
             matrix.reserveCapacity(class1Count)
             for class1 in 0 ..< class1Count {
-                var row: [GPOSValueRecord] = []
+                var row: [PairPosSubtable.PairCell] = []
                 row.reserveCapacity(class2Count)
                 for class2 in 0 ..< class2Count {
                     let recordOffset = offset + 16 + (class1 * class2Count + class2) * recordSize
-                    try row.append(readValueRecord(reader: reader, offset: recordOffset, valueFormat: valueFormat1))
+                    let first = try readValueRecord(reader: reader, offset: recordOffset, valueFormat: valueFormat1)
+                    let second = try readValueRecord(reader: reader, offset: recordOffset + slots1 * 2, valueFormat: valueFormat2)
+                    row.append(PairPosSubtable.PairCell(first: first, second: second))
                 }
                 matrix.append(row)
             }

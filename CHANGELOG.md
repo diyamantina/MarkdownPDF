@@ -33,17 +33,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   occasionally add a duplicated word or a mid-word space around a composed cluster; both
   words remain present and searchable after Unicode normalization
   ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
-- GPOS type-8 chained-context positioning, closing the last Hebrew placement gaps. The
-  mark positioner now runs the `mark` feature's chained-context (type 8) lookups in
-  feature order after base attachment, matching each on the glyphs before, at, and after a
-  position and applying the nested lookup it selects: a type-1 single adjustment (holam
-  after a bare consonant is nudged 25 units, so holam haser matches the reference instead
-  of sitting 25 units off), a type-4 re-anchor (a vowel and meteg under one letter split
-  apart instead of stacking at one anchor), or a type-2 pair adjustment. The reader gained
-  single (type 1), pair (type 2), and chained-context (type 3 subtable) parsing with a
-  value-record decoder. A font whose mark feature has no type-8 lookup (Noto Naskh Arabic
-  has none) finds nothing to run, so Arabic positioning is byte-identical; verified with a
-  999-combination `hb-shape` sweep at zero divergences
+- GPOS type-8 chained-context positioning for Hebrew niqqud and cantillation. The mark
+  positioner now runs the `mark` feature's chained-context (type 8) lookups after base
+  attachment, matching each on the glyphs before, at, and after a position and applying the
+  nested lookup it selects: a type-1 single adjustment (holam after a bare consonant is
+  nudged 25 units, so holam haser matches the reference instead of sitting 25 units off), a
+  type-4 re-anchor (a vowel and meteg under one letter split apart instead of stacking at
+  one anchor), or a type-2 pair adjustment (both value records applied). At each position
+  the subtables are tried in order and only the first match applies before the cursor
+  advances past the input, so a font that lists two subtables covering one spot does not
+  double the adjustment. The reader gained single (type 1), pair (type 2), and
+  chained-context (format 3 subtable) parsing with a value-record decoder driven by the
+  value-format bitmask. A font whose mark feature has no type-8 lookup (Noto Naskh Arabic
+  has none) finds nothing to run, so Arabic positioning is byte-identical (verified: the
+  same document rendered before and after has an identical hash). Verified against
+  `hb-shape` over a 5116-combination sweep in canonical mark order (every consonant with
+  every niqqud, each vowel with meteg or dagesh, and each vowel with a cantillation accent,
+  singly and stacked) at zero divergences. Marks typed in a non-canonical order are not yet
+  reordered to canonical (combining-class) order before shaping the way the reference
+  normalizes them, so such input can still place a mark differently; that Unicode canonical
+  reordering is the remaining Hebrew frontier
   ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
 - Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
   tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a

@@ -65,9 +65,18 @@ enum GPOSMarkPositioner {
     /// Runs the chained-context (type 8) lookups among `lookups` in feature order,
     /// applying each match's nested lookups to `placements`. A type-1 nested lookup adds
     /// its value record; a type-4 nested lookup re-anchors the mark onto its base; a
-    /// type-2 nested lookup adds the first-glyph pair value. The mark features that reach
-    /// here do not set mark-ignoring lookup flags, so every glyph participates in the
-    /// match (no skipping).
+    /// type-2 nested lookup adds both pair value records. At each position the subtables
+    /// are tried in order and only the first match applies, then the cursor advances past
+    /// the matched input, as the OpenType lookup model requires (a font can list two
+    /// subtables that both cover one position, and applying both would double the
+    /// adjustment). The mark features that reach here do not set mark-ignoring lookup
+    /// flags, so every glyph participates in the match (no skipping).
+    ///
+    /// This runs after the mark-to-base and mkmk passes rather than strictly interleaved
+    /// with the type-4 lookups in feature order. That is exact when no type-4 lookup after
+    /// a type-8 re-touches a glyph the type-8 adjusted, which holds for the Hebrew mark
+    /// feature shipped in the system fonts; it is a font-specific simplification, not a
+    /// general proof of feature-order equivalence.
     private static func applyChainedContext(
         _ lookups: [UInt16],
         glyphIDs: [UInt16],
@@ -79,19 +88,23 @@ enum GPOSMarkPositioner {
             guard case let .chainedContext(subtables) = gpos.lookupKind(at: lookupIndex) else {
                 continue
             }
-            for subtable in subtables {
-                for start in glyphIDs.indices where matches(subtable, at: start, glyphIDs: glyphIDs) {
-                    for record in subtable.sequenceLookups {
-                        let position = start + record.sequenceIndex
-                        guard glyphIDs.indices.contains(position) else {
-                            continue
-                        }
-                        applyNested(
-                            record.lookupIndex, at: position,
-                            glyphIDs: glyphIDs, isMark: isMark, gpos: gpos, into: &placements,
-                        )
-                    }
+            var start = 0
+            while start < glyphIDs.count {
+                guard let subtable = subtables.first(where: { matches($0, at: start, glyphIDs: glyphIDs) }) else {
+                    start += 1
+                    continue
                 }
+                for record in subtable.sequenceLookups {
+                    let position = start + record.sequenceIndex
+                    guard glyphIDs.indices.contains(position) else {
+                        continue
+                    }
+                    applyNested(
+                        record.lookupIndex, at: position,
+                        glyphIDs: glyphIDs, isMark: isMark, gpos: gpos, into: &placements,
+                    )
+                }
+                start += subtable.inputCoverage.count
             }
         }
     }
@@ -163,10 +176,14 @@ enum GPOSMarkPositioner {
                 return
             }
             for subtable in subtables {
-                if let value = subtable.firstValue(first: glyphIDs[position], second: glyphIDs[position + 1]) {
+                if let values = subtable.pairValues(first: glyphIDs[position], second: glyphIDs[position + 1]) {
                     placements[position] = Placement(
-                        xOffset: placements[position].xOffset + value.xPlacement,
-                        yOffset: placements[position].yOffset + value.yPlacement,
+                        xOffset: placements[position].xOffset + values.first.xPlacement,
+                        yOffset: placements[position].yOffset + values.first.yPlacement,
+                    )
+                    placements[position + 1] = Placement(
+                        xOffset: placements[position + 1].xOffset + values.second.xPlacement,
+                        yOffset: placements[position + 1].yOffset + values.second.yPlacement,
                     )
                     return
                 }
