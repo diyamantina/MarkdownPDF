@@ -52,7 +52,130 @@ enum GPOSMarkPositioner {
                 }
             }
         }
+
+        // Refine the base placements with the mark feature's chained-context (type 8)
+        // lookups, which re-position a mark in the context of its neighbours: Hebrew holam
+        // is nudged when it follows a bare consonant, and a vowel and meteg under one
+        // letter are split apart. Fonts without type-8 in the mark feature (Arabic) find
+        // no such lookup and the run is left exactly as attached above.
+        applyChainedContext(markLookups, glyphIDs: glyphIDs, isMark: isMark, gpos: gpos, into: &placements)
         return placements
+    }
+
+    /// Runs the chained-context (type 8) lookups among `lookups` in feature order,
+    /// applying each match's nested lookups to `placements`. A type-1 nested lookup adds
+    /// its value record; a type-4 nested lookup re-anchors the mark onto its base; a
+    /// type-2 nested lookup adds the first-glyph pair value. The mark features that reach
+    /// here do not set mark-ignoring lookup flags, so every glyph participates in the
+    /// match (no skipping).
+    private static func applyChainedContext(
+        _ lookups: [UInt16],
+        glyphIDs: [UInt16],
+        isMark: [Bool],
+        gpos: GPOSTable,
+        into placements: inout [Placement],
+    ) {
+        for lookupIndex in lookups {
+            guard case let .chainedContext(subtables) = gpos.lookupKind(at: lookupIndex) else {
+                continue
+            }
+            for subtable in subtables {
+                for start in glyphIDs.indices where matches(subtable, at: start, glyphIDs: glyphIDs) {
+                    for record in subtable.sequenceLookups {
+                        let position = start + record.sequenceIndex
+                        guard glyphIDs.indices.contains(position) else {
+                            continue
+                        }
+                        applyNested(
+                            record.lookupIndex, at: position,
+                            glyphIDs: glyphIDs, isMark: isMark, gpos: gpos, into: &placements,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// Whether the chained-context subtable matches with its input starting at `start`:
+    /// the input, backtrack (reading backwards), and lookahead coverage sets each cover
+    /// the glyph at their position.
+    private static func matches(
+        _ subtable: GPOSTable.ChainedContextSubtable,
+        at start: Int,
+        glyphIDs: [UInt16],
+    ) -> Bool {
+        let inputLength = subtable.inputCoverage.count
+        guard inputLength > 0, start + inputLength <= glyphIDs.count else {
+            return false
+        }
+        for offset in 0 ..< inputLength where !subtable.inputCoverage[offset].contains(glyphIDs[start + offset]) {
+            return false
+        }
+        for (offset, coverage) in subtable.backtrackCoverage.enumerated() {
+            let position = start - 1 - offset
+            guard position >= 0, coverage.contains(glyphIDs[position]) else {
+                return false
+            }
+        }
+        for (offset, coverage) in subtable.lookaheadCoverage.enumerated() {
+            let position = start + inputLength + offset
+            guard position < glyphIDs.count, coverage.contains(glyphIDs[position]) else {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Applies the nested lookup `lookupIndex` to the glyph at `position`.
+    private static func applyNested(
+        _ lookupIndex: UInt16,
+        at position: Int,
+        glyphIDs: [UInt16],
+        isMark: [Bool],
+        gpos: GPOSTable,
+        into placements: inout [Placement],
+    ) {
+        switch gpos.lookupKind(at: lookupIndex) {
+        case let .single(subtables):
+            for subtable in subtables {
+                if let value = subtable.value(for: glyphIDs[position]) {
+                    placements[position] = Placement(
+                        xOffset: placements[position].xOffset + value.xPlacement,
+                        yOffset: placements[position].yOffset + value.yPlacement,
+                    )
+                    return
+                }
+            }
+        case .markAttachment:
+            // Re-anchor the mark onto the nearest preceding base under this lookup,
+            // overwriting the earlier attachment (the context selects a different anchor).
+            guard let baseIndex = (0 ..< position).last(where: { !isMark[$0] }),
+                  let attachment = gpos.attachment(lookupIndex: lookupIndex, mark: glyphIDs[position], target: glyphIDs[baseIndex])
+            else {
+                return
+            }
+            placements[position] = Placement(
+                xOffset: Int(attachment.targetAnchor.x) - Int(attachment.markAnchor.x),
+                yOffset: Int(attachment.targetAnchor.y) - Int(attachment.markAnchor.y),
+            )
+        case let .pair(subtables):
+            guard position + 1 < glyphIDs.count else {
+                return
+            }
+            for subtable in subtables {
+                if let value = subtable.firstValue(first: glyphIDs[position], second: glyphIDs[position + 1]) {
+                    placements[position] = Placement(
+                        xOffset: placements[position].xOffset + value.xPlacement,
+                        yOffset: placements[position].yOffset + value.yPlacement,
+                    )
+                    return
+                }
+            }
+        case .chainedContext, .unsupported, .none:
+            // A nested context-of-context, or a type this reader does not model, is not
+            // applied; the mark keeps its base attachment.
+            break
+        }
     }
 
     /// The placement offset of `mark` onto `target` across `lookups` in order (the first

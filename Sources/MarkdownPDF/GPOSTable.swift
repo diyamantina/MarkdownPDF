@@ -21,7 +21,7 @@ struct GPOSTable {
         var targetAnchor: GPOSAnchor
     }
 
-    private struct MarkRecord: Equatable {
+    struct MarkRecord: Equatable {
         var markClass: UInt16
         var anchor: GPOSAnchor
     }
@@ -29,7 +29,7 @@ struct GPOSTable {
     /// A mark-to-base (type 4) or mark-to-mark (type 6) subtable. The two are identical
     /// in shape: a set of marks (each with a class and an anchor) attach to a set of
     /// targets (each carrying one anchor per mark class).
-    private struct MarkAttachmentSubtable: Equatable {
+    struct MarkAttachmentSubtable: Equatable {
         var markCoverage: [UInt16: Int]
         var marks: [MarkRecord]
         var targetCoverage: [UInt16: Int]
@@ -54,13 +54,104 @@ struct GPOSTable {
         }
     }
 
-    private enum Lookup {
-        case markAttachment(MarkAttachmentSubtable)
-        case unsupported
+    /// A single-adjustment (type 1) subtable. Format 1 carries one value shared by every
+    /// covered glyph; format 2 carries a value per covered glyph. The value is added to
+    /// the glyph's position, most often as a contextual refinement invoked by a chained
+    /// context lookup (Hebrew holam is nudged 25 units when it follows a consonant).
+    struct SinglePosSubtable: Equatable {
+        var coverage: [UInt16: Int]
+        /// Set for format 1 (one value for all); nil for format 2.
+        var sharedValue: GPOSValueRecord?
+        /// Per coverage index for format 2; empty for format 1.
+        var perGlyphValues: [GPOSValueRecord]
+
+        func value(for glyph: UInt16) -> GPOSValueRecord? {
+            guard let index = coverage[glyph] else {
+                return nil
+            }
+            if let sharedValue {
+                return sharedValue
+            }
+            return index < perGlyphValues.count ? perGlyphValues[index] : nil
+        }
     }
 
-    private let lookupsByIndex: [UInt16: [Lookup]]
+    /// A pair-adjustment (type 2) subtable, format 1 (explicit per-glyph pair sets) or
+    /// format 2 (class-based). It returns the value applied to the first glyph of a pair;
+    /// the second glyph's value is unused by the mark-positioning paths that invoke it.
+    struct PairPosSubtable: Equatable {
+        struct PairValue: Equatable {
+            var secondGlyph: UInt16
+            var firstValue: GPOSValueRecord
+        }
+
+        // Format 1
+        var coverage: [UInt16: Int]
+        var pairSets: [[PairValue]]
+        // Format 2
+        var classDef1: [UInt16: Int]
+        var classDef2: [UInt16: Int]
+        var classMatrix: [[GPOSValueRecord]]
+        var class1Count: Int
+        var class2Count: Int
+        var isFormat1: Bool
+
+        func firstValue(first: UInt16, second: UInt16) -> GPOSValueRecord? {
+            if isFormat1 {
+                guard let setIndex = coverage[first], setIndex < pairSets.count else {
+                    return nil
+                }
+                return pairSets[setIndex].first { $0.secondGlyph == second }?.firstValue
+            }
+            guard coverage[first] != nil else {
+                return nil
+            }
+            let class1 = classDef1[first] ?? 0
+            let class2 = classDef2[second] ?? 0
+            guard class1 < classMatrix.count, class2 < classMatrix[class1].count else {
+                return nil
+            }
+            return classMatrix[class1][class2]
+        }
+    }
+
+    /// A chained-context (type 8) subtable, format 3: the position matches when the
+    /// glyphs before (backtrack, in reverse), at (input), and after (lookahead) the
+    /// current position all fall in the given coverage sets, at which point each sequence
+    /// lookup record applies a nested lookup at an offset into the input.
+    struct ChainedContextSubtable: Equatable {
+        var backtrackCoverage: [Set<UInt16>]
+        var inputCoverage: [Set<UInt16>]
+        var lookaheadCoverage: [Set<UInt16>]
+        var sequenceLookups: [SequencePosLookup]
+    }
+
+    /// One nested-lookup application inside a chained-context match: apply the lookup at
+    /// `lookupIndex` to the input glyph `sequenceIndex` positions past the match start.
+    struct SequencePosLookup: Equatable {
+        var sequenceIndex: Int
+        var lookupIndex: UInt16
+    }
+
+    /// A parsed GPOS lookup, tagged by the subtable kind this reader handles. Types it
+    /// does not model (cursive attachment, mark-to-ligature) carry their type number so a
+    /// caller can record them as unsupported rather than mistaking them for a no-op.
+    enum LookupKind: Equatable {
+        case markAttachment([MarkAttachmentSubtable])
+        case single([SinglePosSubtable])
+        case pair([PairPosSubtable])
+        case chainedContext([ChainedContextSubtable])
+        case unsupported(type: UInt16)
+    }
+
+    private let lookupsByIndex: [UInt16: LookupKind]
     private let featureLookupIndices: [String: [UInt16]]
+
+    /// The parsed kind of the lookup at `index`, for a caller that executes a feature's
+    /// lookups in order (mark attachment interleaved with chained-context refinement).
+    func lookupKind(at index: UInt16) -> LookupKind? {
+        lookupsByIndex[index]
+    }
 
     /// Whether the font carries mark/mkmk positioning for the selected script.
     var hasMarkPositioning: Bool {
@@ -75,10 +166,10 @@ struct GPOSTable {
     /// The attachment of `mark` onto `target` under the lookup at `lookupIndex`, trying
     /// each of the lookup's subtables in order (the first that covers both wins).
     func attachment(lookupIndex: UInt16, mark: UInt16, target: UInt16) -> Attachment? {
-        guard let subtables = lookupsByIndex[lookupIndex] else {
+        guard case let .markAttachment(subtables) = lookupsByIndex[lookupIndex] else {
             return nil
         }
-        for case let .markAttachment(subtable) in subtables {
+        for subtable in subtables {
             if let attachment = subtable.attachment(mark: mark, target: target) {
                 return attachment
             }
@@ -134,11 +225,11 @@ struct GPOSTable {
     private static func parseAllLookups(
         reader: TrueTypeByteReader,
         lookupListOffset: Int,
-    ) throws -> [UInt16: [Lookup]] {
+    ) throws -> [UInt16: LookupKind] {
         try reader.requireRange(offset: lookupListOffset, count: 2)
         let lookupCount = try Int(reader.uint16(at: lookupListOffset))
         try reader.requireRange(offset: lookupListOffset + 2, count: lookupCount * 2)
-        var result: [UInt16: [Lookup]] = [:]
+        var result: [UInt16: LookupKind] = [:]
         for index in 0 ..< lookupCount {
             let lookupOffset = try lookupListOffset + Int(reader.uint16(at: lookupListOffset + 2 + index * 2))
             result[UInt16(index)] = try parseLookup(reader: reader, offset: lookupOffset)
@@ -146,7 +237,7 @@ struct GPOSTable {
         return result
     }
 
-    private static func parseLookup(reader: TrueTypeByteReader, offset: Int) throws -> [Lookup] {
+    private static func parseLookup(reader: TrueTypeByteReader, offset: Int) throws -> LookupKind {
         try reader.requireRange(offset: offset, count: 6)
         let lookupType = try reader.uint16(at: offset)
         let subtableCount = try Int(reader.uint16(at: offset + 4))
@@ -156,20 +247,208 @@ struct GPOSTable {
         for index in 0 ..< subtableCount {
             try subtableOffsets.append(offset + Int(reader.uint16(at: offset + 6 + index * 2)))
         }
-        // Types 4 (mark-to-base) and 6 (mark-to-mark) share the same subtable shape:
-        // a mark array attaching to a target array of per-class anchors. Other types
-        // (1 single, 2 pair/kern, 3 cursive, 5 mark-to-ligature) are not applied.
+        // Type 9 wraps another lookup type through an extension offset; the mark features
+        // read here use direct types. Handled: 1 (single), 2 (pair), 4/6 (mark
+        // attachment), 8 (chained context). Unhandled types (3 cursive, 5 mark-to-
+        // ligature, 7 context) carry their number so the executor skips them knowingly.
         switch lookupType {
+        case 1:
+            return try .single(subtableOffsets.compactMap { try parseSinglePos(reader: reader, offset: $0) })
+        case 2:
+            return try .pair(subtableOffsets.compactMap { try parsePairPos(reader: reader, offset: $0) })
         case 4, 6:
-            return try subtableOffsets.map { subtableOffset in
-                guard let subtable = try parseMarkAttachment(reader: reader, offset: subtableOffset) else {
-                    return .unsupported
+            return try .markAttachment(subtableOffsets.compactMap { try parseMarkAttachment(reader: reader, offset: $0) })
+        case 8:
+            return try .chainedContext(subtableOffsets.compactMap { try parseChainedContext(reader: reader, offset: $0) })
+        default:
+            return .unsupported(type: lookupType)
+        }
+    }
+
+    // MARK: - Type 1 (single) / type 2 (pair) / type 8 (chained context)
+
+    private static func parseSinglePos(reader: TrueTypeByteReader, offset: Int) throws -> SinglePosSubtable? {
+        try reader.requireRange(offset: offset, count: 6)
+        let format = try reader.uint16(at: offset)
+        let coverageOffset = try offset + Int(reader.uint16(at: offset + 2))
+        let valueFormat = try reader.uint16(at: offset + 4)
+        let coverage = try coverageIndexMap(reader: reader, offset: coverageOffset)
+        switch format {
+        case 1:
+            let value = try readValueRecord(reader: reader, offset: offset + 6, valueFormat: valueFormat)
+            return SinglePosSubtable(coverage: coverage, sharedValue: value, perGlyphValues: [])
+        case 2:
+            let valueCount = try Int(reader.uint16(at: offset + 6))
+            let slots = GPOSValueRecord.slotCount(valueFormat: valueFormat)
+            var values: [GPOSValueRecord] = []
+            values.reserveCapacity(valueCount)
+            for index in 0 ..< valueCount {
+                try values.append(readValueRecord(reader: reader, offset: offset + 8 + index * slots * 2, valueFormat: valueFormat))
+            }
+            return SinglePosSubtable(coverage: coverage, sharedValue: nil, perGlyphValues: values)
+        default:
+            return nil
+        }
+    }
+
+    private static func parsePairPos(reader: TrueTypeByteReader, offset: Int) throws -> PairPosSubtable? {
+        try reader.requireRange(offset: offset, count: 10)
+        let format = try reader.uint16(at: offset)
+        let coverageOffset = try offset + Int(reader.uint16(at: offset + 2))
+        let valueFormat1 = try reader.uint16(at: offset + 4)
+        let valueFormat2 = try reader.uint16(at: offset + 6)
+        let coverage = try coverageIndexMap(reader: reader, offset: coverageOffset)
+        let slots1 = GPOSValueRecord.slotCount(valueFormat: valueFormat1)
+        let slots2 = GPOSValueRecord.slotCount(valueFormat: valueFormat2)
+        switch format {
+        case 1:
+            let pairSetCount = try Int(reader.uint16(at: offset + 8))
+            try reader.requireRange(offset: offset + 10, count: pairSetCount * 2)
+            var pairSets: [[PairPosSubtable.PairValue]] = []
+            pairSets.reserveCapacity(pairSetCount)
+            for index in 0 ..< pairSetCount {
+                let pairSetOffset = try offset + Int(reader.uint16(at: offset + 10 + index * 2))
+                let pairValueCount = try Int(reader.uint16(at: pairSetOffset))
+                let recordSize = 2 + (slots1 + slots2) * 2
+                var values: [PairPosSubtable.PairValue] = []
+                values.reserveCapacity(pairValueCount)
+                for pair in 0 ..< pairValueCount {
+                    let recordOffset = pairSetOffset + 2 + pair * recordSize
+                    let secondGlyph = try reader.uint16(at: recordOffset)
+                    let firstValue = try readValueRecord(reader: reader, offset: recordOffset + 2, valueFormat: valueFormat1)
+                    values.append(PairPosSubtable.PairValue(secondGlyph: secondGlyph, firstValue: firstValue))
                 }
-                return .markAttachment(subtable)
+                pairSets.append(values)
+            }
+            return PairPosSubtable(
+                coverage: coverage, pairSets: pairSets,
+                classDef1: [:], classDef2: [:], classMatrix: [], class1Count: 0, class2Count: 0,
+                isFormat1: true,
+            )
+        case 2:
+            let classDef1Offset = try offset + Int(reader.uint16(at: offset + 8))
+            let classDef2Offset = try offset + Int(reader.uint16(at: offset + 10))
+            let class1Count = try Int(reader.uint16(at: offset + 12))
+            let class2Count = try Int(reader.uint16(at: offset + 14))
+            let classDef1 = try classDefinitionMap(reader: reader, offset: classDef1Offset)
+            let classDef2 = try classDefinitionMap(reader: reader, offset: classDef2Offset)
+            let recordSize = (slots1 + slots2) * 2
+            var matrix: [[GPOSValueRecord]] = []
+            matrix.reserveCapacity(class1Count)
+            for class1 in 0 ..< class1Count {
+                var row: [GPOSValueRecord] = []
+                row.reserveCapacity(class2Count)
+                for class2 in 0 ..< class2Count {
+                    let recordOffset = offset + 16 + (class1 * class2Count + class2) * recordSize
+                    try row.append(readValueRecord(reader: reader, offset: recordOffset, valueFormat: valueFormat1))
+                }
+                matrix.append(row)
+            }
+            return PairPosSubtable(
+                coverage: coverage, pairSets: [],
+                classDef1: classDef1, classDef2: classDef2, classMatrix: matrix,
+                class1Count: class1Count, class2Count: class2Count, isFormat1: false,
+            )
+        default:
+            return nil
+        }
+    }
+
+    private static func parseChainedContext(reader: TrueTypeByteReader, offset: Int) throws -> ChainedContextSubtable? {
+        try reader.requireRange(offset: offset, count: 2)
+        let format = try reader.uint16(at: offset)
+        guard format == 3 else {
+            return nil
+        }
+        var cursor = offset + 2
+        func readCoverageList() throws -> [Set<UInt16>] {
+            try reader.requireRange(offset: cursor, count: 2)
+            let count = try Int(reader.uint16(at: cursor))
+            try reader.requireRange(offset: cursor + 2, count: count * 2)
+            var sets: [Set<UInt16>] = []
+            sets.reserveCapacity(count)
+            for index in 0 ..< count {
+                let coverageOffset = try offset + Int(reader.uint16(at: cursor + 2 + index * 2))
+                try sets.append(Set(coverageGlyphIDs(reader: reader, offset: coverageOffset)))
+            }
+            cursor += 2 + count * 2
+            return sets
+        }
+        let backtrack = try readCoverageList()
+        let input = try readCoverageList()
+        let lookahead = try readCoverageList()
+        try reader.requireRange(offset: cursor, count: 2)
+        let recordCount = try Int(reader.uint16(at: cursor))
+        try reader.requireRange(offset: cursor + 2, count: recordCount * 4)
+        var records: [SequencePosLookup] = []
+        records.reserveCapacity(recordCount)
+        for index in 0 ..< recordCount {
+            let recordOffset = cursor + 2 + index * 4
+            let sequenceIndex = try Int(reader.uint16(at: recordOffset))
+            let lookupIndex = try reader.uint16(at: recordOffset + 2)
+            records.append(SequencePosLookup(sequenceIndex: sequenceIndex, lookupIndex: lookupIndex))
+        }
+        return ChainedContextSubtable(
+            backtrackCoverage: backtrack, inputCoverage: input,
+            lookaheadCoverage: lookahead, sequenceLookups: records,
+        )
+    }
+
+    private static func readValueRecord(reader: TrueTypeByteReader, offset: Int, valueFormat: UInt16) throws -> GPOSValueRecord {
+        var cursor = offset
+        func next(_ bit: UInt16) throws -> Int {
+            guard valueFormat & bit != 0 else {
+                return 0
+            }
+            let value = try Int(reader.int16(at: cursor))
+            cursor += 2
+            return value
+        }
+        let xPlacement = try next(0x0001)
+        let yPlacement = try next(0x0002)
+        let xAdvance = try next(0x0004)
+        let yAdvance = try next(0x0008)
+        return GPOSValueRecord(xPlacement: xPlacement, yPlacement: yPlacement, xAdvance: xAdvance, yAdvance: yAdvance)
+    }
+
+    private static func classDefinitionMap(reader: TrueTypeByteReader, offset: Int) throws -> [UInt16: Int] {
+        try reader.requireRange(offset: offset, count: 2)
+        let format = try reader.uint16(at: offset)
+        var map: [UInt16: Int] = [:]
+        switch format {
+        case 1:
+            try reader.requireRange(offset: offset + 2, count: 4)
+            let startGlyph = try reader.uint16(at: offset + 2)
+            let glyphCount = try Int(reader.uint16(at: offset + 4))
+            try reader.requireRange(offset: offset + 6, count: glyphCount * 2)
+            for index in 0 ..< glyphCount {
+                let classValue = try Int(reader.uint16(at: offset + 6 + index * 2))
+                if classValue != 0 {
+                    map[startGlyph + UInt16(index)] = classValue
+                }
+            }
+        case 2:
+            try reader.requireRange(offset: offset + 2, count: 2)
+            let rangeCount = try Int(reader.uint16(at: offset + 2))
+            try reader.requireRange(offset: offset + 4, count: rangeCount * 6)
+            for index in 0 ..< rangeCount {
+                let rangeOffset = offset + 4 + index * 6
+                let startGlyph = try reader.uint16(at: rangeOffset)
+                let endGlyph = try reader.uint16(at: rangeOffset + 2)
+                let classValue = try Int(reader.uint16(at: rangeOffset + 4))
+                guard startGlyph <= endGlyph else {
+                    throw GPOSTableError.malformed(reason: "class range is unordered")
+                }
+                if classValue != 0 {
+                    for glyph in startGlyph ... endGlyph {
+                        map[glyph] = classValue
+                    }
+                }
             }
         default:
-            return [.unsupported]
+            throw GPOSTableError.malformed(reason: "class definition format must be 1 or 2")
         }
+        return map
     }
 
     /// Parses a MarkBasePosFormat1 / MarkMarkPosFormat1 subtable (identical field

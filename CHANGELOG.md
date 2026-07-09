@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and attaches the remaining niqqud with the `hebr`-script GPOS mark lookups (reusing the
   shared mark positioner); a pointed run is shaped whole and drawn right-to-left with
   `/ToUnicode` preserved, while an unpointed run stays on the ordinary path unchanged.
-  Verified against `hb-shape`: 299 of 324 letter-and-mark combinations match glyph and
-  offset exactly. A composed base+mark glyph drawn right-to-left in visual order would
+  Verified against `hb-shape`: every one of 999 letter-and-mark combinations (each
+  consonant with each niqqud, and each vowel stacked with meteg or dagesh) matches glyph
+  and offset exactly. A composed base+mark glyph drawn right-to-left in visual order would
   make a text extractor place the point before its letter (the composed glyph's
   multi-scalar `/ToUnicode` is reversed with the run); such a run now carries an
   `/ActualText` override so `pdftotext` and `mutool` recover the letter before its point.
@@ -30,11 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strict one. And `mutool`/PyMuPDF, which do not re-bidi a lone base+mark pair, place the
   mark before the letter for a single composed cluster on its own (e.g. a bare בּ), and
   occasionally add a duplicated word or a mid-word space around a composed cluster; both
-  words remain present and searchable after Unicode normalization.
-  Two GPOS type-8 contextual-positioning cases remain, off by a small amount and not yet
-  applied: holam directly on a consonant (holam haser, 25 font units; holam on vav
-  composes and matches), and a vowel together with meteg under one consonant (the two
-  below-marks attach at the same anchor instead of splitting)
+  words remain present and searchable after Unicode normalization
+  ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
+- GPOS type-8 chained-context positioning, closing the last Hebrew placement gaps. The
+  mark positioner now runs the `mark` feature's chained-context (type 8) lookups in
+  feature order after base attachment, matching each on the glyphs before, at, and after a
+  position and applying the nested lookup it selects: a type-1 single adjustment (holam
+  after a bare consonant is nudged 25 units, so holam haser matches the reference instead
+  of sitting 25 units off), a type-4 re-anchor (a vowel and meteg under one letter split
+  apart instead of stacking at one anchor), or a type-2 pair adjustment. The reader gained
+  single (type 1), pair (type 2), and chained-context (type 3 subtable) parsing with a
+  value-record decoder. A font whose mark feature has no type-8 lookup (Noto Naskh Arabic
+  has none) finds nothing to run, so Arabic positioning is byte-identical; verified with a
+  999-combination `hb-shape` sweep at zero divergences
   ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
 - Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
   tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a

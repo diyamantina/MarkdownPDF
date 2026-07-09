@@ -39,6 +39,9 @@ struct HebrewShaperTests {
             "\u{05D1}\u{05B0}\u{05BC}\u{05E8}\u{05B5}\u{05D0}\u{05E9}\u{05C1}\u{05B4}\u{05D9}\u{05EA}", // בְּרֵאשִׁית
             "\u{05D0}\u{05B1}\u{05DC}\u{05B9}\u{05D4}\u{05B4}\u{05D9}\u{05DD}", // אֱלֹהִים
             "\u{05DE}\u{05B6}\u{05DC}\u{05B6}\u{05DA}\u{05B0}", // מֶלֶךְ (final kaf)
+            "\u{05DE}\u{05B9}\u{05E9}\u{05C1}\u{05B6}\u{05D4}", // מֹשֶׁה (holam haser on mem: GPOS type-8 nudge)
+            "\u{05D1}\u{05B7}\u{05BD}", // בַֽ (patah + meteg: type-8 splits the two below-marks)
+            "\u{05D1}\u{05B4}\u{05BD}", // בִֽ (hiriq + meteg)
         ],
     )
     func composedHebrewMatchesHarfBuzz(_ word: String) throws {
@@ -49,9 +52,9 @@ struct HebrewShaperTests {
         let upem = Double(arial.metadata.head.unitsPerEm)
         let mapping = try shaper.shapedMapping(text: word, fontSize: upem)
         // Full parity: the same positioned glyphs (glyph + offset in font units), as a
-        // sorted multiset since within-cluster order is a reconstruction detail. (Holam
-        // directly on a consonant needs GPOS type-8 contextual positioning the engine
-        // does not yet apply; these words use holam only on vav, which composes.)
+        // sorted multiset since within-cluster order is a reconstruction detail. Holam
+        // directly on a consonant (holam haser) and a vowel stacked with meteg are
+        // refined by the GPOS type-8 chained-context lookups the positioner now applies.
         let engine = mapping.glyphs
             .map { [Int($0.glyphID), Int($0.offset.x.rounded()), Int($0.offset.y.rounded())] }
             .sorted { $0.lexicographicallyPrecedes($1) }
