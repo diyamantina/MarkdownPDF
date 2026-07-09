@@ -144,25 +144,25 @@ struct OpenTypeShaperTests {
         }
     }
 
-    @Test("Rejects unsupported GSUB lookup flags with a typed error")
-    func rejectsUnsupportedGSUBLookupFlagsWithTypedError() throws {
+    @Test("Tolerates a non-zero GSUB lookup flag instead of aborting")
+    func toleratesNonZeroGSUBLookupFlag() throws {
+        // A ligature lookup that sets IgnoreMarks (0x0008) must not abort the whole
+        // document (a real font like Noto sets it). The flag needs GDEF to honor and
+        // does not affect simple Latin ligation, so it is tolerated: shaping succeeds
+        // and produces the same result as a zero flag. See #50.
         let font = try latinLigatureFont(includeGSUBLigatures: true)
         var fontData = font.data
         let lookupFlagOffset = try gsubLookupFlagOffset(in: fontData, metadata: font.metadata)
         fontData[lookupFlagOffset] = 0
         fontData[lookupFlagOffset + 1] = 0x08
-        let shaper = OpenTypeShaper(data: fontData, metadata: font.metadata)
+        let flagged = OpenTypeShaper(data: fontData, metadata: font.metadata)
+        let plain = OpenTypeShaper(data: font.data, metadata: font.metadata)
 
-        do {
-            _ = try shaper.shape(text: "file", fontSize: 10)
-            Issue.record("Expected unsupported GSUB lookup flag")
-        } catch let error as OpenTypeShaper.ValidationError {
-            #expect(error == .unsupportedGSUBLookupFlag(0x0008))
-            #expect(error.errorDescription != nil)
-            #expect(error.recoverySuggestion != nil)
-        } catch {
-            Issue.record("Expected OpenTypeShaper.ValidationError, got \(error)")
-        }
+        let flaggedMapping = try flagged.shape(text: "file", fontSize: 10)
+        let plainMapping = try plain.shape(text: "file", fontSize: 10)
+        #expect(flaggedMapping == plainMapping)
+        // The "fi" ligature still forms (the flag did not disable ligation).
+        #expect(flaggedMapping.glyphs.map(\.glyphID) == [6, 3, 4])
     }
 
     private func latinLigatureShaper(
