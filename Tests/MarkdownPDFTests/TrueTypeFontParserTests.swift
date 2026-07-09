@@ -206,10 +206,13 @@ struct TrueTypeFontParserTests {
         }
     }
 
-    @Test("Rejects malformed table checksums")
-    func rejectsMalformedTableChecksums() {
+    @Test("Reports a malformed table checksum only when checksum validation is requested")
+    func rejectsMalformedTableChecksums() throws {
+        let corrupt = SyntheticTrueTypeFont.data(corruptChecksumTag: "hhea")
+
+        // Opt-in strict validation still catches the mismatch.
         expectTrueTypeError {
-            _ = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data(corruptChecksumTag: "hhea"))
+            _ = try TrueTypeFontParser().parse(corrupt, validateChecksums: true)
         } verify: { error in
             guard case let .invalidTableChecksum(tag, _, _) = error else {
                 Issue.record("Expected invalid table checksum")
@@ -217,6 +220,14 @@ struct TrueTypeFontParserTests {
             }
             #expect(tag == "hhea")
         }
+
+        // Checksums are advisory and wrong in real fonts, so the default path
+        // tolerates a mismatch as long as the structure is valid (#43). The only
+        // difference from a clean font is the corrupted `hhea` record's checksum.
+        let tolerated = try TrueTypeFontParser().parse(corrupt)
+        let clean = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data())
+        #expect(tolerated.maxp.numGlyphs == clean.maxp.numGlyphs)
+        #expect(tolerated.hhea.numberOfHMetrics == clean.hhea.numberOfHMetrics)
     }
 
     @Test("Rejects missing required tables")
