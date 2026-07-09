@@ -45,6 +45,18 @@ struct CanonicalCombiningClassTests {
         #expect(CanonicalCombiningClass.canonicallyOrdered(input) == input)
     }
 
+    @Test("Leaves runs with a non-core mark in typed order")
+    func leavesNonCoreMarksInTypedOrder() {
+        // Hamza above (U+0654) is a Modifier Combining Mark: HarfBuzz orders it by
+        // UTR #53, not raw combining class, so a run containing it must not be reordered.
+        let hamzaRun = scalars("\u{0628}\u{0654}\u{0651}") // beh + hamza above + shadda
+        #expect(CanonicalCombiningClass.canonicallyOrdered(hamzaRun) == hamzaRun)
+        // Subscript alef (U+0656), a Quranic annotation mark, is likewise left as typed
+        // even though its combining class (220) would otherwise sort it after a kasra.
+        let subscriptRun = scalars("\u{0628}\u{0656}\u{0650}") // beh + subscript alef + kasra
+        #expect(CanonicalCombiningClass.canonicallyOrdered(subscriptRun) == subscriptRun)
+    }
+
     @Test("Preserves input order for equal classes")
     func stableForEqualClasses() {
         // Two class-230 marks keep their input order (stable).

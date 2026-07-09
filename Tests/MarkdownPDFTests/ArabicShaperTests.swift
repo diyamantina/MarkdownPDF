@@ -142,6 +142,14 @@ enum HarfBuzzOracle {
         (try? run(arguments: ["hb-shape", "--version"])) != nil
     }
 
+    /// The scalars of `text` as an `hb-shape --unicodes=` argument. Passing the text
+    /// this way (rather than as an argv string) is essential: Foundation's `Process`
+    /// canonically normalizes an argv string, so hb would never see a non-canonical
+    /// mark order. The explicit code points reach hb unchanged.
+    private static func unicodesArgument(for text: String) -> String {
+        "--unicodes=" + text.unicodeScalars.map { String($0.value, radix: 16) }.joined(separator: ",")
+    }
+
     /// The glyph ids `hb-shape` produces for `text`, reordered from visual (RTL) to
     /// logical order by the cluster index each glyph carries.
     static func shape(_ text: String, fontPath: String) throws -> [UInt16] {
@@ -151,7 +159,7 @@ enum HarfBuzzOracle {
         // marks. Without these the harness produces false diffs on extended corpora.
         let output = try run(arguments: [
             "hb-shape", "--font-file=\(fontPath)", "--no-glyph-names",
-            "--script=arab", "--cluster-level=1", text,
+            "--script=arab", "--cluster-level=1", unicodesArgument(for: text),
         ])
         // Format: [glyph=cluster+advance|glyph=cluster+advance|...]
         let inner = output.trimmingCharacters(in: CharacterSet(charactersIn: "[]\n"))
@@ -186,7 +194,7 @@ enum HarfBuzzOracle {
     static func shapeWithPositions(_ text: String, fontPath: String) throws -> [PositionedGlyph] {
         let output = try run(arguments: [
             "hb-shape", "--font-file=\(fontPath)", "--no-glyph-names",
-            "--script=arab", "--cluster-level=1", text,
+            "--script=arab", "--cluster-level=1", unicodesArgument(for: text),
         ])
         let inner = output.trimmingCharacters(in: CharacterSet(charactersIn: "[]\n"))
         guard !inner.isEmpty else {
