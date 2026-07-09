@@ -48,6 +48,32 @@ struct PDFHeadingDestinationNameTests {
         #expect(names.uniqueName(for: "Caf\u{0065}\u{0301}") == "cafe-2")
     }
 
+    @Test("Latin letters with no canonical decomposition still fold to an ASCII base")
+    func nonDecomposableLatinLettersFold() {
+        // These carry a stroke or are ligatures, so the decompose step leaves them
+        // intact; an explicit fold keeps the ASCII-base promise, notably Croatian đ.
+        #expect(PDFHeadingDestinationName.linkTargetName(for: "\u{0110}or\u{0111}e") == "dorde") // Đorđe
+        #expect(PDFHeadingDestinationName.linkTargetName(for: "S\u{00F8}ren") == "soren")
+        #expect(PDFHeadingDestinationName.linkTargetName(for: "\u{0141}\u{00F3}d\u{017A}") == "lodz") // Łódź
+        #expect(PDFHeadingDestinationName.linkTargetName(for: "Stra\u{00DF}e") == "strasse")
+        #expect(PDFHeadingDestinationName.linkTargetName(for: "\u{0152}uvre") == "oeuvre")
+    }
+
+    @Test("Generated names are unique even when a later heading's slug equals an earlier disambiguation")
+    func generatedNamesNeverCollide() {
+        // "Café" and "Cafe" both fold to "cafe", so the second becomes "cafe-2".
+        // A third heading "Cafe 2" whose own slug is "cafe-2" must not reuse that
+        // key: duplicate /Dests entries make viewer lookup undefined. See #39.
+        var names = PDFHeadingDestinationName()
+        let a = names.uniqueName(for: "Caf\u{00E9}")
+        let b = names.uniqueName(for: "Cafe")
+        let c = names.uniqueName(for: "Cafe 2")
+        #expect(a == "cafe")
+        #expect(b == "cafe-2")
+        #expect(c == "cafe-2-2")
+        #expect(Set([a, b, c]).count == 3, "generated destination names must be distinct")
+    }
+
     @Test("Plain ASCII, punctuation, and empty titles are unchanged")
     func asciiAndEdgeCasesAreUnchanged() {
         var names = PDFHeadingDestinationName()

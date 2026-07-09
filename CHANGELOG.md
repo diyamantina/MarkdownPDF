@@ -15,7 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so `# Café` slugged to `caf-du-monde` or `cafe-du-monde` depending on the source
   bytes. It now decomposes and drops the combining marks, folding an accented
   letter to its ASCII base for both forms (`café` → `cafe`, `naïve` → `naive`,
-  `čokolada` → `cokolada`), and applies the same folding to link targets
+  `čokolada` → `cokolada`), with an explicit fold for the Latin letters that carry
+  no canonical decomposition (`đ` → `d`, `ø` → `o`, `ł` → `l`, `æ` → `ae`,
+  `ß` → `ss`), and applies the same folding to link targets. Because folding maps
+  more headings onto the same base, generated destination names are now checked for
+  uniqueness against the names already issued rather than a per-base counter, so a
+  later heading whose slug equals an earlier disambiguation (`Cafe 2` after
+  `Café`/`Cafe`) no longer emits a duplicate `/Dests` key. Note that folding two
+  visually distinct headings (`Café` and `Cafe`) to the same base makes a bare
+  `#cafe` link resolve to the first; the second is reachable only via its
+  disambiguated `#cafe-2`
   ([#39](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/39)).
 - Decomposed (NFD) diacritics no longer render their combining mark as `?` on the
   base-14 path. `WinAnsiEncoding` has the precomposed accented letters but no
