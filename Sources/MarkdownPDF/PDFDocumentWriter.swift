@@ -231,12 +231,18 @@ struct PDFDocumentWriter {
                     cidToGIDMap: cidToGIDMap,
                 ).pdfDictionary,
             )
-            let toUnicodeRef = addData(
-                PDFToUnicodeCMap(
-                    name: "\(resource.baseName)-ToUnicode",
-                    mappings: usage.toUnicodeMappings,
-                ).pdfStream.serialized,
-            )
+            // A resource whose every drawn glyph is .notdef (all scalars missing
+            // from its cmap, tolerated by the notdef fallback) has no recoverable
+            // character to map, so it carries no `/ToUnicode`. Building the CMap
+            // unconditionally would trap on the empty-mappings precondition.
+            let toUnicodeRef = usage.toUnicodeMappings.isEmpty
+                ? nil
+                : addData(
+                    PDFToUnicodeCMap(
+                        name: "\(resource.baseName)-ToUnicode",
+                        mappings: usage.toUnicodeMappings,
+                    ).pdfStream.serialized,
+                )
             let fontRef = addDictionary(
                 PDFType0FontObject(
                     resourceName: resource.resourceName,

@@ -11,7 +11,21 @@ struct PDFEmbeddedFontCatalog {
 
     private var entriesByFont: [StandardFont: Entry]
 
-    init(fonts: PDFOptions.EmbeddedFonts, parseMathTables: Bool = false) throws {
+    /// Policy for a scalar the font's cmap cannot draw on the *rendering* path.
+    /// `.useNotdef` keeps one missing glyph from aborting the whole document; the
+    /// caller passes `.reject` when a conformance profile is active, because
+    /// PDF/UA-1 and PDF/A-2a forbid referencing the `.notdef` glyph in content and
+    /// require a Unicode mapping for every code, so drawing notdef would ship
+    /// spec-violating output under a conformance claim. The strict `.reject` probe
+    /// in ``covers(_:font:)`` is unaffected by this and stays strict always.
+    private let renderingMissingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy
+
+    init(
+        fonts: PDFOptions.EmbeddedFonts,
+        parseMathTables: Bool = false,
+        renderingMissingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy = .useNotdef,
+    ) throws {
+        self.renderingMissingGlyphPolicy = renderingMissingGlyphPolicy
         var entries: [StandardFont: Entry] = [:]
         try Self.add(fonts.regular, for: .helvetica, resourceName: "EF1", parseMathTables: parseMathTables, to: &entries)
         try Self.add(fonts.bold, for: .helveticaBold, resourceName: "EF2", parseMathTables: parseMathTables, to: &entries)
@@ -49,13 +63,25 @@ struct PDFEmbeddedFontCatalog {
         return try shapedMapping(for: run, entry: entry).totalAdvance
     }
 
+    /// Maps a run to glyphs for drawing under ``renderingMissingGlyphPolicy``. With
+    /// `.useNotdef` a single scalar the font's cmap lacks (an emoji, a stray
+    /// combining mark, a CJK glyph the subset omits) renders as that font's
+    /// `.notdef` glyph for that one scalar instead of aborting the whole document
+    /// with `missingGlyph`; the subset always retains glyph 0. Under a conformance
+    /// profile the policy is `.reject`, so a missing glyph refuses rather than
+    /// shipping non-conformant notdef content. The strict `.reject` probe stays in
+    /// ``covers(_:font:)`` regardless, deciding math-symbol transliteration.
     func mapping(for run: PDFTextRun, entry: Entry) throws -> TrueTypeGlyphMapper.TextMapping {
-        try entry.mapper.map(text: run.text, fontSize: run.size)
+        var mapper = entry.mapper
+        mapper.missingGlyphPolicy = renderingMissingGlyphPolicy
+        return try mapper.map(text: run.text, fontSize: run.size)
     }
 
     func shapedMapping(for run: PDFTextRun, entry: Entry) throws -> ShapedTextMapping {
         if OpenTypeShaper.canShapeLatinIncrement(run.text) {
-            return try entry.shaper.shape(text: run.text, fontSize: run.size)
+            var shaper = entry.shaper
+            shaper.missingGlyphPolicy = renderingMissingGlyphPolicy
+            return try shaper.shape(text: run.text, fontSize: run.size)
         }
         if let scalar = run.text.unicodeScalars.first(where: Self.requiresExplicitShapingSupport) {
             throw PDFEmbeddedFontError.unsupportedComplexScriptScalar(scalar: scalar)

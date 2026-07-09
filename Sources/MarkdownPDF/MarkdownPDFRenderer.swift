@@ -288,6 +288,10 @@ private struct Layout {
         embeddedFonts = try PDFEmbeddedFontCatalog(
             fonts: options.embeddedFonts,
             parseMathTables: options.mathTypesetting.isEnabled,
+            // A conformance profile forbids referencing the .notdef glyph in
+            // content, so keep the correct-or-refuse posture there rather than
+            // drawing notdef for a scalar the font lacks.
+            renderingMissingGlyphPolicy: options.conformance.isEnabled ? .reject : .useNotdef,
         )
         taggedContentBuilder = options.taggedPDF.isEnabled || options.conformance.requiresTaggedPDF
             ? PDFTaggedContentBuilder()
