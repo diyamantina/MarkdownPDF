@@ -295,6 +295,49 @@ struct TrueTypeFontParserTests {
         }
     }
 
+    @Test("Selects the requested face from a collection whose faces genuinely differ")
+    func parsesTrueTypeCollectionFace() throws {
+        // Two independent faces at different directory offsets, distinguishable by
+        // their cmap subtable format (4 vs 12). Reading the wrong face-offset entry
+        // would return the other face's format, so this pins that the SELECTED face's
+        // directory is followed, not always face 0's.
+        let collection = SyntheticTrueTypeFont.makeCollection(faces: [
+            SyntheticTrueTypeFont.data(cmapFormat: 4),
+            SyntheticTrueTypeFont.data(cmapFormat: 12),
+        ])
+        let face0 = try TrueTypeFontParser().parse(collection, faceIndex: 0)
+        let face1 = try TrueTypeFontParser().parse(collection, faceIndex: 1)
+        #expect(face0.cmap.selectedUnicodeFormat == 4)
+        #expect(face1.cmap.selectedUnicodeFormat == 12)
+        // Each face still parses like its equivalent single font.
+        let single12 = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data(cmapFormat: 12))
+        #expect(face1.maxp.numGlyphs == single12.maxp.numGlyphs)
+        #expect(face1.tables.map(\.tag).sorted() == single12.tables.map(\.tag).sorted())
+    }
+
+    @Test("Rejects a collection face index outside the collection's range")
+    func rejectsOutOfRangeCollectionFaceIndex() throws {
+        let data = SyntheticTrueTypeFont.makeCollection(faces: [
+            SyntheticTrueTypeFont.data(cmapFormat: 4),
+            SyntheticTrueTypeFont.data(cmapFormat: 12),
+        ])
+        do {
+            _ = try TrueTypeFontParser().parse(data, faceIndex: 2)
+            Issue.record("Expected an out-of-range face index error")
+        } catch let error as TrueTypeFontError {
+            #expect(error == .fontCollectionFaceIndexOutOfRange(index: 2, count: 2))
+            #expect(error.errorDescription != nil)
+            #expect(error.recoverySuggestion != nil)
+        }
+    }
+
+    @Test("A single-face font is unaffected by the collection code path (directory at 0)")
+    func singleFaceFontStillParsesFromOffsetZero() throws {
+        // faceIndex is ignored when the file is not a collection.
+        let metadata = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data(), faceIndex: 0)
+        #expect(!metadata.tables.isEmpty)
+    }
+
     @Test("Discovers format 12 Unicode cmap records")
     func discoversFormat12UnicodeCMapRecords() throws {
         let metadata = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data(cmapFormat: 12))
@@ -305,11 +348,13 @@ struct TrueTypeFontParserTests {
 
     @Test("Rejects unsupported font container formats with a typed actionable error")
     func rejectsUnsupportedFontContainerFormats() {
+        // A TrueType/OpenType Collection ('ttcf') is no longer in this list: it is a
+        // supported container now (a face is selected from it), covered by the
+        // collection tests above.
         let cases: [(signature: [UInt8], format: String)] = [
             ([0x4F, 0x54, 0x54, 0x4F], "OpenType CFF"), // OTTO
             ([0x77, 0x4F, 0x46, 0x46], "WOFF"), // wOFF
             ([0x77, 0x4F, 0x46, 0x32], "WOFF2"), // wOF2
-            ([0x74, 0x74, 0x63, 0x66], "TrueType/OpenType Collection"), // ttcf
         ]
         for testCase in cases {
             expectTrueTypeError {
@@ -321,6 +366,20 @@ struct TrueTypeFontParserTests {
                 }
                 #expect(format == testCase.format)
                 #expect(!guidance.isEmpty)
+            }
+        }
+    }
+
+    @Test("Rejects a collection header with an unsupported version")
+    func rejectsMalformedCollectionHeader() {
+        // 'ttcf' + version 0x00030000 (only 0x00010000 / 0x00020000 are valid).
+        let bytes: [UInt8] = [0x74, 0x74, 0x63, 0x66, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
+        expectTrueTypeError {
+            _ = try TrueTypeFontParser().parse(Data(bytes))
+        } verify: { error in
+            guard case .malformedFontCollection = error else {
+                Issue.record("Expected malformedFontCollection")
+                return
             }
         }
     }
@@ -637,6 +696,43 @@ enum SyntheticTrueTypeFont {
         }
 
         return font
+    }
+
+    /// Assembles several independent single-face sfnts into one TrueType Collection
+    /// ('ttcf') with a genuine per-face directory (each face keeps its own tables at
+    /// its own offset), not a shared directory. This is the faithful model: a
+    /// `faceIndex` that reads the wrong entry lands on a different font, so tests can
+    /// distinguish "selected face N" from "always face 0". Each face's absolute table
+    /// offsets are shifted to where that face lands in the combined blob; the table
+    /// bytes and their checksums are unchanged, so every face validates.
+    static func makeCollection(faces: [Data]) -> Data {
+        let headerLength = 12 + faces.count * 4
+        var blob = Data()
+        var faceOffsets: [Int] = []
+        for face in faces {
+            while (headerLength + blob.count).isMultiple(of: 4) == false {
+                blob.append(0)
+            }
+            let start = headerLength + blob.count
+            faceOffsets.append(start)
+            var shifted = face
+            let numTables = Int(readUInt16(at: 4, in: shifted))
+            for index in 0 ..< numTables {
+                let recordOffset = 12 + index * 16
+                let oldOffset = readUInt32(at: recordOffset + 8, in: shifted)
+                writeUInt32(oldOffset + UInt32(start), at: recordOffset + 8, in: &shifted)
+            }
+            blob.append(shifted)
+        }
+
+        var header = Data(count: headerLength)
+        writeTag("ttcf", at: 0, in: &header)
+        writeUInt32(0x0001_0000, at: 4, in: &header)
+        writeUInt32(UInt32(faces.count), at: 8, in: &header)
+        for (index, offset) in faceOffsets.enumerated() {
+            writeUInt32(UInt32(offset), at: 12 + index * 4, in: &header)
+        }
+        return header + blob
     }
 
     private static func headTable(
@@ -1754,6 +1850,15 @@ enum SyntheticTrueTypeFont {
         data[offset + 1] = UInt8((value >> 16) & 0xFF)
         data[offset + 2] = UInt8((value >> 8) & 0xFF)
         data[offset + 3] = UInt8(value & 0xFF)
+    }
+
+    private static func readUInt16(at offset: Int, in data: Data) -> UInt16 {
+        (UInt16(data[offset]) << 8) | UInt16(data[offset + 1])
+    }
+
+    private static func readUInt32(at offset: Int, in data: Data) -> UInt32 {
+        (UInt32(data[offset]) << 24) | (UInt32(data[offset + 1]) << 16)
+            | (UInt32(data[offset + 2]) << 8) | UInt32(data[offset + 3])
     }
 
     private static func appendUInt16(_ value: UInt16, to data: inout Data) {

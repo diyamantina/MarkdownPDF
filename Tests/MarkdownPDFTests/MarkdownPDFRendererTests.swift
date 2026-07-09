@@ -724,6 +724,26 @@ struct MarkdownPDFRendererTests {
         #expect(!raw.contains("Cafe?"), "a decomposed diacritic degraded to ? in a document string")
     }
 
+    @Test("An embedded font from a .ttc collection renders via its selected face")
+    func embeddedCollectionFontRenders() throws {
+        // Before this, a TrueType collection was rejected outright; a user could not
+        // embed a system CJK/Arabic/Hebrew font (those ship as collections). The
+        // source now carries a face index (default 0). See #41.
+        // A real 2-face collection; embed the second face (its directory is not at
+        // offset 0), exercising the non-first-face path end to end.
+        let collection = SyntheticTrueTypeFont.makeCollection(faces: [
+            SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true),
+            SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true),
+        ])
+        let embedded = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: collection, baseName: "Collection", faceIndex: 1),
+        ))
+        let data = try MarkdownPDFRenderer(options: embedded).render(markdown: "ABCD")
+        #expect(!data.isEmpty)
+        let inspector = try PDFInspector(data)
+        #expect(inspector.text.contains("/FontFile2")) // the selected face was embedded
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
