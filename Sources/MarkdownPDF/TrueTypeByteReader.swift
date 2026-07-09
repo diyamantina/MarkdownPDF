@@ -28,6 +28,11 @@ struct TrueTypeByteReader {
         return tagBytes.map { String(format: "%02X", locale: Locale(identifier: "en_US_POSIX"), $0) }.joined()
     }
 
+    func uint8(at offset: Int) throws -> UInt8 {
+        try requireRange(offset: offset, count: 1)
+        return bytes[offset]
+    }
+
     func uint16(at offset: Int) throws -> UInt16 {
         try requireRange(offset: offset, count: 2)
         return UInt16(bytes[offset]) << 8 | UInt16(bytes[offset + 1])
