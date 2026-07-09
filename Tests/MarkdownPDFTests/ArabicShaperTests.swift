@@ -152,14 +152,14 @@ enum HarfBuzzOracle {
 
     /// The glyph ids `hb-shape` produces for `text`, reordered from visual (RTL) to
     /// logical order by the cluster index each glyph carries.
-    static func shape(_ text: String, fontPath: String) throws -> [UInt16] {
+    static func shape(_ text: String, fontPath: String, script: String = "arab") throws -> [UInt16] {
         // `--script=arab` pins itemization (so a Latin- or digit-adjacent Arabic run
         // is not mis-scripted) and `--cluster-level=1` gives each base and mark its
         // own cluster, so reordering by cluster below stays faithful for text with
         // marks. Without these the harness produces false diffs on extended corpora.
         let output = try run(arguments: [
             "hb-shape", "--font-file=\(fontPath)", "--no-glyph-names",
-            "--script=arab", "--cluster-level=1", unicodesArgument(for: text),
+            "--script=\(script)", "--cluster-level=1", unicodesArgument(for: text),
         ])
         // Format: [glyph=cluster+advance|glyph=cluster+advance|...]
         let inner = output.trimmingCharacters(in: CharacterSet(charactersIn: "[]\n"))
@@ -191,10 +191,10 @@ enum HarfBuzzOracle {
     /// The glyphs `hb-shape` produces for `text` with their GPOS placement offsets, in
     /// logical order, for verifying mark positioning. Output token forms are
     /// `glyph=cluster+advance` (no offset) and `glyph=cluster@xoff,yoff+advance`.
-    static func shapeWithPositions(_ text: String, fontPath: String) throws -> [PositionedGlyph] {
+    static func shapeWithPositions(_ text: String, fontPath: String, script: String = "arab") throws -> [PositionedGlyph] {
         let output = try run(arguments: [
             "hb-shape", "--font-file=\(fontPath)", "--no-glyph-names",
-            "--script=arab", "--cluster-level=1", unicodesArgument(for: text),
+            "--script=\(script)", "--cluster-level=1", unicodesArgument(for: text),
         ])
         let inner = output.trimmingCharacters(in: CharacterSet(charactersIn: "[]\n"))
         guard !inner.isEmpty else {

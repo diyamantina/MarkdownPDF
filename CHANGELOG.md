@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Hebrew shaping: composition and niqqud positioning. Pointed Hebrew now composes its
+  presentation forms (shin dot, sin dot, letter+dagesh) and places the vowel points on
+  their letters, instead of drawing the marks at nominal positions. A new Hebrew shaper
+  reorders the letter-modifying marks (dagesh, shin/sin dot) next to their consonant,
+  composes them with GSUB `ccmp` (reusing the shared GSUB applier the Arabic path uses),
+  and attaches the remaining niqqud with the `hebr`-script GPOS mark lookups (reusing the
+  shared mark positioner); a pointed run is shaped whole and drawn right-to-left with
+  `/ToUnicode` preserved, while an unpointed run stays on the ordinary path unchanged.
+  Verified against `hb-shape`: 299 of 324 letter-and-mark combinations match glyph and
+  offset exactly. The remaining 25 are holam directly on a consonant (holam haser), which
+  needs GPOS type-8 contextual positioning the engine does not yet apply and is off by 25
+  font units (about 0.15 pt at 12 pt); holam on vav composes and matches
+  ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
 - Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
   tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a
   vowel), they are reordered by combining class before shaping so they stack the way the
