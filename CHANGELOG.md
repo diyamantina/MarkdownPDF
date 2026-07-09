@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
+  tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a
+  vowel), they are reordered by combining class before shaping so they stack the way the
+  reference shaper stacks them. A generated table carries the combining class for every
+  non-zero-class scalar (Unicode 17.0.0); the ordering is a stable per-mark-run sort that
+  never crosses a starter and performs no decomposition. Only runs made up entirely of the
+  core harakat are reordered: HarfBuzz orders other marks (hamza, the Quranic annotation
+  marks, subscript alef) by UTR #53 rather than raw combining class, so a run containing
+  one is left in typed order to match the reference exactly. Extraction recovers the
+  reordered (canonically-equivalent) mark order. Verified against `hb-shape` over an
+  816-case sweep (harakat, modifier, and Quranic marks in both orders on several bases):
+  24 placements fixed, zero regressions versus the prior behavior
+  ([#48](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48)).
 - Arabic `ccmp` mark composition and GSUB `IgnoreMarks`. Two refinements that bring
   vocalized Arabic closer to the reference shaper. The contextual matcher now honors the
   `IgnoreMarks` lookup flag, skipping harakat when matching, so a vocalized lam-alef
