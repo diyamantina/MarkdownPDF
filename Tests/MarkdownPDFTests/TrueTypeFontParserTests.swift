@@ -522,6 +522,8 @@ enum SyntheticTrueTypeFont {
         invalidMaxpVersion: Bool = false,
         malformedCMapLength: Bool = false,
         cmapFormat4UsesGlyphArray: Bool = false,
+        cmapFormat4GlyphArrayMapsToNotdefViaIdDelta: Bool = false,
+        cmapFormat4MapsLetterAToNotdef: Bool = false,
         invalidCMapFormat4SegmentRange: Bool = false,
         invalidCMapFormat4SegmentOrder: Bool = false,
         invalidCMapFormat4ReservedPad: Bool = false,
@@ -535,6 +537,7 @@ enum SyntheticTrueTypeFont {
         glyphProfile: GlyphProfile = .basic,
         includeGlyphOutlines: Bool = false,
         includeGSUBLigatures: Bool = false,
+        gsubLigatureOutputsNotdef: Bool = false,
         includeMATHTable: Bool = false,
         invalidMATHConstantsOffset: Bool = false,
         mismatchedMATHItalicsCount: Bool = false,
@@ -558,6 +561,8 @@ enum SyntheticTrueTypeFont {
                 format: cmapFormat,
                 malformedLength: malformedCMapLength,
                 format4UsesGlyphArray: cmapFormat4UsesGlyphArray,
+                format4GlyphArrayMapsToNotdefViaIdDelta: cmapFormat4GlyphArrayMapsToNotdefViaIdDelta,
+                format4MapsLetterAToNotdef: cmapFormat4MapsLetterAToNotdef,
                 invalidFormat4SegmentRange: invalidCMapFormat4SegmentRange,
                 invalidFormat4SegmentOrder: invalidCMapFormat4SegmentOrder,
                 invalidFormat4ReservedPad: invalidCMapFormat4ReservedPad,
@@ -583,7 +588,7 @@ enum SyntheticTrueTypeFont {
             }
         }
         if includeGSUBLigatures, !omittedTables.contains("GSUB") {
-            tables["GSUB"] = gsubLigatureTable(glyphSet: glyphSet)
+            tables["GSUB"] = gsubLigatureTable(glyphSet: glyphSet, outputsNotdef: gsubLigatureOutputsNotdef)
         }
         if includeMATHTable, !omittedTables.contains("MATH") {
             tables["MATH"] = mathTable(
@@ -787,6 +792,8 @@ enum SyntheticTrueTypeFont {
         format: UInt16,
         malformedLength: Bool,
         format4UsesGlyphArray: Bool,
+        format4GlyphArrayMapsToNotdefViaIdDelta: Bool = false,
+        format4MapsLetterAToNotdef: Bool = false,
         invalidFormat4SegmentRange: Bool,
         invalidFormat4SegmentOrder: Bool,
         invalidFormat4ReservedPad: Bool,
@@ -808,13 +815,18 @@ enum SyntheticTrueTypeFont {
                     format4CMapSubtable(
                         malformedLength: malformedLength,
                         usesGlyphArray: format4UsesGlyphArray,
+                        glyphArrayMapsToNotdefViaIdDelta: format4GlyphArrayMapsToNotdefViaIdDelta,
                         invalidSegmentRange: invalidFormat4SegmentRange,
                         invalidSegmentOrder: invalidFormat4SegmentOrder,
                         invalidReservedPad: invalidFormat4ReservedPad,
                     ),
                 )
             } else {
-                data.append(format4GlyphSetCMapSubtable(malformedLength: malformedLength, glyphSet: glyphSet))
+                data.append(format4GlyphSetCMapSubtable(
+                    malformedLength: malformedLength,
+                    mapsLetterAToNotdef: format4MapsLetterAToNotdef,
+                    glyphSet: glyphSet,
+                ))
             }
         case 12:
             if glyphSet.profile == .basic {
@@ -842,9 +854,16 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func format4GlyphSetCMapSubtable(malformedLength: Bool, glyphSet: GlyphSet) -> Data {
+    private static func format4GlyphSetCMapSubtable(
+        malformedLength: Bool,
+        mapsLetterAToNotdef: Bool = false,
+        glyphSet: GlyphSet,
+    ) -> Data {
         if glyphSet.profile == .latinWitness {
-            return format4LatinWitnessCMapSubtable(malformedLength: malformedLength)
+            return format4LatinWitnessCMapSubtable(
+                malformedLength: malformedLength,
+                mapsLetterAToNotdef: mapsLetterAToNotdef,
+            )
         }
 
         let entries = glyphSet.encodedGlyphs
@@ -880,7 +899,10 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func format4LatinWitnessCMapSubtable(malformedLength: Bool) -> Data {
+    private static func format4LatinWitnessCMapSubtable(
+        malformedLength: Bool,
+        mapsLetterAToNotdef: Bool = false,
+    ) -> Data {
         var data = Data()
         appendUInt16(4, to: &data)
         appendUInt16(malformedLength ? 24 : 40, to: &data)
@@ -897,7 +919,10 @@ enum SyntheticTrueTypeFont {
         appendUInt16(0x0041, to: &data)
         appendUInt16(0xFFFF, to: &data)
         appendInt16(-31, to: &data)
-        appendInt16(-63, to: &data)
+        // The A-Z segment normally uses idDelta -63 (A=0x41 -> glyph 2). At -65, A
+        // maps to glyph 0 (.notdef), exercising the idRangeOffset == 0 branch's
+        // resolved-to-notdef guard.
+        appendInt16(mapsLetterAToNotdef ? -65 : -63, to: &data)
         appendInt16(1, to: &data)
         appendUInt16(0, to: &data)
         appendUInt16(0, to: &data)
@@ -908,6 +933,7 @@ enum SyntheticTrueTypeFont {
     private static func format4CMapSubtable(
         malformedLength: Bool,
         usesGlyphArray: Bool,
+        glyphArrayMapsToNotdefViaIdDelta: Bool = false,
         invalidSegmentRange: Bool,
         invalidSegmentOrder: Bool,
         invalidReservedPad: Bool,
@@ -925,7 +951,11 @@ enum SyntheticTrueTypeFont {
         appendUInt16(invalidReservedPad ? 1 : 0, to: &data)
         appendUInt16(invalidSegmentOrder ? 0xFFFF : 0x0041, to: &data)
         appendUInt16(invalidSegmentOrder ? 0x0041 : 0xFFFF, to: &data)
-        appendUInt16(usesGlyphArray ? 0 : 0xFFC0, to: &data)
+        // With the glyph array [1, 2] for A, B, an idDelta of -1 drives 'A' (raw
+        // glyph 1) to glyph 0 after addition, exercising the post-idDelta notdef
+        // guard on the glyph-array branch; 'B' (raw 2) stays at glyph 1.
+        let glyphArrayIdDelta: UInt16 = glyphArrayMapsToNotdefViaIdDelta ? 0xFFFF : 0
+        appendUInt16(usesGlyphArray ? glyphArrayIdDelta : 0xFFC0, to: &data)
         appendUInt16(1, to: &data)
         appendUInt16(usesGlyphArray ? 4 : 0, to: &data)
         appendUInt16(0, to: &data)
@@ -1191,13 +1221,16 @@ enum SyntheticTrueTypeFont {
         appendUInt16(flags, to: &data)
     }
 
-    private static func gsubLigatureTable(glyphSet: GlyphSet) -> Data {
+    private static func gsubLigatureTable(glyphSet: GlyphSet, outputsNotdef: Bool = false) -> Data {
         guard let firstGlyphID = glyphSet.glyphID(for: "f"),
               let secondGlyphID = glyphSet.glyphID(for: "i"),
-              let ligatureGlyphID = glyphSet.glyphID(named: "fi")
+              let realLigatureGlyphID = glyphSet.glyphID(named: "fi")
         else {
             preconditionFailure("The GSUB ligature fixture requires f, i, and fi glyphs")
         }
+        // A substitution whose output glyph is 0 (.notdef) models a malformed font;
+        // the shaper must drop it rather than paint notdef for "fi".
+        let ligatureGlyphID: UInt16 = outputsNotdef ? 0 : realLigatureGlyphID
 
         let scriptList = gsubScriptListTable()
         let featureList = gsubFeatureListTable()

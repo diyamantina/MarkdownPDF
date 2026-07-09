@@ -322,7 +322,12 @@ private struct GSUBLigatureParser {
             }
         }
         try validateGlyphIDs(in: rules)
-        return rules
+        // A ligature substitution whose output glyph is 0 (.notdef) is degenerate:
+        // applying it would paint the missing-glyph box for a real cluster and, under
+        // a conformance profile, reference .notdef in content (the same glyph-0-is-
+        // notdef rule the cmap lookups enforce). Drop it so the cluster renders
+        // un-ligated through its components' own, cmap-guarded glyphs.
+        return rules.filter { $0.ligatureGlyphID != 0 }
     }
 
     private func scriptFeatureIndices(at offset: Int, scriptTag: String) throws -> Set<UInt16> {
