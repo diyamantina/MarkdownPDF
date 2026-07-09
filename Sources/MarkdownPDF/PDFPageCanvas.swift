@@ -152,16 +152,64 @@ final class PDFPageCanvas {
         // `/ToUnicode` CMap and `/W` advances are per character-code and so unaffected
         // by the emission order, keeping extraction faithful.
         let orderedClusters = rightToLeft ? Array(mapping.clusters.reversed()) : mapping.clusters
-        contentStream.append([
-            .beginText,
-            .setFont(PDFSyntax.Name(fontResource.resourceName), size: fontSize),
-            .moveText(x: x, y: y),
-            .showCIDText(orderedClusters.flatMap(\.pdfCharacterCodes)),
-            .endText,
-        ])
+        let orderedGlyphs = orderedClusters.flatMap(\.glyphs)
+        let font = PDFSyntax.Name(fontResource.resourceName)
+        // A run whose glyphs all sit on the baseline (no GPOS placement) is shown in a
+        // single operator, byte-identical to before mark positioning existed. Only a
+        // run carrying a placement offset takes the per-glyph positioned path.
+        if orderedGlyphs.allSatisfy({ $0.offset == .zero }) {
+            contentStream.append([
+                .beginText,
+                .setFont(font, size: fontSize),
+                .moveText(x: x, y: y),
+                .showCIDText(orderedClusters.flatMap(\.pdfCharacterCodes)),
+                .endText,
+            ])
+        } else {
+            contentStream.append(positionedTextOperators(orderedGlyphs, font: font, fontSize: fontSize, x: x, y: y))
+        }
         if let decoratedRun {
             drawDecorations(for: decoratedRun, x: x, y: y, width: mapping.totalAdvance)
         }
+    }
+
+    /// Emits each glyph individually, positioning it with a text-line move so a mark's
+    /// GPOS offset places it off the pen. Successive `moveText` operators accumulate on
+    /// the text line matrix independently of the glyph advances `showCIDText` applies,
+    /// so the pen is tracked here from each glyph's own advance plus its offset; the
+    /// font `/W` advances are not relied on for placement in this path.
+    ///
+    /// The `/ToUnicode` CMap keeps the run recoverable (character codes and order are
+    /// unchanged from the single-show path). One extractor, Poppler's `pdftotext`,
+    /// inserts spurious spaces inside a positioned run because its word-segmentation
+    /// heuristic keys off the per-glyph moves; extractors that honor `/ToUnicode`
+    /// (mutool, Preview, Acrobat) recover the text intact.
+    private func positionedTextOperators(
+        _ glyphs: [ShapedTextMapping.Glyph],
+        font: PDFSyntax.Name,
+        fontSize: Double,
+        x: Double,
+        y: Double,
+    ) -> [PDFContentStream.Operator] {
+        var operators: [PDFContentStream.Operator] = [
+            .beginText,
+            .setFont(font, size: fontSize),
+            .moveText(x: x, y: y),
+        ]
+        var penX = 0.0
+        var previousX = 0.0
+        var previousY = 0.0
+        for glyph in glyphs {
+            let targetX = penX + glyph.offset.x
+            let targetY = glyph.offset.y
+            operators.append(.moveText(x: targetX - previousX, y: targetY - previousY))
+            operators.append(.showCIDText([glyph.pdfCharacterCode]))
+            previousX = targetX
+            previousY = targetY
+            penX += glyph.advance
+        }
+        operators.append(.endText)
+        return operators
     }
 
     func addHeadingDestination(_ destination: PDFHeadingDestination) {

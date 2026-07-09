@@ -170,6 +170,49 @@ enum HarfBuzzOracle {
             .map(\.element.glyph)
     }
 
+    struct PositionedGlyph: Equatable {
+        var glyph: UInt16
+        var xOffset: Int
+        var yOffset: Int
+    }
+
+    /// The glyphs `hb-shape` produces for `text` with their GPOS placement offsets, in
+    /// logical order, for verifying mark positioning. Output token forms are
+    /// `glyph=cluster+advance` (no offset) and `glyph=cluster@xoff,yoff+advance`.
+    static func shapeWithPositions(_ text: String, fontPath: String) throws -> [PositionedGlyph] {
+        let output = try run(arguments: [
+            "hb-shape", "--font-file=\(fontPath)", "--no-glyph-names",
+            "--script=arab", "--cluster-level=1", text,
+        ])
+        let inner = output.trimmingCharacters(in: CharacterSet(charactersIn: "[]\n"))
+        guard !inner.isEmpty else {
+            return []
+        }
+        var entries: [(cluster: Int, glyph: PositionedGlyph)] = []
+        for token in inner.split(separator: "|") {
+            let glyphPart = token.prefix { $0 != "=" }
+            let afterEquals = token.drop { $0 != "=" }.dropFirst()
+            let clusterPart = afterEquals.prefix { $0 != "+" && $0 != "@" }
+            guard let glyph = UInt16(glyphPart), let cluster = Int(clusterPart) else {
+                continue
+            }
+            var xOffset = 0
+            var yOffset = 0
+            if let atStart = afterEquals.firstIndex(of: "@") {
+                let offsetPart = afterEquals[afterEquals.index(after: atStart)...].prefix { $0 != "+" }
+                let coordinates = offsetPart.split(separator: ",")
+                if coordinates.count == 2, let x = Int(coordinates[0]), let y = Int(coordinates[1]) {
+                    xOffset = x
+                    yOffset = y
+                }
+            }
+            entries.append((cluster, PositionedGlyph(glyph: glyph, xOffset: xOffset, yOffset: yOffset)))
+        }
+        return entries.enumerated()
+            .sorted { ($0.element.cluster, $0.offset) < ($1.element.cluster, $1.offset) }
+            .map(\.element.glyph)
+    }
+
     private static func run(arguments: [String]) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
