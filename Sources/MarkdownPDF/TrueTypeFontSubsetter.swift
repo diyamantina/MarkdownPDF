@@ -90,7 +90,12 @@ struct TrueTypeFontSubsetter {
             scalarMappings: scalarMappings(for: glyphs, glyphIDMap: glyphIDMap),
         )
         let fontProgram = Self.fontProgram(scalerType: metadata.scalerType, tables: tables)
-        let subsetMetadata = try TrueTypeFontParser().parse(fontProgram)
+        // Validate checksums when re-parsing our OWN rebuilt subset. Input-font
+        // checksum validation is off by default because real fonts ship non-spec
+        // checksums, but this program's checksums are computed by `fontProgram`, so
+        // verifying them here is a self-oracle: it catches a regression that would
+        // otherwise emit a font with wrong checksums into every PDF unnoticed.
+        let subsetMetadata = try TrueTypeFontParser().parse(fontProgram, validateChecksums: true)
 
         return try Subset(
             fontProgram: fontProgram,

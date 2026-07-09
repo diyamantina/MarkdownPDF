@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arabic (cursive) shaping core: the joining algorithm plus GSUB positional forms.
+  Before, Arabic rendered in disconnected isolated letters. The shaper resolves each
+  letter's positional form (isolated/initial/medial/final) from the Unicode joining
+  algorithm (authoritative `DerivedJoiningType` data for every cursive script), then
+  applies the font's `isol`/`init`/`medi`/`fina` single substitutions and `rlig`
+  ligatures (lam-alef) through a new general GSUB reader (lookup types 1 and 4,
+  script `arab`). The glyph ids match HarfBuzz exactly within that scope, verified by
+  a differential test against `hb-shape`. Contextual shaping (GSUB type 5/6, e.g.
+  Noto's stylistic lam-alef) and GPOS mark positioning are deferred, as is wiring the
+  shaper into the render path with RTL ordering; today this is the
+  independently-tested shaping core
+  ([#42](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/42)).
 - Embedding a face from a TrueType/OpenType Collection (`.ttc`/`.otc`). A collection
   was rejected outright, which blocked embedding the system fonts that cover CJK,
   Arabic, and Hebrew (they ship as collections). The parser now reads the `ttcf`
@@ -19,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#41](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/41)).
 
 ### Fixed
+- Embedding a font with non-spec table checksums no longer fails. Apple system
+  fonts routinely ship incorrect `head`/table checksums, so strict validation
+  rejected them (`invalidTableChecksum`) even though they are structurally valid
+  and the embedder subsets and rebuilds the font anyway. Table-checksum validation
+  is now opt-in (`parse(validateChecksums:)`, default off, matching reference
+  engines); the structural bounds checks and per-table parsers still reject
+  genuinely corrupt fonts. Combined with the collection support, real macOS system
+  fonts (e.g. Apple Symbols, and the Armenian Mshtakan collection) now embed
+  ([#43](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/43)).
 - Heading anchor slugs are stable across Unicode normalization forms, so an
   internal link resolves whether the heading or the link was authored precomposed
   or decomposed. The slug generator kept the ASCII base of a decomposed accent

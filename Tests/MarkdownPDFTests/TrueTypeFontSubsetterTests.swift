@@ -4,6 +4,22 @@ import Testing
 
 @Suite("TrueType font subsetter")
 struct TrueTypeFontSubsetterTests {
+    @Test("The rebuilt subset font carries spec-valid table checksums")
+    func subsetFontHasValidChecksums() throws {
+        // Input-font checksum validation is off by default (real fonts ship non-spec
+        // checksums, #43), but the subset this engine emits must be correct because
+        // it writes those checksums itself. Re-parsing the subset with strict
+        // validation is the self-oracle that guards the subsetter's own output.
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        let glyphs = try TrueTypeGlyphMapper(data: fontData, metadata: metadata)
+            .map(text: "WAVE", fontSize: 12)
+            .glyphs
+        let subset = try TrueTypeFontSubsetter(data: fontData, metadata: metadata).subset(glyphs: glyphs)
+        // Throws invalidTableChecksum if the subsetter ever writes wrong checksums.
+        _ = try TrueTypeFontParser().parse(subset.fontProgram, validateChecksums: true)
+    }
+
     @Test("Builds deterministic compact subsets and CIDToGID streams")
     func buildsDeterministicCompactSubsetsAndCIDToGIDStreams() throws {
         let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
