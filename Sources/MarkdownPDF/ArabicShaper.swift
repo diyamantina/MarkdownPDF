@@ -13,6 +13,10 @@ struct ArabicShaper {
         /// The source scalar indices this output glyph came from (a range so a
         /// ligature can record the cluster it consumed), for a later ToUnicode step.
         var sourceScalarRange: Range<Int>
+        /// GPOS placement offset in font units (mark attachment). Zero for a glyph the
+        /// positioning did not move; scaled to the point size by `shapedMapping`.
+        var xOffset: Int = 0
+        var yOffset: Int = 0
     }
 
     // MARK: - Joining state machine (pure, testable)
@@ -140,6 +144,11 @@ struct ArabicShaper {
     /// GSUB). Shaping and ``canShapeArabic`` reuse it, so the table is not re-parsed
     /// on the per-run, per-measurement hot path.
     private let gsub: GSUBTable?
+    /// The font's `arab` GPOS mark-attachment lookups and its GDEF glyph classes,
+    /// parsed once. Both nil when absent or malformed: the font still shapes and
+    /// renders, marks just keep their nominal (unattached) positions.
+    private let gpos: GPOSTable?
+    private let gdef: GDEFTable?
 
     init(fontData: Data, metadata: TrueTypeFontParser.Metadata) {
         self.fontData = fontData
@@ -157,6 +166,25 @@ struct ArabicShaper {
             )
         } catch {
             gsub = nil
+        }
+        // GPOS/GDEF are likewise optional: mark positioning is a refinement, and a
+        // font that lacks or malforms them still renders with nominal mark positions.
+        do {
+            gpos = try GPOSTable(
+                fontData: fontData,
+                gposTableRange: Self.tableRange(named: "GPOS", fontData: fontData, metadata: metadata),
+                scriptTag: "arab",
+            )
+        } catch {
+            gpos = nil
+        }
+        do {
+            gdef = try GDEFTable(
+                fontData: fontData,
+                gdefTableRange: Self.tableRange(named: "GDEF", fontData: fontData, metadata: metadata),
+            )
+        } catch {
+            gdef = nil
         }
     }
 
@@ -211,7 +239,73 @@ struct ArabicShaper {
             // canonical presentation form.
             glyphs = applyFeatureLookups("rlig", to: glyphs, gsub: gsub)
         }
+        applyMarkPositioning(&glyphs)
         return glyphs
+    }
+
+    /// Places combining marks on their base and on preceding marks via GPOS. The
+    /// `mark` feature attaches each mark to the nearest preceding non-mark (its base);
+    /// the `mkmk` feature then attaches each mark to the nearest preceding mark,
+    /// stacking on top of that mark's already-computed placement. The offset stored is
+    /// `targetAnchor - markAnchor` in font units: in the drawn (visual) order a mark
+    /// sits at the same pen as its base (marks do not advance), so that offset aligns
+    /// the two anchors. Requires GDEF to tell marks from bases; without GPOS/GDEF the
+    /// marks keep their nominal positions.
+    private func applyMarkPositioning(_ glyphs: inout [ShapedGlyph]) {
+        guard let gpos, gpos.hasMarkPositioning, let gdef else {
+            return
+        }
+        let isMark = glyphs.map { gdef.isMark($0.glyphID) }
+
+        // MARK: - to-base: attach each mark to the nearest preceding base glyph.
+
+        let markLookups = gpos.orderedLookupIndices(feature: "mark")
+        if !markLookups.isEmpty {
+            for index in glyphs.indices where isMark[index] {
+                guard let baseIndex = (0 ..< index).last(where: { !isMark[$0] }) else {
+                    continue
+                }
+                if let offset = attachmentOffset(markLookups, mark: glyphs[index].glyphID, target: glyphs[baseIndex].glyphID, gpos: gpos) {
+                    glyphs[index].xOffset = offset.x
+                    glyphs[index].yOffset = offset.y
+                }
+            }
+        }
+
+        // MARK: - to-mark: attach each mark to the mark immediately before it, adding that
+
+        // mark's placement so it stacks above. Only the immediately preceding glyph is
+        // a candidate: a base between two marks means they sit on different letters
+        // (each attached its own base), not stacked, so mkmk must not reach across it.
+        let mkmkLookups = gpos.orderedLookupIndices(feature: "mkmk")
+        if !mkmkLookups.isEmpty {
+            for index in glyphs.indices where isMark[index] && index > 0 && isMark[index - 1] {
+                let priorMark = index - 1
+                if let offset = attachmentOffset(mkmkLookups, mark: glyphs[index].glyphID, target: glyphs[priorMark].glyphID, gpos: gpos) {
+                    glyphs[index].xOffset = glyphs[priorMark].xOffset + offset.x
+                    glyphs[index].yOffset = glyphs[priorMark].yOffset + offset.y
+                }
+            }
+        }
+    }
+
+    /// The placement offset of `mark` onto `target` across `lookups` in order (the
+    /// first lookup that attaches them wins), or nil when none does.
+    private func attachmentOffset(
+        _ lookups: [UInt16],
+        mark: UInt16,
+        target: UInt16,
+        gpos: GPOSTable,
+    ) -> (x: Int, y: Int)? {
+        for lookupIndex in lookups {
+            if let attachment = gpos.attachment(lookupIndex: lookupIndex, mark: mark, target: target) {
+                return (
+                    x: Int(attachment.targetAnchor.x) - Int(attachment.markAnchor.x),
+                    y: Int(attachment.targetAnchor.y) - Int(attachment.markAnchor.y),
+                )
+            }
+        }
+        return nil
     }
 
     /// Applies every lookup of `feature`, in LookupList (apply) order, over the glyph
@@ -371,6 +465,9 @@ struct ArabicShaper {
             let advanceWidth = Int(glyph.glyphID) < advanceWidths.count ? advanceWidths[Int(glyph.glyphID)] : 0
             let advance = unitsPerEm > 0 ? Double(advanceWidth) / unitsPerEm * fontSize : 0
             let cid = metadata.compositeCID(forGlyph: glyph.glyphID)
+            // GPOS placement, in font units, scaled to the point size.
+            let scale = unitsPerEm > 0 ? fontSize / unitsPerEm : 0
+            let offset = ShapedTextMapping.Offset(x: Double(glyph.xOffset) * scale, y: Double(glyph.yOffset) * scale)
             clusters.append(ShapedTextMapping.Cluster(
                 sourceScalarRange: range,
                 normalizedText: String(String.UnicodeScalarView(clusterScalars)),
@@ -380,6 +477,7 @@ struct ArabicShaper {
                     pdfCharacterCode: cid,
                     advanceWidth: advanceWidth,
                     advance: advance,
+                    offset: offset,
                     // A positional form maps one base scalar to different glyphs by
                     // context (beh initial vs medial), which would collide in the
                     // subset font cmap. Give each glyph a synthetic, glyph-unique
@@ -394,7 +492,13 @@ struct ArabicShaper {
     }
 
     private static func gsubTableRange(fontData: Data, metadata: TrueTypeFontParser.Metadata) -> Range<Int>? {
-        guard let record = metadata.table(named: "GSUB") else {
+        tableRange(named: "GSUB", fontData: fontData, metadata: metadata)
+    }
+
+    /// The byte range of a named font table, bounds-checked against the file, or nil
+    /// when the table is absent or its record is out of range.
+    private static func tableRange(named tag: String, fontData: Data, metadata: TrueTypeFontParser.Metadata) -> Range<Int>? {
+        guard let record = metadata.table(named: tag) else {
             return nil
         }
         let start = Int(record.offset)
