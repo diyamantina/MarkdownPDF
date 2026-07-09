@@ -213,24 +213,15 @@ struct PDFDocumentWriter {
         mutating func addEmbeddedFont(_ usage: PDFEmbeddedFontUsage) throws -> PDFPageResources.Entry {
             let resource = usage.resource
             let widths = try cidFontWidths(for: usage)
-            let subset = try TrueTypeFontSubsetter(
-                data: resource.fontProgram,
-                metadata: resource.metadata,
-            ).subset(glyphs: usage.glyphs)
-            let fontFileRef = addData(PDFFontFile2Stream(
-                fontProgram: subset.fontProgram,
-                streamCompression: streamCompression,
-            ).pdfStream.serialized)
-            let descriptorRef = addDictionary(embeddedFontDescriptor(resource, fontFile: fontFileRef).pdfDictionary)
-            let cidToGIDMap = addCIDToGIDMap(subset.cidToGIDMap)
-            let descendantRef = addDictionary(
-                PDFCIDFontType2Object(
-                    baseName: resource.baseName,
-                    fontDescriptor: descriptorRef,
-                    widths: widths,
-                    cidToGIDMap: cidToGIDMap,
-                ).pdfDictionary,
-            )
+            // Dispatch on outline type. An OpenType/CFF font (`metadata.cff != nil`)
+            // takes the FontFile3 / CIDFontType0 path and embeds the whole `CFF `
+            // program; a TrueType (`glyf`) font takes the FontFile2 / CIDFontType2
+            // subsetting path, byte-for-byte unchanged.
+            let descendantRef = if resource.metadata.cff != nil {
+                try addCFFDescendantFont(resource: resource, widths: widths)
+            } else {
+                try addGlyfDescendantFont(usage: usage, resource: resource, widths: widths)
+            }
             // A resource whose every drawn glyph is .notdef (all scalars missing
             // from its cmap, tolerated by the notdef fallback) has no recoverable
             // character to map, so it carries no `/ToUnicode`. Building the CMap
@@ -263,6 +254,93 @@ struct PDFDocumentWriter {
             case let .stream(data):
                 .stream(addStream(dictionary: PDFSyntax.Dictionary(), data: data))
             }
+        }
+
+        /// Emits the FontFile2 / CIDFontType2 descendant for a TrueType (`glyf`) font:
+        /// subset the glyphs, wrap the subset sfnt as FontFile2, and map CIDs to the
+        /// compacted glyph ids with a CIDToGIDMap. Unchanged from the original path.
+        private mutating func addGlyfDescendantFont(
+            usage: PDFEmbeddedFontUsage,
+            resource: PDFEmbeddedFontResource,
+            widths: PDFCIDFontWidths,
+        ) throws -> PDFSyntax.Reference {
+            let subset = try TrueTypeFontSubsetter(
+                data: resource.fontProgram,
+                metadata: resource.metadata,
+            ).subset(glyphs: usage.glyphs)
+            let fontFileRef = addData(PDFFontFile2Stream(
+                fontProgram: subset.fontProgram,
+                streamCompression: streamCompression,
+            ).pdfStream.serialized)
+            let descriptorRef = addDictionary(
+                embeddedFontDescriptor(resource, fontFile: .trueType(fontFileRef)).pdfDictionary,
+            )
+            let cidToGIDMap = addCIDToGIDMap(subset.cidToGIDMap)
+            return addDictionary(
+                PDFCIDFontType2Object(
+                    baseName: resource.baseName,
+                    fontDescriptor: descriptorRef,
+                    widths: widths,
+                    cidToGIDMap: cidToGIDMap,
+                ).pdfDictionary,
+            )
+        }
+
+        /// Emits the FontFile3 / CIDFontType0 descendant for an OpenType/CFF font. The
+        /// whole `CFF ` program is embedded verbatim (no charstring subsetting yet, a
+        /// tracked optimization); glyph selection is the CFF's own responsibility, so
+        /// there is no CIDToGIDMap. A CID-keyed CFF is tagged `CIDFontType0C`, a
+        /// name-keyed one `Type1C`.
+        private mutating func addCFFDescendantFont(
+            resource: PDFEmbeddedFontResource,
+            widths: PDFCIDFontWidths,
+        ) throws -> PDFSyntax.Reference {
+            guard let cff = resource.metadata.cff,
+                  let record = resource.metadata.table(named: "CFF ")
+            else {
+                throw PDFEmbeddedFontError.missingCFFTable(resourceName: resource.resourceName)
+            }
+            let program = resource.fontProgram
+            let start = Int(record.offset)
+            let end = start + Int(record.length)
+            guard start >= 0, end <= program.count, start <= end else {
+                throw PDFEmbeddedFontError.missingCFFTable(resourceName: resource.resourceName)
+            }
+            // A CID-keyed CFF is embedded as its bare `CFF ` table (CIDFontType0C):
+            // the viewer maps CID to glyph through the CFF's own charset. A name-keyed
+            // (non-CID) CFF is not a valid CIDFontType0C program, so a single-face
+            // source is embedded whole as an OpenType program (the CID is used
+            // directly as the glyph index); a name-keyed face inside a collection,
+            // which cannot be sliced to a lone sfnt here, falls back to a bare Type1C
+            // program (it renders everywhere, though a strict reader may note the
+            // composite/simple mismatch).
+            let isCollection = program.starts(with: [0x74, 0x74, 0x63, 0x66]) // 'ttcf'
+            let fontFile = if cff.isCIDKeyed {
+                PDFFontFile3Stream(
+                    fontProgram: program.subdata(in: (program.startIndex + start) ..< (program.startIndex + end)),
+                    subtype: .cidFontType0C,
+                    streamCompression: streamCompression,
+                )
+            } else if !isCollection {
+                PDFFontFile3Stream(fontProgram: program, subtype: .openType, streamCompression: streamCompression)
+            } else {
+                PDFFontFile3Stream(
+                    fontProgram: program.subdata(in: (program.startIndex + start) ..< (program.startIndex + end)),
+                    subtype: .type1C,
+                    streamCompression: streamCompression,
+                )
+            }
+            let fontFileRef = addData(fontFile.pdfStream.serialized)
+            let descriptorRef = addDictionary(
+                embeddedFontDescriptor(resource, fontFile: .fontFile3(fontFileRef)).pdfDictionary,
+            )
+            return addDictionary(
+                PDFCIDFontType0Object(
+                    baseName: resource.baseName,
+                    fontDescriptor: descriptorRef,
+                    widths: widths,
+                ).pdfDictionary,
+            )
         }
 
         mutating func addStream(dictionary: PDFSyntax.Dictionary, data: Data) -> PDFSyntax.Reference {
@@ -408,7 +486,7 @@ struct PDFDocumentWriter {
 
         private func embeddedFontDescriptor(
             _ resource: PDFEmbeddedFontResource,
-            fontFile: PDFSyntax.Reference,
+            fontFile: PDFFontDescriptor.EmbeddedFontFile,
         ) -> PDFFontDescriptor {
             let metadata = resource.metadata
             let boundingBox = metadata.head.boundingBox
@@ -436,7 +514,7 @@ struct PDFDocumentWriter {
                 descent: scaled(metadata.hhea.descender),
                 capHeight: scaled(metadata.hhea.ascender),
                 stemV: 80,
-                embeddedFontFile: .trueType(fontFile),
+                embeddedFontFile: fontFile,
             )
         }
 

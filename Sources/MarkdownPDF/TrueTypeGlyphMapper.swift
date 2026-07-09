@@ -143,11 +143,12 @@ struct TrueTypeGlyphMapper {
         }
         let advanceWidth = metadata.hmtx.advanceWidths[Int(glyphID)]
         let width = Double(advanceWidth) / Double(metadata.head.unitsPerEm) * fontSize
+        let cid = metadata.compositeCID(forGlyph: glyphID)
         return Glyph(
             scalar: scalar,
             glyphID: glyphID,
-            cid: glyphID,
-            pdfCharacterCode: glyphID,
+            cid: cid,
+            pdfCharacterCode: cid,
             advanceWidth: advanceWidth,
             width: width,
         )

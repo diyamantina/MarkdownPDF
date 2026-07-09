@@ -143,14 +143,15 @@ public struct PDFOptions: Equatable, Sendable {
         )
     }
 
-    /// Caller-provided TrueType font data for one Markdown text role.
+    /// Caller-provided font data for one Markdown text role.
     ///
     /// MarkdownPDF never discovers system fonts in the portable renderer and
-    /// never bundles font binaries in the public repository. Pass complete
-    /// TrueType font data here when the document should embed that role as a
-    /// subsetted Type 0 / CIDFontType2 font. The caller remains responsible for
-    /// the font license, and rendering rejects fonts whose OS/2 embedding bits
-    /// forbid the subset profile.
+    /// never bundles font binaries in the public repository. Pass complete font
+    /// data here when the document should embed that role. A TrueType (`glyf`)
+    /// font embeds as a subsetted Type 0 / CIDFontType2 font; an OpenType/CFF
+    /// (`OTTO`, PostScript outlines) font embeds whole as a Type 0 / CIDFontType0
+    /// font. The caller remains responsible for the font license, and rendering
+    /// rejects fonts whose OS/2 embedding bits forbid the profile.
     public struct EmbeddedFontSource: Equatable, Sendable {
         public var data: Data
         public var baseName: String?
@@ -158,8 +159,8 @@ public struct PDFOptions: Equatable, Sendable {
         /// Ignored for a single-face font. Defaults to 0, the first face. Many system
         /// CJK/Arabic/Hebrew fonts ship as collections; a collection that bundles
         /// several weights exposes each as a face, so pass the index of the weight
-        /// this role needs. The selected face must still be a TrueType (`glyf`)
-        /// outline font; a CFF (`OTTO`) face is rejected like any single-face CFF.
+        /// this role needs. The selected face may be a TrueType (`glyf`) or an
+        /// OpenType/CFF (`OTTO`) outline font.
         public var faceIndex: Int
 
         public init(data: Data, baseName: String? = nil, faceIndex: Int = 0) {
@@ -173,8 +174,9 @@ public struct PDFOptions: Equatable, Sendable {
     ///
     /// The default value is ``disabled``, so MarkdownPDF continues to use PDF
     /// base fonts and emits no font files unless the caller supplies font data.
-    /// Each non-nil role is parsed, validated, subsetted, and written directly
-    /// in Swift on macOS and Linux. Roles left nil fall back to the matching
+    /// Each non-nil role is parsed, validated, and written directly in Swift on
+    /// macOS and Linux (a `glyf` font is also subsetted; a CFF font embeds
+    /// whole). Roles left nil fall back to the matching
     /// standard PDF base-font role. This API does not perform macOS font
     /// discovery and does not imply iOS support.
     public struct EmbeddedFonts: Equatable, Sendable {

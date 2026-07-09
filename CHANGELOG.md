@@ -29,17 +29,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and an out-of-range index reports a typed error. Algorithm grounded in the
   reference-engine corpus (reportlab, openpdf, libharu, hexapdf)
   ([#41](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/41)).
-- A `CFF ` (Compact Font Format, Adobe Type 2) table reader, the parsing foundation
-  for embedding OpenType fonts with PostScript outlines (`OTTO`), which most CJK
-  system fonts use instead of `glyf`. It reads the header, Name and Top DICT INDEXes,
-  the CharStrings INDEX (glyph count), and the charset, and detects CID-keyed fonts
-  from the `ROS` operator, exposing each glyph id's CID. Every read is bounds-checked
-  and malformed input throws a typed error rather than trapping, verified against a
-  fontTools-generated CID CFF fixture (glyph count, CID flag, and the full glyph-to-CID
-  charset match exactly) and a bounded fuzz sweep. This is the reader only: emitting a
-  subset `FontFile3`/`CIDFontType0` is the next step, so `OTTO` fonts are still
-  reported as unsupported at embed time and the `glyf` path is byte-for-byte unchanged.
-  Grounded in the Adobe CFF and Type 2 Charstring specifications
+- Embedding OpenType fonts with PostScript (CFF, Adobe Type 2) outlines (`OTTO`),
+  which most CJK system fonts use instead of `glyf`. Such a font was rejected outright;
+  it now embeds and renders. A new `CFF ` table reader parses the header, Name and Top
+  DICT INDEXes, the CharStrings INDEX (glyph count), and the charset, and detects
+  CID-keyed fonts from the `ROS` operator, exposing each glyph id's CID. A CID-keyed
+  CFF (the CJK shape) is embedded whole as a `CIDFontType0` descendant font with a
+  `CIDFontType0C` `FontFile3`, and the content stream addresses each glyph by the CID
+  its charset assigns, which the viewer maps back through the embedded CFF's own
+  charset (so there is no `CIDToGIDMap`); a single-face name-keyed CFF embeds whole as
+  a `CIDFontType0` with an `OpenType` `FontFile3`. Widths (`/W`) and `/ToUnicode` are
+  emitted as on the `glyf` path. Every CFF read is bounds-checked and malformed input
+  throws a typed error rather than trapping. Verified end to end against a system CJK
+  font and a system name-keyed CFF: `qpdf --check` and `mutool clean` pass, `pdftotext`
+  recovers the characters, and a Poppler-vs-MuPDF raster witness confirms real glyphs
+  with correct widths. Whole-font only for now: charstring subsetting (to shrink the
+  embedded program) is a tracked optimization. The `glyf` embedding path is
+  byte-for-byte unchanged. Grounded in the Adobe CFF and Type 2 Charstring specs and
+  PDF 32000-1 §9.7.4
   ([#49](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/49)).
 
 ### Fixed

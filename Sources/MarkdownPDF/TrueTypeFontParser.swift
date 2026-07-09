@@ -19,9 +19,29 @@ struct TrueTypeFontParser {
         var os2: OS2Metrics
         var post: PostScriptTable
         var math: TrueTypeMathTable?
+        /// The parsed `CFF ` table for an OpenType/CFF (`OTTO`) font, `nil` for a
+        /// TrueType (`glyf`) font. Its presence selects the FontFile3 / CIDFontType0
+        /// embedding path; the glyf path is taken when this is `nil`.
+        var cff: CFFFont?
 
         func table(named tag: String) -> TableRecord? {
             tables.first { $0.tag == tag }
+        }
+
+        /// The CID a glyph is addressed by in a composite font's content stream.
+        ///
+        /// For a TrueType (`glyf`) font or a non-CID `CFF ` font the CID equals the
+        /// glyph id: PDF 32000-1 §9.7.4.2 says a CIDFontType2's CIDToGIDMap and a
+        /// non-CID CIDFontType0's CIDs are used directly as glyph indices. For a
+        /// CID-keyed `CFF ` font the glyph is addressed by the CID its charset
+        /// assigns, and the viewer maps that CID back to a glyph through the embedded
+        /// CFF's own charset. Out-of-range ids fall back to the identity, so callers
+        /// stay bounds-safe.
+        func compositeCID(forGlyph glyphID: UInt16) -> UInt16 {
+            guard let cff, cff.isCIDKeyed, Int(glyphID) < cff.charset.count else {
+                return glyphID
+            }
+            return cff.charset[Int(glyphID)]
         }
     }
 
@@ -206,6 +226,25 @@ struct TrueTypeFontParser {
             nil
         }
 
+        // An OpenType font with PostScript outlines carries a `CFF ` table instead of
+        // `glyf`. Parse it so the embedder can take the FontFile3 / CIDFontType0 path
+        // and address glyphs by CID. A font with `glyf` is a TrueType font and keeps
+        // `cff` nil, so its embedding path is byte-for-byte unchanged.
+        let cff: CFFFont?
+        if recordsByTag["glyf"] == nil, let cffRecord = recordsByTag["CFF "] {
+            let cffBytes = tableBytes(cffRecord, in: bytes)
+            do {
+                cff = try CFFFont(bytes: cffBytes)
+            } catch let error as CFFFont.ParseError {
+                if case let .malformed(reason) = error {
+                    throw TrueTypeFontError.malformedTable(tag: "CFF ", reason: reason)
+                }
+                throw TrueTypeFontError.malformedTable(tag: "CFF ", reason: "unreadable CFF table")
+            }
+        } else {
+            cff = nil
+        }
+
         return Metadata(
             scalerType: scalerType,
             tables: records,
@@ -218,6 +257,7 @@ struct TrueTypeFontParser {
             os2: os2,
             post: post,
             math: math,
+            cff: cff,
         )
     }
 
@@ -328,8 +368,12 @@ struct TrueTypeFontParser {
         let reader = TrueTypeByteReader(table: "maxp", bytes: bytes)
         try reader.requireRange(offset: 0, count: 6)
         let version = try reader.uint32(at: 0)
-        guard version == 0x0001_0000 else {
-            throw TrueTypeFontError.malformedTable(tag: "maxp", reason: "version must be 1.0")
+        // Version 1.0 (0x00010000) is the full TrueType profile; version 0.5
+        // (0x00005000) is the short profile that CFF-outline (OpenType/CFF) fonts
+        // carry. Both begin with `numGlyphs` at offset 4, which is all this parser
+        // reads, so accept either.
+        guard version == 0x0001_0000 || version == 0x0000_5000 else {
+            throw TrueTypeFontError.malformedTable(tag: "maxp", reason: "version must be 0.5 or 1.0")
         }
         let numGlyphs = try reader.uint16(at: 4)
         guard numGlyphs > 0 else {
@@ -635,6 +679,7 @@ struct TrueTypeFontParser {
     private static let supportedScalerTypes: Set<UInt32> = [
         0x0001_0000,
         0x7472_7565,
+        0x4F54_544F, // 'OTTO' -- OpenType with a CFF (PostScript) outline table
     ]
 
     /// Resolves the sfnt table-directory offset for the requested face. Returns 0
@@ -677,11 +722,6 @@ struct TrueTypeFontParser {
     /// before this runs, so the scaler seen here is always a single face's.)
     private static func rejectUnsupportedContainer(scalerType: UInt32) throws {
         switch scalerType {
-        case 0x4F54_544F: // 'OTTO'
-            throw TrueTypeFontError.unsupportedFontFormat(
-                format: "OpenType CFF",
-                guidance: "OpenType CFF embedding (FontFile3 / CIDFontType0) is staged but not implemented. Supply a TrueType (glyf) font.",
-            )
         case 0x774F_4646: // 'wOFF'
             throw TrueTypeFontError.unsupportedFontFormat(
                 format: "WOFF",
@@ -704,12 +744,6 @@ struct TrueTypeFontParser {
             throw TrueTypeFontError.unsupportedFontFormat(
                 format: "CFF2",
                 guidance: "Instance the CFF2 font to a static outline before embedding; CFF2 is not supported.",
-            )
-        }
-        if !tags.contains("glyf"), tags.contains("CFF ") {
-            throw TrueTypeFontError.unsupportedFontFormat(
-                format: "OpenType CFF",
-                guidance: "OpenType CFF embedding (FontFile3 / CIDFontType0) is staged but not implemented. Supply a TrueType (glyf) font.",
             )
         }
         if tags.contains("fvar") {

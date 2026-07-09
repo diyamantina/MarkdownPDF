@@ -201,10 +201,11 @@ struct OpenTypeShaper {
             throw ValidationError.invalidGlyphID(UInt32(glyphID), numGlyphs: metadata.maxp.numGlyphs)
         }
         let advanceWidth = metadata.hmtx.advanceWidths[Int(glyphID)]
+        let cid = metadata.compositeCID(forGlyph: glyphID)
         return ShapedTextMapping.Glyph(
             glyphID: glyphID,
-            cid: glyphID,
-            pdfCharacterCode: glyphID,
+            cid: cid,
+            pdfCharacterCode: cid,
             advanceWidth: advanceWidth,
             advance: Double(advanceWidth) / Double(metadata.head.unitsPerEm) * fontSize,
         )
