@@ -556,7 +556,11 @@ struct ArabicShaper {
                 toUnicodeScalars: clusterScalars,
             ))
         }
-        return try ShapedTextMapping(sourceText: text, clusters: clusters)
+        // The clusters index the canonically-ordered scalars, so the mapping's source
+        // text is that ordering (canonically equivalent to the input); extraction then
+        // recovers a canonically-ordered, Unicode-equivalent mark sequence.
+        let orderedText = String(String.UnicodeScalarView(scalars))
+        return try ShapedTextMapping(sourceText: orderedText, clusters: clusters)
     }
 
     private static func gsubTableRange(fontData: Data, metadata: TrueTypeFontParser.Metadata) -> Range<Int>? {
