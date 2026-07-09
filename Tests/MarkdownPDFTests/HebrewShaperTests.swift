@@ -77,4 +77,34 @@ struct HebrewShaperTests {
             #expect(inspector.text.uppercased().contains(String(format: "%04X", scalar.value)), "ToUnicode missing U+\(String(scalar.value, radix: 16))")
         }
     }
+
+    @Test("A composed cluster carries an /ActualText override so extraction is base-first")
+    func composedClusterWrapsActualText() throws {
+        guard let arial = try Self.arial() else {
+            return
+        }
+        let options = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: arial.data, baseName: "Arial"),
+        ))
+        // A composed base+mark cluster (bet + dagesh) drawn RTL in visual order would
+        // extract mark-before-base; the run is wrapped in an /ActualText span so a text
+        // extractor recovers the letter before its point.
+        let composed = try MarkdownPDFRenderer(options: options).render(markdown: "\u{05D1}\u{05BC}") // בּ
+        #expect(PDFInspector(composed).text.contains("/ActualText"))
+        // Plain Hebrew (no composition) needs no override.
+        let plain = try MarkdownPDFRenderer(options: options).render(markdown: "\u{05E9}\u{05DC}\u{05D5}\u{05DD}") // שלום
+        #expect(!PDFInspector(plain).text.contains("/ActualText"))
+    }
+
+    @Test("Detects when a mapping needs the ActualText override")
+    func detectsActualTextNeed() throws {
+        guard let arial = try Self.arial() else {
+            return
+        }
+        let shaper = HebrewShaper(fontData: arial.data, metadata: arial.metadata)
+        // bet + dagesh composes to one glyph over two scalars starting with a base.
+        #expect(try shaper.shapedMapping(text: "\u{05D1}\u{05BC}", fontSize: 12).needsActualTextOverride)
+        // Plain shin has no multi-scalar composed cluster.
+        #expect(try !shaper.shapedMapping(text: "\u{05E9}", fontSize: 12).needsActualTextOverride)
+    }
 }

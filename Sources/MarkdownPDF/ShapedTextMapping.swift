@@ -155,6 +155,20 @@ struct ShapedTextMapping: Equatable {
         clusters.map(\.toUnicodeText).joined()
     }
 
+    /// Whether extraction needs an `/ActualText` override: a cluster whose single glyph
+    /// carries more than one source scalar starting with a base letter (a composed
+    /// base+mark presentation glyph, as in Hebrew shin+dot or letter+dagesh). Drawn in
+    /// visual order in a right-to-left run, such a glyph's multi-scalar ToUnicode is
+    /// reversed by a text extractor's bidi handling, landing the mark before its letter;
+    /// an all-mark composition (Arabic shadda+vowel) is unaffected and is not flagged.
+    var needsActualTextOverride: Bool {
+        clusters.contains { cluster in
+            cluster.glyphs.count == 1
+                && cluster.toUnicodeScalars.count > 1
+                && CanonicalCombiningClass.of(cluster.toUnicodeScalars[0]) == 0
+        }
+    }
+
     static func oneGlyphPerScalar(
         sourceText: String,
         glyphs: [TrueTypeGlyphMapper.Glyph],
