@@ -134,32 +134,61 @@ struct ArabicShaper {
     var fontData: Data
     var metadata: TrueTypeFontParser.Metadata
 
+    /// The font's `arab` GSUB, parsed once at construction (nil when the font has no
+    /// GSUB). Shaping and ``canShapeArabic`` reuse it, so the table is not re-parsed
+    /// on the per-run, per-measurement hot path.
+    private let gsub: GSUBTable?
+
+    init(fontData: Data, metadata: TrueTypeFontParser.Metadata) {
+        self.fontData = fontData
+        self.metadata = metadata
+        // Arabic shaping is an optional capability: a font with no `arab` GSUB (most
+        // fonts) or a malformed one is simply not Arabic-shapeable and falls back to
+        // the ordinary base-glyph path, so a parse failure is an expected
+        // "not eligible" state, not a swallowed error. The font still renders.
+        do {
+            gsub = try GSUBTable(
+                fontData: fontData,
+                gsubTableRange: Self.gsubTableRange(fontData: fontData, metadata: metadata),
+                scriptTag: "arab",
+                numGlyphs: metadata.maxp.numGlyphs,
+            )
+        } catch {
+            gsub = nil
+        }
+    }
+
+    /// Whether this font actually carries the Arabic positional-form GSUB features,
+    /// i.e. shaping it will do something. A font without them (a Latin font, or a
+    /// synthetic test font) gains nothing from the shaper, so the caller keeps it on
+    /// the ordinary path rather than routing it here.
+    var canShapeArabic: Bool {
+        gsub?.hasArabicJoiningFeatures ?? false
+    }
+
     /// Shapes `text` into logical-order glyphs. Steps: base glyph per scalar via the
     /// cmap; per-glyph positional-form single substitution (`isol`/`init`/`medi`/
     /// `fina`); then `rlig` ligatures over the resulting glyphs (lam-alef and the
     /// like). Marks pass through in place.
-    func shape(_ text: String) throws -> [ShapedGlyph] {
+    func shape(
+        _ text: String,
+        missingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy = .useNotdef,
+    ) throws -> [ShapedGlyph] {
         let scalars = Array(text.unicodeScalars)
         guard !scalars.isEmpty else {
             return []
         }
 
-        // Base glyphs, one per scalar, from the font cmap. `.useNotdef` keeps a
-        // scalar the font lacks from aborting; the caller decides how to treat it.
-        let mapper = TrueTypeGlyphMapper(data: fontData, metadata: metadata, missingGlyphPolicy: .useNotdef)
+        // Base glyphs, one per scalar, from the font cmap. The caller's policy
+        // governs a scalar the font lacks: `.reject` refuses (conformance) and
+        // `.useNotdef` keeps it from aborting the document.
+        let mapper = TrueTypeGlyphMapper(data: fontData, metadata: metadata, missingGlyphPolicy: missingGlyphPolicy)
         let baseGlyphs = try mapper.map(text: text, fontSize: 1).glyphs.map(\.glyphID)
         guard baseGlyphs.count == scalars.count else {
             return zip(baseGlyphs.indices, baseGlyphs).map { index, glyph in
                 ShapedGlyph(glyphID: glyph, sourceScalarRange: index ..< index + 1)
             }
         }
-
-        let gsub = try GSUBTable(
-            fontData: fontData,
-            gsubTableRange: gsubTableRange(),
-            scriptTag: "arab",
-            numGlyphs: metadata.maxp.numGlyphs,
-        )
 
         // Positional forms.
         let forms = Self.positionalForms(for: scalars)
@@ -179,7 +208,52 @@ struct ArabicShaper {
         return glyphs
     }
 
-    private func gsubTableRange() -> Range<Int>? {
+    /// Shapes `text` into a `ShapedTextMapping` in logical order: one cluster per
+    /// output glyph, advances from the font `hmtx` scaled to `fontSize`, and each
+    /// cluster's `toUnicodeScalars` the source scalars it consumed (so `/ToUnicode`
+    /// recovers the original characters even though glyphs are positional forms and
+    /// ligatures). The caller draws these clusters left-to-right for an LTR context
+    /// or reversed for an RTL run; the mapping itself stays logical.
+    func shapedMapping(
+        text: String,
+        fontSize: Double,
+        missingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy = .useNotdef,
+    ) throws -> ShapedTextMapping {
+        let scalars = Array(text.unicodeScalars)
+        let shaped = try shape(text, missingGlyphPolicy: missingGlyphPolicy)
+        let unitsPerEm = Double(metadata.head.unitsPerEm)
+        let advanceWidths = metadata.hmtx.advanceWidths
+
+        var clusters: [ShapedTextMapping.Cluster] = []
+        clusters.reserveCapacity(shaped.count)
+        for glyph in shaped {
+            let range = glyph.sourceScalarRange
+            let clusterScalars = Array(scalars[range])
+            let advanceWidth = Int(glyph.glyphID) < advanceWidths.count ? advanceWidths[Int(glyph.glyphID)] : 0
+            let advance = unitsPerEm > 0 ? Double(advanceWidth) / unitsPerEm * fontSize : 0
+            clusters.append(ShapedTextMapping.Cluster(
+                sourceScalarRange: range,
+                normalizedText: String(String.UnicodeScalarView(clusterScalars)),
+                glyphs: [ShapedTextMapping.Glyph(
+                    glyphID: glyph.glyphID,
+                    cid: glyph.glyphID,
+                    pdfCharacterCode: glyph.glyphID,
+                    advanceWidth: advanceWidth,
+                    advance: advance,
+                    // A positional form maps one base scalar to different glyphs by
+                    // context (beh initial vs medial), which would collide in the
+                    // subset font cmap. Give each glyph a synthetic, glyph-unique
+                    // cmap scalar (harmless: the CID font uses CIDs, not this cmap).
+                    // Extraction still uses the cluster's real `toUnicodeScalars`.
+                    cmapScalar: UnicodeScalar(0x100000 + UInt32(glyph.glyphID)),
+                )],
+                toUnicodeScalars: clusterScalars,
+            ))
+        }
+        return try ShapedTextMapping(sourceText: text, clusters: clusters)
+    }
+
+    private static func gsubTableRange(fontData: Data, metadata: TrueTypeFontParser.Metadata) -> Range<Int>? {
         guard let record = metadata.table(named: "GSUB") else {
             return nil
         }

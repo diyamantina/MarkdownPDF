@@ -138,6 +138,7 @@ final class PDFPageCanvas {
         x: Double,
         y: Double,
         color: PDFColor = .black,
+        rightToLeft: Bool = false,
         decorationsFor decoratedRun: PDFTextRun? = nil,
     ) throws {
         guard !mapping.glyphs.isEmpty else {
@@ -146,11 +147,16 @@ final class PDFPageCanvas {
 
         try resourceUsage.useEmbeddedFont(fontResource, mapping: mapping)
         setFillColor(color)
+        // The mapping is in logical order. For an RTL run the glyphs are emitted in
+        // reversed (visual) order so the last logical glyph is drawn leftmost; the
+        // `/ToUnicode` CMap and `/W` advances are per character-code and so unaffected
+        // by the emission order, keeping extraction faithful.
+        let orderedClusters = rightToLeft ? Array(mapping.clusters.reversed()) : mapping.clusters
         contentStream.append([
             .beginText,
             .setFont(PDFSyntax.Name(fontResource.resourceName), size: fontSize),
             .moveText(x: x, y: y),
-            .showCIDText(mapping.clusters.flatMap(\.pdfCharacterCodes)),
+            .showCIDText(orderedClusters.flatMap(\.pdfCharacterCodes)),
             .endText,
         ])
         if let decoratedRun {

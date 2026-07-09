@@ -245,6 +245,11 @@ private struct BidiPositionedRun {
     var displayText: String
     var x: Double
     var sourceScalarOffset: Int
+    /// A whole-run shaping already computed in LOGICAL order (cursive scripts).
+    /// When set, the run is drawn from this mapping rather than the per-character
+    /// path, and `isRightToLeft` decides the visual glyph order.
+    var preShapedMapping: ShapedTextMapping?
+    var isRightToLeft: Bool = false
 }
 
 private struct Layout {
@@ -3320,10 +3325,14 @@ private struct Layout {
         }
 
         let paragraph = try ordering.order(logicalText)
-        let visualRuns = paragraph.visualRuns.map { run in
-            template.withText(run.displayText)
+        // Measure each run from its LOGICAL source text, not the visually reordered
+        // display text: a cursive run must be shaped in logical order to get its
+        // (ligated) width, and for a non-joining run the width is the same either way
+        // since advances do not depend on order.
+        let logicalRuns = paragraph.visualRuns.map { run in
+            template.withText(run.sourceText)
         }
-        let lineWidth = try textWidth(visualRuns)
+        let lineWidth = try textWidth(logicalRuns)
         var cursor = x
         if paragraph.baseDirection == .rightToLeft, let maxWidth {
             cursor += max(0, maxWidth - lineWidth)
@@ -3333,12 +3342,27 @@ private struct Layout {
         for run in paragraph.visualRuns {
             let positioned = try positionedBidiRuns(for: run, template: template, x: cursor)
             positionedRuns.append(contentsOf: positioned)
-            cursor += try textWidth(template.withText(run.displayText))
+            cursor += try textWidth(template.withText(run.sourceText))
         }
         return BidiLine(visualRuns: positionedRuns)
     }
 
     private func drawBidiPositionedRun(_ run: BidiPositionedRun, y: Double) throws {
+        if let mapping = run.preShapedMapping,
+           let entry = embeddedFonts.entry(for: run.sourceTextRun.font)
+        {
+            try currentPage.drawCIDText(
+                mapping: mapping,
+                fontResource: entry.resource,
+                fontSize: run.sourceTextRun.size,
+                x: run.x,
+                y: y,
+                color: run.sourceTextRun.color,
+                rightToLeft: run.isRightToLeft,
+                decorationsFor: run.sourceTextRun,
+            )
+            return
+        }
         if let mapping = try mirroredBidiGlyphMapping(for: run),
            let entry = embeddedFonts.entry(for: run.sourceTextRun.font)
         {
@@ -3379,6 +3403,26 @@ private struct Layout {
         template: PDFTextRun,
         x: Double,
     ) throws -> [BidiPositionedRun] {
+        // A cursive run (Arabic and the other joining scripts) must be shaped as a
+        // whole in LOGICAL order, because a letter's form depends on its neighbours.
+        // The per-character path below would shape each letter in isolation, so it is
+        // skipped here. The mapping stays logical (correct `/ToUnicode`); an RTL run
+        // draws its glyphs reversed for visual placement.
+        if ArabicShaper.containsJoiningScript(run.sourceText),
+           let entry = embeddedFonts.entry(for: template.font),
+           entry.arabicShaper.canShapeArabic
+        {
+            let mapping = try entry.arabicShaper.shapedMapping(text: run.sourceText, fontSize: template.size)
+            return [BidiPositionedRun(
+                sourceTextRun: template.withText(run.sourceText),
+                displayText: run.sourceText,
+                x: x,
+                sourceScalarOffset: run.sourceScalarRange.lowerBound,
+                preShapedMapping: mapping,
+                isRightToLeft: run.direction == .rightToLeft,
+            )]
+        }
+
         let sourceCharacters = Array(run.sourceText)
         let displayCharacters = Array(run.displayText)
         let sourceScalarOffsets = scalarOffsetsByCharacter(in: run.sourceText)
