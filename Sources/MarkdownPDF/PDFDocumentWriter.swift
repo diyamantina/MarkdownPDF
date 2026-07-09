@@ -289,8 +289,9 @@ struct PDFDocumentWriter {
         /// Emits the FontFile3 / CIDFontType0 descendant for an OpenType/CFF font. The
         /// whole `CFF ` program is embedded verbatim (no charstring subsetting yet, a
         /// tracked optimization); glyph selection is the CFF's own responsibility, so
-        /// there is no CIDToGIDMap. A CID-keyed CFF is tagged `CIDFontType0C`, a
-        /// name-keyed one `Type1C`.
+        /// there is no CIDToGIDMap. A CID-keyed CFF is tagged `CIDFontType0C`; a
+        /// name-keyed CFF goes out as an `OpenType` sfnt (reconstructed to a single
+        /// face first if it came from a collection).
         private mutating func addCFFDescendantFont(
             resource: PDFEmbeddedFontResource,
             widths: PDFCIDFontWidths,
@@ -308,14 +309,14 @@ struct PDFDocumentWriter {
             }
             // A CID-keyed CFF is embedded as its bare `CFF ` table (CIDFontType0C):
             // the viewer maps CID to glyph through the CFF's own charset. A name-keyed
-            // (non-CID) CFF is not a valid CIDFontType0C program, so a single-face
-            // source is embedded whole as an OpenType program (the CID is used
-            // directly as the glyph index); a name-keyed face inside a collection,
-            // which cannot be sliced to a lone sfnt here, falls back to a bare Type1C
-            // program (it renders everywhere, though a strict reader may note the
-            // composite/simple mismatch).
+            // (non-CID) CFF is not a valid CIDFontType0C program, so it goes out as an
+            // OpenType program (the CID is used directly as the glyph index): a
+            // single-face source is embedded whole, and a face inside a collection is
+            // rebuilt into a standalone single-face sfnt first. Emitting the bare CFF
+            // as `Type1C` under a `CIDFontType0` descendant would be a composite/simple
+            // mismatch that fails PDF/A and PDF/UA, so it is never done.
             let isCollection = program.starts(with: [0x74, 0x74, 0x63, 0x66]) // 'ttcf'
-            let fontFile = if cff.isCIDKeyed {
+            let fontFile: PDFFontFile3Stream = if cff.isCIDKeyed {
                 PDFFontFile3Stream(
                     fontProgram: program.subdata(in: (program.startIndex + start) ..< (program.startIndex + end)),
                     subtype: .cidFontType0C,
@@ -324,9 +325,13 @@ struct PDFDocumentWriter {
             } else if !isCollection {
                 PDFFontFile3Stream(fontProgram: program, subtype: .openType, streamCompression: streamCompression)
             } else {
-                PDFFontFile3Stream(
-                    fontProgram: program.subdata(in: (program.startIndex + start) ..< (program.startIndex + end)),
-                    subtype: .type1C,
+                try PDFFontFile3Stream(
+                    fontProgram: SingleFaceSFNTAssembler.assemble(
+                        program: program,
+                        scalerType: resource.metadata.scalerType,
+                        tables: resource.metadata.tables,
+                    ),
+                    subtype: .openType,
                     streamCompression: streamCompression,
                 )
             }

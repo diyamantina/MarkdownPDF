@@ -37,16 +37,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CFF (the CJK shape) is embedded whole as a `CIDFontType0` descendant font with a
   `CIDFontType0C` `FontFile3`, and the content stream addresses each glyph by the CID
   its charset assigns, which the viewer maps back through the embedded CFF's own
-  charset (so there is no `CIDToGIDMap`); a single-face name-keyed CFF embeds whole as
-  a `CIDFontType0` with an `OpenType` `FontFile3`. Widths (`/W`) and `/ToUnicode` are
-  emitted as on the `glyf` path. Every CFF read is bounds-checked and malformed input
-  throws a typed error rather than trapping. Verified end to end against a system CJK
-  font and a system name-keyed CFF: `qpdf --check` and `mutool clean` pass, `pdftotext`
-  recovers the characters, and a Poppler-vs-MuPDF raster witness confirms real glyphs
-  with correct widths. Whole-font only for now: charstring subsetting (to shrink the
-  embedded program) is a tracked optimization. The `glyf` embedding path is
-  byte-for-byte unchanged. Grounded in the Adobe CFF and Type 2 Charstring specs and
-  PDF 32000-1 §9.7.4
+  charset (so there is no `CIDToGIDMap`). A name-keyed (non-CID) CFF embeds as a
+  `CIDFontType0` with an `OpenType` `FontFile3`: a single-face source is embedded whole,
+  and a face inside a collection is first reconstructed into a standalone single-face
+  sfnt. It is never emitted as a bare `Type1C` program, which under a `CIDFontType0`
+  descendant is a composite/simple mismatch that fails PDF/A and PDF/UA validation.
+  Widths (`/W`) and `/ToUnicode` are emitted as on the `glyf` path. Every CFF read is
+  bounds-checked and malformed input throws a typed error rather than trapping. Verified
+  end to end against a system CJK font and a system name-keyed CFF: `qpdf --check` and
+  `mutool clean` pass, `pdftotext` recovers the characters, a Poppler-vs-MuPDF raster
+  witness confirms real glyphs with correct widths, and veraPDF reports the
+  collection-face path compliant with PDF/A-2a and PDF/UA-1. Whole-font only for now:
+  charstring subsetting (to shrink the embedded program) and de-duplicating an identical
+  font program shared across roles (a heading and body role currently embed one copy
+  each) are tracked optimizations. The `glyf` embedding path is byte-for-byte unchanged.
+  Grounded in the Adobe CFF and Type 2 Charstring specs and PDF 32000-1 §9.7.4
   ([#49](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/49)).
 
 ### Fixed

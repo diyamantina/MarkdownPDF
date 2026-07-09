@@ -2,13 +2,15 @@ import Foundation
 
 /// A `FontFile3` stream: the embedded font program for a CFF (PostScript) outline,
 /// referenced from a `FontDescriptor`. Unlike `FontFile2` (which carries an sfnt and
-/// a `/Length1`), a `FontFile3` carries the bare `CFF ` table and identifies it with
-/// a `/Subtype`: `CIDFontType0C` for a CID-keyed CFF, `Type1C` for a name-keyed one
-/// (PDF 32000-1, Table 126).
+/// a `/Length1`), a `FontFile3` identifies its program with a `/Subtype`:
+/// `CIDFontType0C` for a bare CID-keyed `CFF ` table, or `OpenType` for a whole sfnt
+/// wrapping a name-keyed CFF used under a `CIDFontType0` descendant (PDF 32000-1,
+/// Table 126). `Type1C` is deliberately absent: it is only valid for a simple
+/// (`/Type1`) font, which this engine never emits, and stamping a name-keyed CFF
+/// `Type1C` under a composite descendant fails PDF/A and PDF/UA validation.
 struct PDFFontFile3Stream {
     enum Subtype: String {
         case cidFontType0C = "CIDFontType0C"
-        case type1C = "Type1C"
         case openType = "OpenType"
     }
 
