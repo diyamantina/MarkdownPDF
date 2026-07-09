@@ -2,16 +2,16 @@ import Foundation
 @testable import MarkdownPDF
 import Testing
 
-/// Unit witness for the chained-context matcher (`ArabicShaper.matches`), which the
+/// Unit witness for the chained-context matcher (`GSUBFeatureApplier.matches`), which the
 /// fixture's only applied contextual lookup (unchained) does not exercise. These pin
 /// the backtrack and lookahead index math directly, so a regression there (e.g. a
 /// flipped backtrack offset or a dropped lookahead check) fails a test even though the
 /// end-to-end lam-alef parity would not notice.
 @Suite("Arabic contextual matcher")
 struct ArabicContextualMatchTests {
-    private func glyphs(_ ids: [UInt16]) -> [ArabicShaper.ShapedGlyph] {
+    private func glyphs(_ ids: [UInt16]) -> [ShapedGlyph] {
         ids.enumerated().map { index, id in
-            ArabicShaper.ShapedGlyph(glyphID: id, sourceScalarRange: index ..< index + 1)
+            ShapedGlyph(glyphID: id, sourceScalarRange: index ..< index + 1)
         }
     }
 
@@ -19,11 +19,11 @@ struct ArabicContextualMatchTests {
     func inputOnlyRule() {
         let rule = GSUBContextualRule(backtrack: [], input: [[10], [20]], lookahead: [], lookupRecords: [])
         let buffer = glyphs([5, 10, 20, 30])
-        #expect(ArabicShaper.matches(rule, in: buffer, at: 1))
-        #expect(!ArabicShaper.matches(rule, in: buffer, at: 0)) // 5,10 != 10,20
-        #expect(!ArabicShaper.matches(rule, in: buffer, at: 2)) // 20,30 != 10,20
+        #expect(GSUBFeatureApplier.matches(rule, in: buffer, at: 1))
+        #expect(!GSUBFeatureApplier.matches(rule, in: buffer, at: 0)) // 5,10 != 10,20
+        #expect(!GSUBFeatureApplier.matches(rule, in: buffer, at: 2)) // 20,30 != 10,20
         // Input running past the buffer end never matches.
-        #expect(!ArabicShaper.matches(rule, in: buffer, at: 3))
+        #expect(!GSUBFeatureApplier.matches(rule, in: buffer, at: 3))
     }
 
     @Test("Backtrack must match the glyphs immediately before the input, in text order")
@@ -31,21 +31,21 @@ struct ArabicContextualMatchTests {
         // backtrack stored text order: [7, 8] means glyph 7 two before input, 8 one
         // before. So at input index 3 the buffer must read [.., 7, 8, INPUT..].
         let rule = GSUBContextualRule(backtrack: [[7], [8]], input: [[9]], lookahead: [], lookupRecords: [])
-        #expect(ArabicShaper.matches(rule, in: glyphs([1, 7, 8, 9, 2]), at: 3))
+        #expect(GSUBFeatureApplier.matches(rule, in: glyphs([1, 7, 8, 9, 2]), at: 3))
         // Wrong order (8 then 7) must not match: catches a flipped backtrack offset.
-        #expect(!ArabicShaper.matches(rule, in: glyphs([1, 8, 7, 9, 2]), at: 3))
+        #expect(!GSUBFeatureApplier.matches(rule, in: glyphs([1, 8, 7, 9, 2]), at: 3))
         // Not enough room before the input for the backtrack.
-        #expect(!ArabicShaper.matches(rule, in: glyphs([8, 9, 2]), at: 1))
+        #expect(!GSUBFeatureApplier.matches(rule, in: glyphs([8, 9, 2]), at: 1))
     }
 
     @Test("Lookahead must match the glyphs immediately after the input")
     func lookaheadMatchesAfterInput() {
         let rule = GSUBContextualRule(backtrack: [], input: [[9]], lookahead: [[11], [12]], lookupRecords: [])
-        #expect(ArabicShaper.matches(rule, in: glyphs([9, 11, 12, 3]), at: 0))
+        #expect(GSUBFeatureApplier.matches(rule, in: glyphs([9, 11, 12, 3]), at: 0))
         // Wrong lookahead content must not match: catches a dropped lookahead check.
-        #expect(!ArabicShaper.matches(rule, in: glyphs([9, 11, 99, 3]), at: 0))
+        #expect(!GSUBFeatureApplier.matches(rule, in: glyphs([9, 11, 99, 3]), at: 0))
         // Not enough room after the input for the lookahead.
-        #expect(!ArabicShaper.matches(rule, in: glyphs([9, 11]), at: 0))
+        #expect(!GSUBFeatureApplier.matches(rule, in: glyphs([9, 11]), at: 0))
     }
 
     @Test("Marks between input glyphs are skipped when the lookup ignores marks")
@@ -53,9 +53,9 @@ struct ArabicContextualMatchTests {
         let rule = GSUBContextualRule(backtrack: [], input: [[10], [20]], lookahead: [], lookupRecords: [])
         let buffer = glyphs([10, 99, 20]) // 99 stands in for an interposed mark
         // Contiguous (no skipping): 10 then 99 != 20, so no match.
-        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 0, isMark: { _ in false }) == nil)
+        #expect(GSUBFeatureApplier.matchedInputPositions(rule, in: buffer, at: 0, isMark: { _ in false }) == nil)
         // Skipping 99 as a mark: input matches [10, 20] at buffer positions 0 and 2.
-        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 0, isMark: { $0 == 99 }) == [0, 2])
+        #expect(GSUBFeatureApplier.matchedInputPositions(rule, in: buffer, at: 0, isMark: { $0 == 99 }) == [0, 2])
     }
 
     @Test("Marks are skipped in backtrack and lookahead too")
@@ -63,8 +63,8 @@ struct ArabicContextualMatchTests {
         let rule = GSUBContextualRule(backtrack: [[7]], input: [[9]], lookahead: [[13]], lookupRecords: [])
         // [7, mark, 9, mark, 13]: the marks sit in the backtrack and lookahead gaps.
         let buffer = glyphs([7, 99, 9, 99, 13])
-        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 2, isMark: { _ in false }) == nil)
-        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 2, isMark: { $0 == 99 }) == [2])
+        #expect(GSUBFeatureApplier.matchedInputPositions(rule, in: buffer, at: 2, isMark: { _ in false }) == nil)
+        #expect(GSUBFeatureApplier.matchedInputPositions(rule, in: buffer, at: 2, isMark: { $0 == 99 }) == [2])
     }
 
     @Test("A full backtrack + input + lookahead rule matches only in the exact context")
@@ -75,9 +75,9 @@ struct ArabicContextualMatchTests {
             lookahead: [[13]],
             lookupRecords: [],
         )
-        #expect(ArabicShaper.matches(rule, in: glyphs([7, 9, 10, 13]), at: 1))
-        #expect(!ArabicShaper.matches(rule, in: glyphs([8, 9, 10, 13]), at: 1)) // wrong backtrack
-        #expect(!ArabicShaper.matches(rule, in: glyphs([7, 9, 99, 13]), at: 1)) // wrong second input
-        #expect(!ArabicShaper.matches(rule, in: glyphs([7, 9, 10, 99]), at: 1)) // wrong lookahead
+        #expect(GSUBFeatureApplier.matches(rule, in: glyphs([7, 9, 10, 13]), at: 1))
+        #expect(!GSUBFeatureApplier.matches(rule, in: glyphs([8, 9, 10, 13]), at: 1)) // wrong backtrack
+        #expect(!GSUBFeatureApplier.matches(rule, in: glyphs([7, 9, 99, 13]), at: 1)) // wrong second input
+        #expect(!GSUBFeatureApplier.matches(rule, in: glyphs([7, 9, 10, 99]), at: 1)) // wrong lookahead
     }
 }

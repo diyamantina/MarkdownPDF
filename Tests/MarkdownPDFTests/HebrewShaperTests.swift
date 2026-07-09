@@ -2,12 +2,11 @@ import Foundation
 @testable import MarkdownPDF
 import Testing
 
-/// Witness that Hebrew niqqud are placed on their letters by GPOS, matching hb-shape.
-/// The engine does not yet apply Hebrew GSUB presentation composition (vav+holam and
-/// the like into one glyph), so its glyph set can carry a mark hb composed away; the
-/// invariant verified here is that every mark hb positions, the engine positions at the
-/// same offset. A system Hebrew font (Arial) provides the `hebr` GPOS; the tests skip
-/// when it is absent.
+/// Witness that Hebrew is composed and positioned like the reference shaper: the
+/// letter-modifying marks are reordered next to their consonant, GSUB `ccmp` composes
+/// the presentation forms (shin/sin dot, letter+dagesh), and GPOS places the niqqud.
+/// A system Hebrew font (Arial) provides the `hebr` GSUB/GPOS; the tests skip when it
+/// is absent.
 @Suite("Hebrew shaper")
 struct HebrewShaperTests {
     private static let arialPath = "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -31,33 +30,35 @@ struct HebrewShaperTests {
     }
 
     @Test(
-        "Niqqud are placed on their letters, matching hb-shape",
+        "Composed and positioned Hebrew matches hb-shape glyph for glyph",
         .enabled(if: HarfBuzzOracle.isAvailable, "hb-shape not found on PATH"),
+        arguments: [
+            "\u{05E9}\u{05B8}\u{05C1}\u{05DC}\u{05D5}\u{05B9}\u{05DD}", // שָׁלוֹם (shin dot composes)
+            "\u{05E9}\u{05B8}\u{05C2}\u{05E8}\u{05B8}\u{05D4}", // שָׂרָה (sin dot composes)
+            "\u{05D1}\u{05B7}\u{05BC}\u{05D9}\u{05B4}\u{05EA}", // בַּיִת (bet+dagesh composes)
+            "\u{05D1}\u{05B0}\u{05BC}\u{05E8}\u{05B5}\u{05D0}\u{05E9}\u{05C1}\u{05B4}\u{05D9}\u{05EA}", // בְּרֵאשִׁית
+            "\u{05D0}\u{05B1}\u{05DC}\u{05B9}\u{05D4}\u{05B4}\u{05D9}\u{05DD}", // אֱלֹהִים
+            "\u{05DE}\u{05B6}\u{05DC}\u{05B6}\u{05DA}\u{05B0}", // מֶלֶךְ (final kaf)
+        ],
     )
-    func niqqudMatchHarfBuzz() throws {
+    func composedHebrewMatchesHarfBuzz(_ word: String) throws {
         guard let arial = try Self.arial() else {
             return
         }
         let shaper = HebrewShaper(fontData: arial.data, metadata: arial.metadata)
         let upem = Double(arial.metadata.head.unitsPerEm)
-        for word in [
-            "\u{05E9}\u{05B8}\u{05C1}\u{05DC}\u{05D5}\u{05B9}\u{05DD}", // שָׁלוֹם
-            "\u{05D1}\u{05B0}\u{05BC}\u{05E8}\u{05B5}\u{05D0}\u{05E9}\u{05C1}\u{05B4}\u{05D9}\u{05EA}", // בְּרֵאשִׁית
-            "\u{05D0}\u{05B1}\u{05DC}\u{05B9}\u{05D4}\u{05B4}\u{05D9}\u{05DD}",
-        ] // אֱלֹהִים
-        {
-            let mapping = try shaper.shapedMapping(text: word, fontSize: upem)
-            // A positioned mark is a glyph the shaper moved off the baseline.
-            let engine = Set(mapping.glyphs
-                .filter { $0.offset != .zero }
-                .map { [Int($0.glyphID), Int($0.offset.x.rounded()), Int($0.offset.y.rounded())] })
-            let oracle = try Set(HarfBuzzOracle.shapeWithPositions(word, fontPath: Self.arialPath, script: "hebr")
-                .filter { $0.xOffset != 0 || $0.yOffset != 0 }
-                .map { [Int($0.glyph), $0.xOffset, $0.yOffset] })
-            // Every mark hb positions, the engine positions identically.
-            #expect(oracle.isSubset(of: engine), "\(word): hb marks \(oracle) not all in engine \(engine)")
-            #expect(!oracle.isEmpty, "\(word) should have positioned marks")
-        }
+        let mapping = try shaper.shapedMapping(text: word, fontSize: upem)
+        // Full parity: the same positioned glyphs (glyph + offset in font units), as a
+        // sorted multiset since within-cluster order is a reconstruction detail. (Holam
+        // directly on a consonant needs GPOS type-8 contextual positioning the engine
+        // does not yet apply; these words use holam only on vav, which composes.)
+        let engine = mapping.glyphs
+            .map { [Int($0.glyphID), Int($0.offset.x.rounded()), Int($0.offset.y.rounded())] }
+            .sorted { $0.lexicographicallyPrecedes($1) }
+        let reference = try HarfBuzzOracle.shapeWithPositions(word, fontPath: Self.arialPath, script: "hebr")
+            .map { [Int($0.glyph), $0.xOffset, $0.yOffset] }
+            .sorted { $0.lexicographicallyPrecedes($1) }
+        #expect(engine == reference, "\(word): engine \(engine) vs hb \(reference)")
     }
 
     @Test("A pointed Hebrew run renders with the niqqud recoverable via ToUnicode")
