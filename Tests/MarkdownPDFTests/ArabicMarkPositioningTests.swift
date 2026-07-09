@@ -48,6 +48,41 @@ struct ArabicMarkPositioningTests {
         )
     }
 
+    @Test("A vocalized run renders through the positioned path with recoverable text")
+    func vocalizedRunUsesPositionedPath() throws {
+        let font = try Self.notoFont()
+        let options = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: font.data, baseName: "Noto"),
+        ))
+        let pdf = try MarkdownPDFRenderer(options: options).render(markdown: "\u{0643}\u{064E}\u{062A}\u{064E}\u{0628}\u{064E}") // كَتَبَ
+        let inspector = PDFInspector(pdf)
+        // The positioned path shows each glyph in its own operator (one `Tj` per glyph,
+        // each preceded by a `Td` move), so a vocalized run has several `Tj`, unlike the
+        // single-operator baseline path.
+        let textStream = try #require(inspector.streams.first { $0.body.contains(" Tj") })
+        #expect(textStream.body.components(separatedBy: " Tj").count - 1 > 1)
+        // The vowels are still recoverable: mark positioning does not disturb ToUnicode.
+        #expect(inspector.text.contains("/ToUnicode"))
+        for scalar in "\u{0643}\u{064E}\u{062A}\u{064E}\u{0628}\u{064E}".unicodeScalars {
+            #expect(inspector.text.uppercased().contains(String(format: "%04X", scalar.value)))
+        }
+    }
+
+    @Test("An unvocalized run keeps the single-show baseline path")
+    func unvocalizedRunKeepsSingleShow() throws {
+        let font = try Self.notoFont()
+        let options = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: font.data, baseName: "Noto"),
+        ))
+        let pdf = try MarkdownPDFRenderer(options: options).render(markdown: "\u{0645}\u{0631}\u{062D}\u{0628}\u{0627}") // مرحبا, no marks
+        // No mark offsets, so the run is emitted in one showCIDText: exactly one Tj in
+        // the page content, the byte-identical pre-positioning path.
+        let inspector = PDFInspector(pdf)
+        let contentStreams = inspector.streams.filter { $0.body.contains(" Tj") }
+        #expect(contentStreams.count == 1)
+        #expect(contentStreams.allSatisfy { $0.body.components(separatedBy: " Tj").count - 1 == 1 })
+    }
+
     @Test("A base letter carries no placement offset")
     func baseHasNoOffset() throws {
         let font = try Self.notoFont()
