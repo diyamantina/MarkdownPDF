@@ -11,12 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A visible scalar the embedded font's cmap lacks (an emoji, a CJK glyph the
   subset omits, a stray combining mark) no longer aborts the whole document. The
   glyph mapper's default `.reject` policy threw `missingGlyph` and dropped every
-  page; the render path now maps that one scalar to the font's `.notdef` glyph
-  while the strict `.reject` probe stays in `covers(_:font:)` so math-symbol
-  transliteration is unchanged. Because every `.notdef` occurrence shares PDF
-  character code 0, distinct missing scalars no longer collide in the `/ToUnicode`
-  CMap: a `.notdef` glyph contributes no mapping, so the unrenderable scalar drops
-  from text extraction while the rest of the page is preserved
+  page; in a plain PDF the render path now maps that one scalar to the font's
+  `.notdef` glyph while the strict `.reject` probe stays in `covers(_:font:)` so
+  math-symbol transliteration is unchanged. Because every `.notdef` occurrence
+  shares PDF character code 0, distinct missing scalars would collide in the
+  `/ToUnicode` CMap, so a `.notdef` glyph contributes no mapping (the unrenderable
+  scalar drops from text extraction while the rest of the page is preserved), and
+  a font resource that draws nothing but `.notdef` omits `/ToUnicode` entirely
+  rather than trapping on the empty-CMap precondition. Under a PDF/UA-1 or
+  PDF/A-2a profile the fallback is disabled and a missing glyph still refuses,
+  because those profiles forbid referencing `.notdef` in content, so the notdef
+  fallback would ship spec-violating output under a conformance claim
   ([#33](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/33)).
 - Invisible default-ignorable format controls no longer abort an embedded-font
   render or paint `?` on the base-14 path. A zero-width space, joiner, non-joiner,

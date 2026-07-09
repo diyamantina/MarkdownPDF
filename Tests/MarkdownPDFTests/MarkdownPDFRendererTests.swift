@@ -613,6 +613,50 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.text.contains("/ToUnicode"))
     }
 
+    @Test("A font resource that draws only notdef renders without trapping on an empty ToUnicode")
+    func allNotdefUsageDoesNotTrapOnEmptyToUnicode() throws {
+        // When every scalar a font resource is asked to draw is missing from its
+        // cmap, the resource has no real glyph and so no ToUnicode mapping. Building
+        // the CMap unconditionally trapped on its non-empty precondition (an
+        // uncatchable crash, worse than the pre-fix thrown error). The witness font
+        // is uppercase-only, so "xyz" is entirely notdef.
+        let witness = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let embedded = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: witness, baseName: "Witness"),
+        ))
+        let data = try MarkdownPDFRenderer(options: embedded).render(markdown: "xyz")
+        #expect(!data.isEmpty)
+
+        // The all-notdef font carries no `/ToUnicode`, which is legal in a plain PDF.
+        let inspector = try PDFInspector(data)
+        #expect(!inspector.text.contains("/ToUnicode"))
+    }
+
+    @Test("A conformance profile refuses a missing glyph rather than drawing notdef", arguments: [
+        PDFOptions.Conformance.pdfUA1,
+        PDFOptions.Conformance.pdfA2A,
+    ])
+    func conformanceRefusesMissingGlyphInsteadOfNotdef(_ conformance: PDFOptions.Conformance) throws {
+        // PDF/UA-1 and PDF/A-2a forbid referencing the .notdef glyph in content and
+        // require a Unicode mapping for every code, so drawing notdef would ship
+        // spec-violating output under a conformance claim. The render must refuse.
+        let witness = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let options = PDFOptions(
+            embeddedFonts: .allRoles(PDFOptions.EmbeddedFontSource(data: witness, baseName: "Witness")),
+            title: "Conformance",
+            taggedPDF: .enabled,
+            conformance: conformance,
+        )
+        #expect(throws: (any Error).self) {
+            _ = try MarkdownPDFRenderer(options: options).render(markdown: "AB\u{1F600}CD")
+        }
+
+        // The same document with no missing glyph still renders under conformance,
+        // so it is the missing glyph, not the conformance setup, that refuses.
+        let clean = try MarkdownPDFRenderer(options: options).render(markdown: "ABCD")
+        #expect(!clean.isEmpty)
+    }
+
     @Test("The notdef render fallback does not weaken the strict coverage probe")
     func notdefFallbackKeepsCoverageProbeStrict() throws {
         // covers() drives math-symbol transliteration and must keep reporting a
