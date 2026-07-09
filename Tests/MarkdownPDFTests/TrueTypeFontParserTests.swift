@@ -522,6 +522,7 @@ enum SyntheticTrueTypeFont {
         invalidMaxpVersion: Bool = false,
         malformedCMapLength: Bool = false,
         cmapFormat4UsesGlyphArray: Bool = false,
+        cmapFormat4GlyphArrayMapsToNotdefViaIdDelta: Bool = false,
         cmapFormat4MapsLetterAToNotdef: Bool = false,
         invalidCMapFormat4SegmentRange: Bool = false,
         invalidCMapFormat4SegmentOrder: Bool = false,
@@ -536,6 +537,7 @@ enum SyntheticTrueTypeFont {
         glyphProfile: GlyphProfile = .basic,
         includeGlyphOutlines: Bool = false,
         includeGSUBLigatures: Bool = false,
+        gsubLigatureOutputsNotdef: Bool = false,
         includeMATHTable: Bool = false,
         invalidMATHConstantsOffset: Bool = false,
         mismatchedMATHItalicsCount: Bool = false,
@@ -559,6 +561,7 @@ enum SyntheticTrueTypeFont {
                 format: cmapFormat,
                 malformedLength: malformedCMapLength,
                 format4UsesGlyphArray: cmapFormat4UsesGlyphArray,
+                format4GlyphArrayMapsToNotdefViaIdDelta: cmapFormat4GlyphArrayMapsToNotdefViaIdDelta,
                 format4MapsLetterAToNotdef: cmapFormat4MapsLetterAToNotdef,
                 invalidFormat4SegmentRange: invalidCMapFormat4SegmentRange,
                 invalidFormat4SegmentOrder: invalidCMapFormat4SegmentOrder,
@@ -585,7 +588,7 @@ enum SyntheticTrueTypeFont {
             }
         }
         if includeGSUBLigatures, !omittedTables.contains("GSUB") {
-            tables["GSUB"] = gsubLigatureTable(glyphSet: glyphSet)
+            tables["GSUB"] = gsubLigatureTable(glyphSet: glyphSet, outputsNotdef: gsubLigatureOutputsNotdef)
         }
         if includeMATHTable, !omittedTables.contains("MATH") {
             tables["MATH"] = mathTable(
@@ -789,6 +792,7 @@ enum SyntheticTrueTypeFont {
         format: UInt16,
         malformedLength: Bool,
         format4UsesGlyphArray: Bool,
+        format4GlyphArrayMapsToNotdefViaIdDelta: Bool = false,
         format4MapsLetterAToNotdef: Bool = false,
         invalidFormat4SegmentRange: Bool,
         invalidFormat4SegmentOrder: Bool,
@@ -811,6 +815,7 @@ enum SyntheticTrueTypeFont {
                     format4CMapSubtable(
                         malformedLength: malformedLength,
                         usesGlyphArray: format4UsesGlyphArray,
+                        glyphArrayMapsToNotdefViaIdDelta: format4GlyphArrayMapsToNotdefViaIdDelta,
                         invalidSegmentRange: invalidFormat4SegmentRange,
                         invalidSegmentOrder: invalidFormat4SegmentOrder,
                         invalidReservedPad: invalidFormat4ReservedPad,
@@ -928,6 +933,7 @@ enum SyntheticTrueTypeFont {
     private static func format4CMapSubtable(
         malformedLength: Bool,
         usesGlyphArray: Bool,
+        glyphArrayMapsToNotdefViaIdDelta: Bool = false,
         invalidSegmentRange: Bool,
         invalidSegmentOrder: Bool,
         invalidReservedPad: Bool,
@@ -945,7 +951,11 @@ enum SyntheticTrueTypeFont {
         appendUInt16(invalidReservedPad ? 1 : 0, to: &data)
         appendUInt16(invalidSegmentOrder ? 0xFFFF : 0x0041, to: &data)
         appendUInt16(invalidSegmentOrder ? 0x0041 : 0xFFFF, to: &data)
-        appendUInt16(usesGlyphArray ? 0 : 0xFFC0, to: &data)
+        // With the glyph array [1, 2] for A, B, an idDelta of -1 drives 'A' (raw
+        // glyph 1) to glyph 0 after addition, exercising the post-idDelta notdef
+        // guard on the glyph-array branch; 'B' (raw 2) stays at glyph 1.
+        let glyphArrayIdDelta: UInt16 = glyphArrayMapsToNotdefViaIdDelta ? 0xFFFF : 0
+        appendUInt16(usesGlyphArray ? glyphArrayIdDelta : 0xFFC0, to: &data)
         appendUInt16(1, to: &data)
         appendUInt16(usesGlyphArray ? 4 : 0, to: &data)
         appendUInt16(0, to: &data)
@@ -1211,13 +1221,16 @@ enum SyntheticTrueTypeFont {
         appendUInt16(flags, to: &data)
     }
 
-    private static func gsubLigatureTable(glyphSet: GlyphSet) -> Data {
+    private static func gsubLigatureTable(glyphSet: GlyphSet, outputsNotdef: Bool = false) -> Data {
         guard let firstGlyphID = glyphSet.glyphID(for: "f"),
               let secondGlyphID = glyphSet.glyphID(for: "i"),
-              let ligatureGlyphID = glyphSet.glyphID(named: "fi")
+              let realLigatureGlyphID = glyphSet.glyphID(named: "fi")
         else {
             preconditionFailure("The GSUB ligature fixture requires f, i, and fi glyphs")
         }
+        // A substitution whose output glyph is 0 (.notdef) models a malformed font;
+        // the shaper must drop it rather than paint notdef for "fi".
+        let ligatureGlyphID: UInt16 = outputsNotdef ? 0 : realLigatureGlyphID
 
         let scriptList = gsubScriptListTable()
         let featureList = gsubFeatureListTable()

@@ -124,6 +124,31 @@ struct TrueTypeGlyphMapperTests {
         #expect(mapping.glyphs.map(\.glyphID) == [1])
     }
 
+    @Test("A format 4 glyph-array entry that idDelta drives to glyph 0 is treated as unmapped")
+    func format4GlyphArrayPostIdDeltaNotdefIsUnmapped() throws {
+        // The glyph-array branch checks the raw array value for 0, but idDelta can
+        // still drive a non-zero raw id to 0. Here the array is [1, 2] for A, B with
+        // idDelta -1, so 'A' resolves to glyph 0 (.notdef) and must read as unmapped
+        // while 'B' still maps to glyph 1. See #35.
+        let fontData = SyntheticTrueTypeFont.data(
+            cmapFormat4UsesGlyphArray: true,
+            cmapFormat4GlyphArrayMapsToNotdefViaIdDelta: true,
+        )
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        expectGlyphMappingError {
+            _ = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "A", fontSize: 12)
+        } verify: { error in
+            guard case let .missingGlyph(scalar) = error else {
+                Issue.record("Expected missing glyph for a glyph-array entry that idDelta drives to 0")
+                return
+            }
+            #expect(scalar == "A")
+        }
+
+        let mapping = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "B", fontSize: 12)
+        #expect(mapping.glyphs.map(\.glyphID) == [1])
+    }
+
     @Test("A format 12 group resolving a real code to glyph 0 is treated as unmapped")
     func format12ResolvingToNotdefIsUnmapped() throws {
         // startGlyphID 0 maps 'A' to glyph 0 (.notdef); that must read as unmapped.

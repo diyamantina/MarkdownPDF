@@ -58,6 +58,23 @@ struct OpenTypeShaperTests {
         #expect(mapping.glyphs.map(\.glyphID) == [1, 2, 3, 4])
     }
 
+    @Test("Drops a ligature whose output glyph is notdef instead of painting it")
+    func dropsLigatureThatOutputsNotdef() throws {
+        // A GSUB rule substituting "fi" with glyph 0 (.notdef) is degenerate: applying
+        // it would paint the missing-glyph box for a real cluster and reference .notdef
+        // in content under a conformance profile. The shaper must drop the rule and
+        // render "file" un-ligated through the components' own glyphs, exactly as if no
+        // GSUB were present. See #35.
+        let shaper = try latinLigatureShaper(includeGSUBLigatures: true, gsubLigatureOutputsNotdef: true)
+
+        let mapping = try shaper.shape(text: "file", fontSize: 10)
+
+        #expect(mapping.clusters.map(\.sourceScalarRange) == [0 ..< 1, 1 ..< 2, 2 ..< 3, 3 ..< 4])
+        #expect(mapping.clusters.map(\.toUnicodeText) == ["f", "i", "l", "e"])
+        #expect(mapping.glyphs.map(\.glyphID) == [1, 2, 3, 4])
+        #expect(!mapping.glyphs.map(\.glyphID).contains(0), "notdef ligature glyph reached the content stream")
+    }
+
     @Test("Rejects unsupported scripts with a typed error")
     func rejectsUnsupportedScriptsWithTypedError() throws {
         let shaper = try latinLigatureShaper(includeGSUBLigatures: true)
@@ -148,17 +165,25 @@ struct OpenTypeShaperTests {
         }
     }
 
-    private func latinLigatureShaper(includeGSUBLigatures: Bool) throws -> OpenTypeShaper {
-        let font = try latinLigatureFont(includeGSUBLigatures: includeGSUBLigatures)
+    private func latinLigatureShaper(
+        includeGSUBLigatures: Bool,
+        gsubLigatureOutputsNotdef: Bool = false,
+    ) throws -> OpenTypeShaper {
+        let font = try latinLigatureFont(
+            includeGSUBLigatures: includeGSUBLigatures,
+            gsubLigatureOutputsNotdef: gsubLigatureOutputsNotdef,
+        )
         return OpenTypeShaper(data: font.data, metadata: font.metadata)
     }
 
     private func latinLigatureFont(
         includeGSUBLigatures: Bool,
+        gsubLigatureOutputsNotdef: Bool = false,
     ) throws -> (data: Data, metadata: TrueTypeFontParser.Metadata) {
         let fontData = SyntheticTrueTypeFont.data(
             glyphProfile: .latinLigature,
             includeGSUBLigatures: includeGSUBLigatures,
+            gsubLigatureOutputsNotdef: gsubLigatureOutputsNotdef,
         )
         let metadata = try TrueTypeFontParser().parse(fontData)
         return (data: fontData, metadata: metadata)
