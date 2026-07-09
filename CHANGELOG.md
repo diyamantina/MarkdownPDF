@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Decomposed (NFD) diacritics no longer render their combining mark as `?` on the
+  base-14 path. `WinAnsiEncoding` has the precomposed accented letters but no
+  combining marks, so a sequence like `e` + U+0301 (the form macOS and many web
+  sources produce) drew the base letter and then `?`. The base-14 encoding
+  chokepoint (`PDFTextEncoding.portableText`/`portableScalars`, feeding width, the
+  drawn bytes, and the ActualText span) now NFC-normalizes, folding the sequence to
+  the single precomposed WinAnsi byte so it both draws and extracts correctly; this
+  also recovers the NFD forms of `š`, `ž`, `à`, `ü`, and the like. The embedded
+  path reads `run.text` directly and is unaffected, so its shaper keeps attaching
+  marks. Characters with no WinAnsi form even when precomposed (Croatian `č`, `ć`,
+  `đ`) still need an embedded font
+  ([#37](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/37)).
 - A font that resolves a real character to glyph 0 (`.notdef`) no longer slips a
   `.notdef` reference into content. In `cmap` format 4 the `idRangeOffset == 0`
   branch returned `code + idDelta` without a zero check (and the glyph-array branch

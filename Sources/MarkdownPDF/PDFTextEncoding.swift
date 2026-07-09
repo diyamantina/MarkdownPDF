@@ -1,10 +1,21 @@
+import Foundation
+
 enum PDFTextEncoding {
     /// Text used for the page's `/ActualText` span and as the source string the
-    /// content-stream encoder walks. It is the original Unicode, unchanged, so
-    /// extraction and copy recover the real characters even where the drawn
-    /// glyph is a fallback. (Formerly this substituted "?" for non-ASCII.)
+    /// base-14 content-stream encoder walks, normalized to NFC (precomposed form).
+    ///
+    /// The base-14 fonts draw through `/WinAnsiEncoding`, which has precomposed
+    /// accented letters (`é`, `ñ`, `š`, ...) but no combining marks. Without
+    /// normalization a decomposed sequence (`e` + U+0301, the form macOS and many
+    /// web sources hand back) draws the base letter and then the combining mark as
+    /// `?`. NFC folds it back to the single precomposed scalar, which is one WinAnsi
+    /// byte, so it both draws and extracts correctly. NFC is canonical-equivalent,
+    /// so copy still recovers the real characters. Characters with no WinAnsi
+    /// precomposed form (Croatian `č`/`ć`/`đ`, ...) still fall back to `?` on this
+    /// path; they need an embedded font, whose shaper attaches the marks itself and
+    /// reads `run.text` directly, unaffected by this normalization.
     static func portableText(for text: String) -> String {
-        text
+        text.precomposedStringWithCanonicalMapping
     }
 
     /// Removes the Unicode default-ignorable format controls that must render
@@ -71,11 +82,13 @@ enum PDFTextEncoding {
         }
     }
 
-    /// Scalars used to measure run width: the original scalars, with any scalar
-    /// the base-14 WinAnsi set cannot draw mapped to the fallback glyph so the
-    /// measured width matches what is painted.
+    /// Scalars used to measure run width: the NFC-normalized scalars (matching what
+    /// ``portableText(for:)`` draws), with any scalar the base-14 WinAnsi set cannot
+    /// draw mapped to the fallback glyph so the measured width matches what is
+    /// painted. Normalizing here keeps the measured advance in step with the drawn
+    /// bytes for a decomposed diacritic that folds to one WinAnsi code point.
     static func portableScalars(for text: String) -> [UnicodeScalar] {
-        text.unicodeScalars.map { isRepresentable($0) ? $0 : replacementScalar }
+        text.precomposedStringWithCanonicalMapping.unicodeScalars.map { isRepresentable($0) ? $0 : replacementScalar }
     }
 
     /// The byte written to the content stream for a scalar under

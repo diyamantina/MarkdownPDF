@@ -194,12 +194,15 @@ struct FixtureTests {
         #expect(normalizedText.contains("Reference-style chart placeholder"))
         #expect(!extractedText.contains("Unsupported Mermaid diagram:"))
         #expect(normalizedText.contains("Crazy chart"))
-        // WinAnsi renders accented Latin (Café, naïve); CJK and combining marks
-        // are beyond WinAnsi and still fall back to "?" until a font is embedded.
+        // WinAnsi renders precomposed accented Latin (Café, naïve). A decomposed
+        // diacritic is NFC-normalized to its precomposed WinAnsi byte, so the
+        // combining sample extracts as "café", not "cafe?". CJK has no WinAnsi form
+        // and still falls back to "?" until a font is embedded (#37).
         #expect(normalizedText.contains("Café"))
         #expect(normalizedText.contains("naïve"))
-        #expect(normalizedText.contains("??"))
-        #expect(normalizedText.contains("cafe?"))
+        #expect(normalizedText.contains("??")) // kanji 漢字, beyond WinAnsi
+        #expect(normalizedText.contains("café"))
+        #expect(!normalizedText.contains("cafe?"))
         #expect(normalizedText.contains("Crazy Torture Exit Marker"))
         #expect(!extractedText.contains("CI[Crazy input]"))
     }
