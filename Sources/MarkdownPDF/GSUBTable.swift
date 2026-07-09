@@ -30,9 +30,34 @@ struct GSUBTable {
         case unsupported
     }
 
+    /// A parsed lookup addressed by its LookupList index, carrying the lookup flag so
+    /// the applier can honor `IgnoreMarks` and friends. Contextual lookups (type 5/6)
+    /// reference other lookups by index, which is why lookups are also kept in this
+    /// by-index form, not only grouped by feature.
+    struct ParsedLookup: Equatable {
+        var lookupFlag: UInt16
+        var kind: Kind
+
+        enum Kind: Equatable {
+            case single([UInt16: UInt16])
+            case ligature([LigatureRule])
+            /// Coverage-based (format 3) contextual/chained-contextual rules.
+            case contextual([GSUBContextualRule])
+            /// A lookup type or subtable format not applied here (e.g. contextual
+            /// format 1/2). Kept as a typed marker so the applier passes over it
+            /// rather than a silent gap.
+            case unsupported
+        }
+    }
+
     /// Feature tag → the feature's lookups, in ascending LookupList index order (the
     /// order OpenType applies them).
     private let featureLookups: [String: [Lookup]]
+    /// Every lookup in the LookupList, by index, for resolving contextual nested
+    /// references and for the general feature applier.
+    private let lookupsByIndex: [UInt16: ParsedLookup]
+    /// Feature tag → its lookup indices in ascending (apply) order.
+    private let featureLookupIndices: [String: [UInt16]]
     private let numGlyphs: UInt16
 
     /// Parses the GSUB table of `data` for `scriptTag`, falling back to `DFLT`.
@@ -61,6 +86,8 @@ struct GSUBTable {
         )
         guard !featureIndices.isEmpty else {
             featureLookups = [:]
+            lookupsByIndex = [:]
+            featureLookupIndices = [:]
             return
         }
 
@@ -86,10 +113,31 @@ struct GSUBTable {
         )
 
         var result: [String: [Lookup]] = [:]
+        var indicesByTag: [String: [UInt16]] = [:]
         for (tag, indices) in lookupIndicesByTag {
-            result[tag] = indices.sorted().compactMap { parsedLookups[$0] }
+            let ordered = indices.sorted()
+            result[tag] = ordered.compactMap { parsedLookups[$0] }
+            indicesByTag[tag] = ordered
         }
         featureLookups = result
+        featureLookupIndices = indicesByTag
+
+        // Parse the whole LookupList by index so a contextual lookup's nested
+        // references (SequenceLookupRecord.lookupListIndex, which may name any lookup)
+        // resolve, and so a feature's lookups can be applied in order by the general
+        // applier. This is additive to `featureLookups` above, which the positional
+        // single-substitution and `rlig` ligature paths keep using unchanged.
+        lookupsByIndex = try Self.parseAllLookups(reader: reader, lookupListOffset: lookupListOffset)
+    }
+
+    /// The lookup at `index`, or nil when out of range.
+    func parsedLookup(at index: UInt16) -> ParsedLookup? {
+        lookupsByIndex[index]
+    }
+
+    /// The lookup indices `feature` runs, in ascending (apply) order.
+    func orderedLookupIndices(feature: String) -> [UInt16] {
+        featureLookupIndices[feature] ?? []
     }
 
     /// Whether the font carries the Arabic positional-form features, i.e. it is
@@ -262,6 +310,154 @@ struct GSUBTable {
         default:
             return .unsupported
         }
+    }
+
+    // MARK: - Full lookup list (by index, flag-aware) for the contextual applier
+
+    private static func parseAllLookups(
+        reader: TrueTypeByteReader,
+        lookupListOffset: Int,
+    ) throws -> [UInt16: ParsedLookup] {
+        try reader.requireRange(offset: lookupListOffset, count: 2)
+        let lookupCount = try Int(reader.uint16(at: lookupListOffset))
+        try reader.requireRange(offset: lookupListOffset + 2, count: lookupCount * 2)
+        var result: [UInt16: ParsedLookup] = [:]
+        for index in 0 ..< lookupCount {
+            let lookupOffset = try lookupListOffset + Int(reader.uint16(at: lookupListOffset + 2 + index * 2))
+            result[UInt16(index)] = try parseLookupWithFlag(reader: reader, offset: lookupOffset)
+        }
+        return result
+    }
+
+    private static func parseLookupWithFlag(reader: TrueTypeByteReader, offset: Int) throws -> ParsedLookup {
+        try reader.requireRange(offset: offset, count: 6)
+        let lookupType = try reader.uint16(at: offset)
+        let lookupFlag = try reader.uint16(at: offset + 2)
+        let subtableCount = try Int(reader.uint16(at: offset + 4))
+        try reader.requireRange(offset: offset + 6, count: subtableCount * 2)
+        var subtableOffsets: [Int] = []
+        subtableOffsets.reserveCapacity(subtableCount)
+        for index in 0 ..< subtableCount {
+            try subtableOffsets.append(offset + Int(reader.uint16(at: offset + 6 + index * 2)))
+        }
+
+        let kind: ParsedLookup.Kind
+        switch lookupType {
+        case 1:
+            var map: [UInt16: UInt16] = [:]
+            for subtableOffset in subtableOffsets {
+                try parseSingleSubstitution(reader: reader, offset: subtableOffset, into: &map)
+            }
+            kind = .single(map)
+        case 4:
+            var rules: [LigatureRule] = []
+            for subtableOffset in subtableOffsets {
+                try rules.append(contentsOf: parseLigatureSubstitution(reader: reader, offset: subtableOffset))
+            }
+            kind = .ligature(rules)
+        case 5, 6:
+            var rules: [GSUBContextualRule] = []
+            for subtableOffset in subtableOffsets {
+                try rules.append(contentsOf: parseContextual(reader: reader, offset: subtableOffset, chained: lookupType == 6))
+            }
+            kind = .contextual(rules)
+        default:
+            // Types 2 (multiple), 3 (alternate), 7 (extension), 8 (reverse chaining)
+            // are not applied by the contextual engine; a font using them keeps its
+            // base glyphs for those lookups.
+            kind = .unsupported
+        }
+        return ParsedLookup(lookupFlag: lookupFlag, kind: kind)
+    }
+
+    /// Parses a coverage-based (format 3) contextual (type 5) or chained-contextual
+    /// (type 6) subtable into normalized rules. Formats 1 (glyph-sequence rule sets)
+    /// and 2 (class-based) are not parsed yet and yield no rule, a documented gap:
+    /// format 3 is what Noto Naskh uses for the lam-alef `rlig` refinement and for the
+    /// `ccmp` chained lookup. Backtrack coverages are stored reversed to text order so
+    /// the nearest preceding glyph is `backtrack.last`, matching the applier's walk.
+    private static func parseContextual(
+        reader: TrueTypeByteReader,
+        offset: Int,
+        chained: Bool,
+    ) throws -> [GSUBContextualRule] {
+        try reader.requireRange(offset: offset, count: 2)
+        let format = try reader.uint16(at: offset)
+        guard format == 3 else {
+            return []
+        }
+        if chained {
+            var cursor = offset + 2
+            let backtrack = try readCoverageArray(reader: reader, subtableOffset: offset, cursor: &cursor)
+            let input = try readCoverageArray(reader: reader, subtableOffset: offset, cursor: &cursor)
+            let lookahead = try readCoverageArray(reader: reader, subtableOffset: offset, cursor: &cursor)
+            let records = try readSequenceLookupRecords(reader: reader, cursor: &cursor)
+            return [GSUBContextualRule(
+                backtrack: Array(backtrack.reversed()),
+                input: input,
+                lookahead: lookahead,
+                lookupRecords: records,
+            )]
+        }
+        // SequenceContextFormat3: glyphCount and seqLookupCount precede the coverage
+        // array (a different field order from the chained form).
+        try reader.requireRange(offset: offset + 2, count: 4)
+        let glyphCount = try Int(reader.uint16(at: offset + 2))
+        let recordCount = try Int(reader.uint16(at: offset + 4))
+        var cursor = offset + 6
+        var input: [Set<UInt16>] = []
+        input.reserveCapacity(glyphCount)
+        for _ in 0 ..< glyphCount {
+            let coverageOffset = try offset + Int(reader.uint16(at: cursor))
+            cursor += 2
+            try input.append(Set(coverageGlyphIDs(reader: reader, offset: coverageOffset)))
+        }
+        var records: [SequenceLookupRecord] = []
+        records.reserveCapacity(recordCount)
+        for _ in 0 ..< recordCount {
+            let sequenceIndex = try reader.uint16(at: cursor)
+            let lookupListIndex = try reader.uint16(at: cursor + 2)
+            cursor += 4
+            records.append(SequenceLookupRecord(sequenceIndex: sequenceIndex, lookupListIndex: lookupListIndex))
+        }
+        return [GSUBContextualRule(backtrack: [], input: input, lookahead: [], lookupRecords: records)]
+    }
+
+    /// A count-prefixed array of coverage offsets (relative to `subtableOffset`),
+    /// advancing `cursor` past it, each resolved to the set of glyphs it covers.
+    private static func readCoverageArray(
+        reader: TrueTypeByteReader,
+        subtableOffset: Int,
+        cursor: inout Int,
+    ) throws -> [Set<UInt16>] {
+        let count = try Int(reader.uint16(at: cursor))
+        cursor += 2
+        var sets: [Set<UInt16>] = []
+        sets.reserveCapacity(count)
+        for _ in 0 ..< count {
+            let coverageOffset = try subtableOffset + Int(reader.uint16(at: cursor))
+            cursor += 2
+            try sets.append(Set(coverageGlyphIDs(reader: reader, offset: coverageOffset)))
+        }
+        return sets
+    }
+
+    /// A count-prefixed array of SequenceLookupRecords, advancing `cursor` past it.
+    private static func readSequenceLookupRecords(
+        reader: TrueTypeByteReader,
+        cursor: inout Int,
+    ) throws -> [SequenceLookupRecord] {
+        let count = try Int(reader.uint16(at: cursor))
+        cursor += 2
+        var records: [SequenceLookupRecord] = []
+        records.reserveCapacity(count)
+        for _ in 0 ..< count {
+            let sequenceIndex = try reader.uint16(at: cursor)
+            let lookupListIndex = try reader.uint16(at: cursor + 2)
+            cursor += 4
+            records.append(SequenceLookupRecord(sequenceIndex: sequenceIndex, lookupListIndex: lookupListIndex))
+        }
+        return records
     }
 
     // MARK: - Subtable parsing

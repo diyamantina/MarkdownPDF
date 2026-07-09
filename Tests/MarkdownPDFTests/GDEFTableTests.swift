@@ -32,14 +32,16 @@ struct GDEFTableTests {
         let gdef = try #require(try GDEFTable(fontData: data, gdefTableRange: gdefRange(metadata, in: data)))
 
         // Harakat (combining vowel marks) are GDEF class 3.
-        for markScalar in ["\u{064E}", "\u{0650}", "\u{0651}"] { // fatha, kasra, shadda
-            let glyph = try glyphID(for: UnicodeScalar(#require(markScalar.unicodeScalars.first)), data: data, metadata: metadata)
-            #expect(gdef.isMark(glyph), "U+\(String(markScalar.unicodeScalars.first!.value, radix: 16)) should be a mark")
+        for scalar in [UnicodeScalar(0x064E), UnicodeScalar(0x0650), UnicodeScalar(0x0651)] { // fatha, kasra, shadda
+            let mark = try #require(scalar)
+            let glyph = try glyphID(for: mark, data: data, metadata: metadata)
+            #expect(gdef.isMark(glyph), "U+\(String(mark.value, radix: 16)) should be a mark")
         }
         // Letters are bases, not marks.
-        for letterScalar in ["\u{0645}", "\u{0628}", "\u{0627}"] { // meem, beh, alef
-            let glyph = try glyphID(for: UnicodeScalar(#require(letterScalar.unicodeScalars.first)), data: data, metadata: metadata)
-            #expect(!gdef.isMark(glyph), "U+\(String(letterScalar.unicodeScalars.first!.value, radix: 16)) should not be a mark")
+        for scalar in [UnicodeScalar(0x0645), UnicodeScalar(0x0628), UnicodeScalar(0x0627)] { // meem, beh, alef
+            let letter = try #require(scalar)
+            let glyph = try glyphID(for: letter, data: data, metadata: metadata)
+            #expect(!gdef.isMark(glyph), "U+\(String(letter.value, radix: 16)) should not be a mark")
         }
     }
 
