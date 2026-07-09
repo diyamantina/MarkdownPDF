@@ -157,17 +157,29 @@ final class PDFPageCanvas {
         // A run whose glyphs all sit on the baseline (no GPOS placement) is shown in a
         // single operator, byte-identical to before mark positioning existed. Only a
         // run carrying a placement offset takes the per-glyph positioned path.
-        if orderedGlyphs.allSatisfy({ $0.offset == .zero }) {
-            contentStream.append([
+        var operators: [PDFContentStream.Operator] = if orderedGlyphs.allSatisfy({ $0.offset == .zero }) {
+            [
                 .beginText,
                 .setFont(font, size: fontSize),
                 .moveText(x: x, y: y),
                 .showCIDText(orderedClusters.flatMap(\.pdfCharacterCodes)),
                 .endText,
-            ])
+            ]
         } else {
-            contentStream.append(positionedTextOperators(orderedGlyphs, font: font, fontSize: fontSize, x: x, y: y))
+            positionedTextOperators(orderedGlyphs, font: font, fontSize: fontSize, x: x, y: y)
         }
+        // An RTL run drawn in visual order defeats a text extractor's bidi reversal for a
+        // composed base+mark glyph (its multi-scalar ToUnicode flips, landing the mark
+        // before its letter). Wrap such a run in an `/ActualText` span carrying the
+        // logical text so extraction recovers it exactly. Runs without such a glyph
+        // (all Arabic, unpointed Hebrew, LTR) are untouched and stay byte-identical.
+        if rightToLeft, mapping.needsActualTextOverride {
+            let visual = String(String.UnicodeScalarView(mapping.toUnicodeText.unicodeScalars.reversed()))
+            let utf16: [UInt16] = [0xFEFF] + Array(visual.utf16)
+            operators = [.beginActualTextUTF16(PDFSyntax.HexString(twoByteCodes: utf16))]
+                + operators + [.endMarkedContent]
+        }
+        contentStream.append(operators)
         if let decoratedRun {
             drawDecorations(for: decoratedRun, x: x, y: y, width: mapping.totalAdvance)
         }

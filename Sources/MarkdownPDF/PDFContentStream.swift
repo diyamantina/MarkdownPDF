@@ -74,6 +74,9 @@ struct PDFContentStream {
         case restoreGraphicsState
         case beginMarkedContent(PDFSyntax.Name, mcid: Int)
         case beginActualText(PDFSyntax.LiteralString)
+        /// `/ActualText` as a UTF-16BE hex string (with BOM), for text a WinAnsi
+        /// literal cannot carry (Arabic, Hebrew, and any non-Latin extraction override).
+        case beginActualTextUTF16(PDFSyntax.HexString)
         case beginArtifact
         case endMarkedContent
         case concatenateMatrix(
@@ -132,6 +135,8 @@ struct PDFContentStream {
                 "\(tag.serialized) << /MCID \(mcid) >> BDC"
             case let .beginActualText(text):
                 "/Span << /ActualText \(text.serialized) >> BDC"
+            case let .beginActualTextUTF16(hex):
+                "/Span << /ActualText \(hex.serialized) >> BDC"
             case .beginArtifact:
                 "/Artifact BMC"
             case .endMarkedContent:

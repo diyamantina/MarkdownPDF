@@ -17,9 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared mark positioner); a pointed run is shaped whole and drawn right-to-left with
   `/ToUnicode` preserved, while an unpointed run stays on the ordinary path unchanged.
   Verified against `hb-shape`: 299 of 324 letter-and-mark combinations match glyph and
-  offset exactly. The remaining 25 are holam directly on a consonant (holam haser), which
-  needs GPOS type-8 contextual positioning the engine does not yet apply and is off by 25
-  font units (about 0.15 pt at 12 pt); holam on vav composes and matches
+  offset exactly. A composed base+mark glyph drawn right-to-left in visual order would
+  make a text extractor place the point before its letter (the composed glyph's
+  multi-scalar `/ToUnicode` is reversed with the run); such a run now carries an
+  `/ActualText` override so `pdftotext` and `mutool` recover the letter before its point.
+  Two GPOS type-8 contextual-positioning cases remain, off by a small amount and not yet
+  applied: holam directly on a consonant (holam haser, 25 font units; holam on vav
+  composes and matches), and a vowel together with meteg under one consonant (the two
+  below-marks attach at the same anchor instead of splitting)
   ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
 - Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
   tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a
