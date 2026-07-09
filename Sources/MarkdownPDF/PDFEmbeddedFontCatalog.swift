@@ -6,6 +6,7 @@ struct PDFEmbeddedFontCatalog {
         var resource: PDFEmbeddedFontResource
         var mapper: TrueTypeGlyphMapper
         var shaper: OpenTypeShaper
+        var arabicShaper: ArabicShaper
         var mathMetrics: MathLayoutMetrics?
     }
 
@@ -83,6 +84,19 @@ struct PDFEmbeddedFontCatalog {
             shaper.missingGlyphPolicy = renderingMissingGlyphPolicy
             return try shaper.shape(text: run.text, fontSize: run.size)
         }
+        // Cursive scripts (Arabic and the other joining scripts) resolve each
+        // letter's positional form and apply the font's GSUB before mapping to
+        // glyphs. This produces joined shapes and the correct (ligated) advance;
+        // RTL visual ordering is the renderer's job. A font without the script's
+        // GSUB features shapes to base (isolated) glyphs, i.e. no worse than the
+        // unshaped path.
+        if ArabicShaper.containsJoiningScript(run.text), entry.arabicShaper.canShapeArabic {
+            return try entry.arabicShaper.shapedMapping(
+                text: run.text,
+                fontSize: run.size,
+                missingGlyphPolicy: renderingMissingGlyphPolicy,
+            )
+        }
         if let scalar = run.text.unicodeScalars.first(where: Self.requiresExplicitShapingSupport) {
             throw PDFEmbeddedFontError.unsupportedComplexScriptScalar(scalar: scalar)
         }
@@ -115,6 +129,7 @@ struct PDFEmbeddedFontCatalog {
             resource: resource,
             mapper: TrueTypeGlyphMapper(data: source.data, metadata: metadata),
             shaper: OpenTypeShaper(data: source.data, metadata: metadata),
+            arabicShaper: ArabicShaper(fontData: source.data, metadata: metadata),
             mathMetrics: metadata.math.map {
                 MathLayoutMetrics.openType(constants: $0.constants, unitsPerEm: metadata.head.unitsPerEm)
             },
