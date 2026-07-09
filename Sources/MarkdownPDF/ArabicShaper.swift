@@ -204,16 +204,21 @@ struct ArabicShaper {
         _ text: String,
         missingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy = .useNotdef,
     ) throws -> [ShapedGlyph] {
-        let scalars = Array(text.unicodeScalars)
+        // Canonically order combining marks before shaping (marks typed out of ccc
+        // order stack the way the reference shaper stacks them). This only reorders
+        // marks, so it stays one glyph per scalar; source ranges below index into this
+        // ordered sequence, which `shapedMapping` reproduces for a faithful ToUnicode.
+        let scalars = CanonicalCombiningClass.canonicallyOrdered(Array(text.unicodeScalars))
         guard !scalars.isEmpty else {
             return []
         }
+        let orderedText = String(String.UnicodeScalarView(scalars))
 
         // Base glyphs, one per scalar, from the font cmap. The caller's policy
         // governs a scalar the font lacks: `.reject` refuses (conformance) and
         // `.useNotdef` keeps it from aborting the document.
         let mapper = TrueTypeGlyphMapper(data: fontData, metadata: metadata, missingGlyphPolicy: missingGlyphPolicy)
-        let baseGlyphs = try mapper.map(text: text, fontSize: 1).glyphs.map(\.glyphID)
+        let baseGlyphs = try mapper.map(text: orderedText, fontSize: 1).glyphs.map(\.glyphID)
         guard baseGlyphs.count == scalars.count else {
             return zip(baseGlyphs.indices, baseGlyphs).map { index, glyph in
                 ShapedGlyph(glyphID: glyph, sourceScalarRange: index ..< index + 1)
@@ -513,7 +518,9 @@ struct ArabicShaper {
         fontSize: Double,
         missingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy = .useNotdef,
     ) throws -> ShapedTextMapping {
-        let scalars = Array(text.unicodeScalars)
+        // `shape` canonically orders the marks; index into the same ordered sequence so
+        // each cluster's source scalars line up with the glyph that came from them.
+        let scalars = CanonicalCombiningClass.canonicallyOrdered(Array(text.unicodeScalars))
         let shaped = try shape(text, missingGlyphPolicy: missingGlyphPolicy)
         let unitsPerEm = Double(metadata.head.unitsPerEm)
         let advanceWidths = metadata.hmtx.advanceWidths

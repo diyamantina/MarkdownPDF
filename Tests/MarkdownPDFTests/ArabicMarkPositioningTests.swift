@@ -38,6 +38,11 @@ struct ArabicMarkPositioningTests {
             "\u{0645}\u{0651}\u{064E}", // مَّ  meem + shadda + fatha
             "\u{0631}\u{0628}\u{0651}\u{0650}", // رَبِّ (rabbi)
             "\u{0645}\u{064F}\u{062D}\u{064E}\u{0645}\u{0651}\u{064E}\u{062F}", // مُحَمَّد
+            // Marks typed out of canonical order (shadda before fatha): the shaper
+            // reorders them to canonical order first, so this matches hb like the
+            // canonically-ordered form.
+            "\u{0645}\u{0651}\u{064E}", // meem + shadda + fatha (non-canonical order)
+            "\u{0628}\u{064F}\u{064E}", // beh + damma + fatha (non-canonical, non-composing)
         ],
     )
     func shapedOffsetsMatchHarfBuzz(_ word: String) throws {

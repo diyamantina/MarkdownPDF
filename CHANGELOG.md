@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Canonical combining-class ordering before Arabic shaping. Combining marks typed out of
+  Unicode canonical order (e.g. shadda before a vowel) are now reordered by combining
+  class before shaping, so they stack the way the reference shaper stacks them. A generated
+  table carries the class for every non-zero-class scalar (Unicode 17.0.0); the ordering
+  is a stable per-mark-run sort that never moves a mark across a starter and performs no
+  decomposition, so the scalar set is unchanged and the result is canonically equivalent.
+  Verified against `hb-shape`: all 56 two-mark combinations on a base now match exactly
+  (previously 24 differed only in mark order), with no glyph-set change
+  ([#48](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48)).
 - Arabic `ccmp` mark composition and GSUB `IgnoreMarks`. Two refinements that bring
   vocalized Arabic closer to the reference shaper. The contextual matcher now honors the
   `IgnoreMarks` lookup flag, skipping harakat when matching, so a vocalized lam-alef
