@@ -56,11 +56,10 @@ struct ArabicRenderIntegrationTests {
             "\u{0645}\u{062D}\u{0645}\u{062F}", // محمد
             "\u{0639}\u{0631}\u{0628}\u{064A}", // عربي
             "\u{0646}\u{0639}\u{0645}", // نعم
-            // Lam-alef (سلام) is excluded here: Noto refines it with a GSUB type-5/6
-            // contextual lookup this engine does not implement, so the drawn glyph is
-            // the canonical uniFEFC ligature rather than Noto's contextual pair. That
-            // divergence is a documented Phase-2 item, covered by the shaping-core
-            // `lamAlefLigates` test.
+            // Lam-alef: the engine now applies Noto's contextual (GSUB type 5) rlig
+            // lookup, so the drawn glyphs are the font's exact contextual pair and
+            // match hb-shape end to end.
+            "\u{0633}\u{0644}\u{0627}\u{0645}", // سلام
         ],
     )
     func arabicParagraphDrawsJoinedRTL(_ word: String) throws {

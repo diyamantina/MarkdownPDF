@@ -60,9 +60,10 @@ struct ArabicShaperTests {
 
     // MARK: - Differential oracle against HarfBuzz (hb-shape)
 
-    /// Words Noto shapes purely with GSUB single-substitution (isol/init/medi/fina)
-    /// and non-lam-alef ligatures, i.e. the lookup types this shaper implements
-    /// (1 and 4). Each must match hb-shape's glyph ids exactly.
+    /// Words Noto shapes with GSUB single-substitution (isol/init/medi/fina),
+    /// ligatures, and the coverage-based contextual (type 5) lam-alef refinement, i.e.
+    /// the lookup types this shaper implements (1, 4, and 5/6 format 3). Each must
+    /// match hb-shape's glyph ids exactly.
     private static let oracleCorpus = [
         "\u{0628}", "\u{062A}", "\u{0646}", // isolated beh, teh, noon
         "\u{0628}\u{0628}\u{0628}", // ببب
@@ -75,6 +76,10 @@ struct ArabicShaperTests {
         "\u{0639}\u{0631}\u{0628}\u{064A}", // عربي
         "\u{0634}\u{0643}\u{0631}\u{0627}", // شكرا
         "\u{0643}\u{0644}\u{0645}\u{0629}", // كلمة
+        // Lam-alef, now shaped through the contextual (type 5) rlig lookup to the
+        // font's exact glyph pair rather than the canonical presentation ligature.
+        "\u{0644}\u{0627}", "\u{0644}\u{0623}", "\u{0644}\u{0625}", "\u{0644}\u{0622}", // لا لأ لإ لآ
+        "\u{0633}\u{0644}\u{0627}\u{0645}", // سلام
     ]
 
     @Test(
@@ -91,21 +96,28 @@ struct ArabicShaperTests {
         }
     }
 
-    @Test("Lam-alef ligates to a single presentation-form glyph")
-    func lamAlefLigates() throws {
-        // Noto refines lam-alef with an additional contextual (GSUB type 5/6)
-        // substitution that this shaper does not implement yet. Without it the shaper
-        // applies Noto's simple type-4 rlig ligature, which yields the canonical
-        // single lam-alef presentation-form glyph (U+FEFB/U+FEFC, GID 733 = uniFEFC),
-        // a complete, legible ligature. So the two input letters collapse to one glyph.
+    @Test(
+        "Lam-alef shapes to the font's contextual glyph pair, matching hb-shape",
+        .enabled(if: HarfBuzzOracle.isAvailable, "hb-shape not found on PATH"),
+    )
+    func lamAlefShapesToContextualPair() throws {
+        // Noto refines lam-alef with a coverage-based contextual (GSUB type 5) rlig
+        // lookup that swaps the lam and alef forms for their `.rlig` variants, leaving
+        // two connected glyphs rather than collapsing them into the canonical single
+        // presentation ligature. The shaper now runs that lookup, so its output is the
+        // font's exact glyph pair (verified against hb-shape) and each output glyph
+        // keeps its own source scalar, so `/ToUnicode` still recovers lam then alef.
         let font = try Self.notoFont()
         let shaper = ArabicShaper(fontData: font.data, metadata: font.metadata)
         for word in ["\u{0644}\u{0627}", "\u{0644}\u{0623}", "\u{0644}\u{0625}", "\u{0644}\u{0622}"] {
             let glyphs = try shaper.shape(word)
-            #expect(glyphs.count == 1, "\(word) should ligate lam-alef to one glyph, got \(glyphs.count)")
-            #expect(glyphs.first?.glyphID != 0)
-            // The ligature covers both source scalars.
-            #expect(glyphs.first?.sourceScalarRange == 0 ..< 2)
+            let engine = glyphs.map(\.glyphID)
+            let oracle = try HarfBuzzOracle.shape(word, fontPath: font.path)
+            #expect(engine == oracle, "\(word) engine \(engine) vs hb-shape \(oracle)")
+            #expect(glyphs.count == 2, "lam-alef stays a two-glyph contextual pair")
+            #expect(glyphs.allSatisfy { $0.glyphID != 0 })
+            // Each output glyph maps back to exactly one source scalar.
+            #expect(glyphs.map(\.sourceScalarRange) == [0 ..< 1, 1 ..< 2])
         }
     }
 
