@@ -32,6 +32,12 @@ struct ArabicMarkPositioningTests {
             // first (its offset builds on the first's), exercising the accumulation in
             // the mark-to-mark path. hb stacks them at @354,39 then @352,279.
             "\u{0628}\u{0670}\u{0670}", // beh + superscript alef + superscript alef
+            // ccmp composition: shadda + vowel compose to a single glyph, then that
+            // composed glyph is placed by GPOS. Both the composed glyph and its offset
+            // must match hb.
+            "\u{0645}\u{0651}\u{064E}", // مَّ  meem + shadda + fatha
+            "\u{0631}\u{0628}\u{0651}\u{0650}", // رَبِّ (rabbi)
+            "\u{0645}\u{064F}\u{062D}\u{064E}\u{0645}\u{0651}\u{064E}\u{062F}", // مُحَمَّد
         ],
     )
     func shapedOffsetsMatchHarfBuzz(_ word: String) throws {

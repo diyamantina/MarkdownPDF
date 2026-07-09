@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arabic `ccmp` mark composition and GSUB `IgnoreMarks`. Two refinements that bring
+  vocalized Arabic closer to the reference shaper. The contextual matcher now honors the
+  `IgnoreMarks` lookup flag, skipping harakat when matching, so a vocalized lam-alef
+  (لَا) gets the same contextual refinement as the unvocalized form. And the `ccmp`
+  feature is now applied, so a font that provides one glyph for a mark combination (e.g.
+  shadda + vowel) composes it instead of drawing two marks; the composed glyph is then
+  placed by GPOS. Verified against `hb-shape` across a 253-word sweep (every harakat on
+  23 base letters, plus shadda + vowel combinations) with zero divergences, and مُحَمَّد
+  (which previously diverged) now composes and positions correctly. Input that needs
+  canonical combining-class reordering first still diverges and is a tracked follow-up
+  ([#48](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48)).
 - Arabic GPOS mark positioning: combining marks now sit precisely on their letters.
   Before, harakat (Arabic vowel marks) and niqqud were drawn at the pen with no
   attachment, so vocalized text was legible but not typographically placed. A new GPOS
