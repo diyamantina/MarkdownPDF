@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Heading anchor slugs are stable across Unicode normalization forms, so an
+  internal link resolves whether the heading or the link was authored precomposed
+  or decomposed. The slug generator kept the ASCII base of a decomposed accent
+  (`e` + U+0301 → `cafe`) but dropped a precomposed one wholesale (`é` → nothing),
+  so `# Café` slugged to `caf-du-monde` or `cafe-du-monde` depending on the source
+  bytes. It now decomposes and drops the combining marks, folding an accented
+  letter to its ASCII base for both forms (`café` → `cafe`, `naïve` → `naive`,
+  `čokolada` → `cokolada`), and applies the same folding to link targets
+  ([#39](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/39)).
 - Decomposed (NFD) diacritics no longer render their combining mark as `?` on the
   base-14 path. `WinAnsiEncoding` has the precomposed accented letters but no
   combining marks, so a sequence like `e` + U+0301 (the form macOS and many web
