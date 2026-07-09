@@ -10,4 +10,4 @@ MarkdownPDF is dual licensed.
   closed-source product, or in a service that cannot comply with the AGPL terms,
   a commercial license is available that exempts you from those obligations.
 
-For a commercial license, contact Mihaela Mihaljevic at mihaelamj@me.com.
+For a commercial license, contact Mihaela Mihaljevic at https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues.

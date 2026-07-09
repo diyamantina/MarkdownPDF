@@ -5,7 +5,7 @@
 If you believe you have found a security issue in MarkdownPDF, please report it
 privately. Do not open a public issue for security problems.
 
-Email **mihaelamj@me.com** with:
+Email **mihaelamj@gmail.com** with:
 
 - A description of the issue and its impact.
 - Steps to reproduce, or a proof of concept.

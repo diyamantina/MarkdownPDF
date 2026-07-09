@@ -33,7 +33,7 @@ is the full reference for expected behavior and enforcement guidelines.
 ## Enforcement
 
 Instances of unacceptable behavior may be reported to the project maintainer at
-**mihaelamj@me.com**. All reports will be reviewed and investigated promptly and
+**https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues**. All reports will be reviewed and investigated promptly and
 fairly. The maintainer is obligated to respect the privacy and security of the
 reporter of any incident.
 
