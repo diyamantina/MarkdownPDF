@@ -275,8 +275,8 @@ struct ArabicShaper {
         var index = 0
         while index < output.count {
             var advanced = false
-            for rule in rules where matches(rule, in: output, at: index) {
-                applyRecords(rule.lookupRecords, in: &output, inputStart: index, gsub: gsub)
+            for rule in rules where Self.matches(rule, in: output, at: index) {
+                applyRecords(rule.lookupRecords, in: &output, inputStart: index, inputCount: rule.input.count, gsub: gsub)
                 index += max(rule.input.count, 1)
                 advanced = true
                 break
@@ -289,8 +289,9 @@ struct ArabicShaper {
     }
 
     /// Whether `rule`'s backtrack/input/lookahead coverages all match the buffer with
-    /// the input beginning at `index`.
-    private func matches(_ rule: GSUBContextualRule, in glyphs: [ShapedGlyph], at index: Int) -> Bool {
+    /// the input beginning at `index`. Pure in its arguments (no font state), so the
+    /// backtrack/lookahead index math is unit-testable on its own.
+    static func matches(_ rule: GSUBContextualRule, in glyphs: [ShapedGlyph], at index: Int) -> Bool {
         let inputEnd = index + rule.input.count
         guard rule.input.count >= 1, inputEnd <= glyphs.count else {
             return false
@@ -318,16 +319,23 @@ struct ArabicShaper {
         return true
     }
 
-    /// Applies each record's nested single substitution at its input position.
+    /// Applies each record's nested single substitution at its input position. A
+    /// record whose `sequenceIndex` falls outside the matched input window is skipped
+    /// (as HarfBuzz does): a spec-invalid font could otherwise name a position past
+    /// the input and substitute a glyph outside the rule's match, corrupting an
+    /// unrelated cluster.
     private func applyRecords(
         _ records: [SequenceLookupRecord],
         in glyphs: inout [ShapedGlyph],
         inputStart: Int,
+        inputCount: Int,
         gsub: GSUBTable,
     ) {
         for record in records {
-            let position = inputStart + Int(record.sequenceIndex)
-            guard position < glyphs.count,
+            let sequenceIndex = Int(record.sequenceIndex)
+            let position = inputStart + sequenceIndex
+            guard sequenceIndex < inputCount,
+                  position < glyphs.count,
                   let nested = gsub.parsedLookup(at: record.lookupListIndex),
                   case let .single(map) = nested.kind,
                   let substitute = map[glyphs[position].glyphID],

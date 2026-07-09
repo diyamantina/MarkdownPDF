@@ -35,6 +35,11 @@ struct OpenTypeClassDef: Equatable {
             let startGlyphID = try reader.uint16(at: offset + 2)
             let glyphCount = try Int(reader.uint16(at: offset + 4))
             try reader.requireRange(offset: offset + 6, count: glyphCount * 2)
+            // The run [startGlyphID, startGlyphID + glyphCount) must fit the glyph-id
+            // space; a table that runs past 0xFFFF is malformed and must not wrap.
+            guard Int(startGlyphID) + glyphCount <= 0x10000 else {
+                throw GSUBTable.GSUBTableError.malformed(reason: "ClassDef format 1 run exceeds the glyph-id space")
+            }
             var ranges: [ClassRange] = []
             ranges.reserveCapacity(glyphCount)
             for index in 0 ..< glyphCount {
@@ -42,7 +47,7 @@ struct OpenTypeClassDef: Equatable {
                 guard classValue != 0 else {
                     continue // class 0 is the default; storing it wastes space
                 }
-                let glyphID = UInt16(truncatingIfNeeded: Int(startGlyphID) + index)
+                let glyphID = startGlyphID + UInt16(index)
                 ranges.append(ClassRange(startGlyphID: glyphID, endGlyphID: glyphID, classValue: classValue))
             }
             return OpenTypeClassDef(ranges: ranges)
