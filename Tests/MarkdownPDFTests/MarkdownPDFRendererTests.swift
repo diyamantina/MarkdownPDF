@@ -729,11 +729,12 @@ struct MarkdownPDFRendererTests {
         // Before this, a TrueType collection was rejected outright; a user could not
         // embed a system CJK/Arabic/Hebrew font (those ship as collections). The
         // source now carries a face index (default 0). See #41.
-        let collection = SyntheticTrueTypeFont.data(
-            glyphProfile: .latinWitness,
-            includeGlyphOutlines: true,
-            ttcFaceCount: 2,
-        )
+        // A real 2-face collection; embed the second face (its directory is not at
+        // offset 0), exercising the non-first-face path end to end.
+        let collection = SyntheticTrueTypeFont.makeCollection(faces: [
+            SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true),
+            SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true),
+        ])
         let embedded = PDFOptions(embeddedFonts: .allRoles(
             PDFOptions.EmbeddedFontSource(data: collection, baseName: "Collection", faceIndex: 1),
         ))

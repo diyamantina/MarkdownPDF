@@ -295,31 +295,37 @@ struct TrueTypeFontParserTests {
         }
     }
 
-    @Test("Selects a face from a TrueType collection and parses it like a single font", arguments: [0, 1, 2])
-    func parsesTrueTypeCollectionFace(_ faceIndex: Int) throws {
-        // A 3-face collection whose faces all share one directory: any valid index
-        // resolves to the same font, proving the header is read and the face's
-        // directory offset is followed. Table offsets are absolute, so parsing,
-        // metrics, and cmap are identical to the equivalent single-face font.
-        let single = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data())
-        let collection = try TrueTypeFontParser().parse(
-            SyntheticTrueTypeFont.data(ttcFaceCount: 3),
-            faceIndex: faceIndex,
-        )
-        #expect(collection.maxp.numGlyphs == single.maxp.numGlyphs)
-        #expect(collection.head.unitsPerEm == single.head.unitsPerEm)
-        #expect(collection.cmap.selectedUnicodeFormat == single.cmap.selectedUnicodeFormat)
-        #expect(collection.tables.map(\.tag).sorted() == single.tables.map(\.tag).sorted())
+    @Test("Selects the requested face from a collection whose faces genuinely differ")
+    func parsesTrueTypeCollectionFace() throws {
+        // Two independent faces at different directory offsets, distinguishable by
+        // their cmap subtable format (4 vs 12). Reading the wrong face-offset entry
+        // would return the other face's format, so this pins that the SELECTED face's
+        // directory is followed, not always face 0's.
+        let collection = SyntheticTrueTypeFont.makeCollection(faces: [
+            SyntheticTrueTypeFont.data(cmapFormat: 4),
+            SyntheticTrueTypeFont.data(cmapFormat: 12),
+        ])
+        let face0 = try TrueTypeFontParser().parse(collection, faceIndex: 0)
+        let face1 = try TrueTypeFontParser().parse(collection, faceIndex: 1)
+        #expect(face0.cmap.selectedUnicodeFormat == 4)
+        #expect(face1.cmap.selectedUnicodeFormat == 12)
+        // Each face still parses like its equivalent single font.
+        let single12 = try TrueTypeFontParser().parse(SyntheticTrueTypeFont.data(cmapFormat: 12))
+        #expect(face1.maxp.numGlyphs == single12.maxp.numGlyphs)
+        #expect(face1.tables.map(\.tag).sorted() == single12.tables.map(\.tag).sorted())
     }
 
     @Test("Rejects a collection face index outside the collection's range")
     func rejectsOutOfRangeCollectionFaceIndex() throws {
-        let data = SyntheticTrueTypeFont.data(ttcFaceCount: 3)
+        let data = SyntheticTrueTypeFont.makeCollection(faces: [
+            SyntheticTrueTypeFont.data(cmapFormat: 4),
+            SyntheticTrueTypeFont.data(cmapFormat: 12),
+        ])
         do {
-            _ = try TrueTypeFontParser().parse(data, faceIndex: 3)
+            _ = try TrueTypeFontParser().parse(data, faceIndex: 2)
             Issue.record("Expected an out-of-range face index error")
         } catch let error as TrueTypeFontError {
-            #expect(error == .fontCollectionFaceIndexOutOfRange(index: 3, count: 3))
+            #expect(error == .fontCollectionFaceIndexOutOfRange(index: 2, count: 2))
             #expect(error.errorDescription != nil)
             #expect(error.recoverySuggestion != nil)
         }
@@ -595,7 +601,6 @@ enum SyntheticTrueTypeFont {
         invalidMATHConstantsOffset: Bool = false,
         mismatchedMATHItalicsCount: Bool = false,
         invalidMATHGlyphID: Bool = false,
-        ttcFaceCount: Int = 0,
     ) -> Data {
         let glyphSet = GlyphSet(profile: glyphProfile)
         var tables = [
@@ -690,35 +695,44 @@ enum SyntheticTrueTypeFont {
             writeUInt32(record.length, at: offset + 12, in: &font)
         }
 
-        if ttcFaceCount > 0 {
-            return wrapAsCollection(font, faceCount: ttcFaceCount)
-        }
         return font
     }
 
-    /// Wraps a single assembled sfnt in a TrueType Collection ('ttcf') header whose
-    /// `faceCount` face offsets all point at the one shared directory. The table
-    /// records' absolute offset fields are shifted by the header length so they keep
-    /// indexing the (now relocated) table bytes; the table bytes and their checksums
-    /// are unchanged, so the collection validates.
-    private static func wrapAsCollection(_ single: Data, faceCount: Int) -> Data {
-        let headerLength = 12 + faceCount * 4
-        var shifted = single
-        let numTables = Int(readUInt16(at: 4, in: shifted))
-        for index in 0 ..< numTables {
-            let recordOffset = 12 + index * 16
-            let oldOffset = readUInt32(at: recordOffset + 8, in: shifted)
-            writeUInt32(oldOffset + UInt32(headerLength), at: recordOffset + 8, in: &shifted)
+    /// Assembles several independent single-face sfnts into one TrueType Collection
+    /// ('ttcf') with a genuine per-face directory (each face keeps its own tables at
+    /// its own offset), not a shared directory. This is the faithful model: a
+    /// `faceIndex` that reads the wrong entry lands on a different font, so tests can
+    /// distinguish "selected face N" from "always face 0". Each face's absolute table
+    /// offsets are shifted to where that face lands in the combined blob; the table
+    /// bytes and their checksums are unchanged, so every face validates.
+    static func makeCollection(faces: [Data]) -> Data {
+        let headerLength = 12 + faces.count * 4
+        var blob = Data()
+        var faceOffsets: [Int] = []
+        for face in faces {
+            while (headerLength + blob.count).isMultiple(of: 4) == false {
+                blob.append(0)
+            }
+            let start = headerLength + blob.count
+            faceOffsets.append(start)
+            var shifted = face
+            let numTables = Int(readUInt16(at: 4, in: shifted))
+            for index in 0 ..< numTables {
+                let recordOffset = 12 + index * 16
+                let oldOffset = readUInt32(at: recordOffset + 8, in: shifted)
+                writeUInt32(oldOffset + UInt32(start), at: recordOffset + 8, in: &shifted)
+            }
+            blob.append(shifted)
         }
 
         var header = Data(count: headerLength)
         writeTag("ttcf", at: 0, in: &header)
         writeUInt32(0x0001_0000, at: 4, in: &header)
-        writeUInt32(UInt32(faceCount), at: 8, in: &header)
-        for face in 0 ..< faceCount {
-            writeUInt32(UInt32(headerLength), at: 12 + face * 4, in: &header)
+        writeUInt32(UInt32(faces.count), at: 8, in: &header)
+        for (index, offset) in faceOffsets.enumerated() {
+            writeUInt32(UInt32(offset), at: 12 + index * 4, in: &header)
         }
-        return header + shifted
+        return header + blob
     }
 
     private static func headTable(

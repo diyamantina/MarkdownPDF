@@ -155,10 +155,11 @@ public struct PDFOptions: Equatable, Sendable {
         public var data: Data
         public var baseName: String?
         /// The face to select from a TrueType/OpenType Collection (`.ttc`/`.otc`).
-        /// Ignored for a single-face font. Defaults to 0, the first face. Most
-        /// system CJK/Arabic/Hebrew fonts ship as collections; a collection that
-        /// bundles several weights exposes each as a face, so pass the index of the
-        /// weight this role needs.
+        /// Ignored for a single-face font. Defaults to 0, the first face. Many system
+        /// CJK/Arabic/Hebrew fonts ship as collections; a collection that bundles
+        /// several weights exposes each as a face, so pass the index of the weight
+        /// this role needs. The selected face must still be a TrueType (`glyf`)
+        /// outline font; a CFF (`OTTO`) face is rejected like any single-face CFF.
         public var faceIndex: Int
 
         public init(data: Data, baseName: String? = nil, faceIndex: Int = 0) {
