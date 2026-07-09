@@ -48,6 +48,25 @@ struct ArabicContextualMatchTests {
         #expect(!ArabicShaper.matches(rule, in: glyphs([9, 11]), at: 0))
     }
 
+    @Test("Marks between input glyphs are skipped when the lookup ignores marks")
+    func skipsMarksInInput() {
+        let rule = GSUBContextualRule(backtrack: [], input: [[10], [20]], lookahead: [], lookupRecords: [])
+        let buffer = glyphs([10, 99, 20]) // 99 stands in for an interposed mark
+        // Contiguous (no skipping): 10 then 99 != 20, so no match.
+        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 0, isMark: { _ in false }) == nil)
+        // Skipping 99 as a mark: input matches [10, 20] at buffer positions 0 and 2.
+        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 0, isMark: { $0 == 99 }) == [0, 2])
+    }
+
+    @Test("Marks are skipped in backtrack and lookahead too")
+    func skipsMarksInContext() {
+        let rule = GSUBContextualRule(backtrack: [[7]], input: [[9]], lookahead: [[13]], lookupRecords: [])
+        // [7, mark, 9, mark, 13]: the marks sit in the backtrack and lookahead gaps.
+        let buffer = glyphs([7, 99, 9, 99, 13])
+        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 2, isMark: { _ in false }) == nil)
+        #expect(ArabicShaper.matchedInputPositions(rule, in: buffer, at: 2, isMark: { $0 == 99 }) == [2])
+    }
+
     @Test("A full backtrack + input + lookahead rule matches only in the exact context")
     func fullChainedRule() {
         let rule = GSUBContextualRule(
