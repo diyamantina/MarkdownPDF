@@ -238,6 +238,12 @@ struct ArabicShaper {
             // the ligature that follows is the font's intended one rather than only the
             // canonical presentation form.
             glyphs = applyFeatureLookups("rlig", to: glyphs, gsub: gsub)
+            // ccmp: compose adjacent marks the font provides a single glyph for (e.g.
+            // shadda + vowel). Marks are transparent to letter joining, so applying
+            // ccmp after the positional and rlig passes composes the marks while
+            // keeping the per-scalar glyph alignment those passes rely on. The composed
+            // glyph is then placed by GPOS like any other mark.
+            glyphs = applyFeatureLookups("ccmp", to: glyphs, gsub: gsub)
         }
         applyMarkPositioning(&glyphs)
         return glyphs
