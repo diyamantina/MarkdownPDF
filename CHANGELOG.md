@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arabic (cursive) shaping core: the joining algorithm plus GSUB positional forms.
+  Before, Arabic rendered in disconnected isolated letters. The shaper resolves each
+  letter's positional form (isolated/initial/medial/final) from the Unicode joining
+  algorithm (authoritative `DerivedJoiningType` data for every cursive script), then
+  applies the font's `isol`/`init`/`medi`/`fina` single substitutions and `rlig`
+  ligatures (lam-alef) through a new general GSUB reader (lookup types 1 and 4,
+  script `arab`). The glyph ids match HarfBuzz exactly within that scope, verified by
+  a differential test against `hb-shape`. Contextual shaping (GSUB type 5/6, e.g.
+  Noto's stylistic lam-alef) and GPOS mark positioning are deferred, as is wiring the
+  shaper into the render path with RTL ordering; today this is the
+  independently-tested shaping core
+  ([#42](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/42)).
 - Embedding a face from a TrueType/OpenType Collection (`.ttc`/`.otc`). A collection
   was rejected outright, which blocked embedding the system fonts that cover CJK,
   Arabic, and Hebrew (they ship as collections). The parser now reads the `ttcf`
