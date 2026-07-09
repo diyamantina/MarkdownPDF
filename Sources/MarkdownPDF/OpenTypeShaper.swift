@@ -6,7 +6,6 @@ struct OpenTypeShaper {
         case unsupportedScriptScalar(scalar: UnicodeScalar, scalarOffset: Int)
         case leadingCombiningMark(scalar: UnicodeScalar, scalarOffset: Int)
         case invalidGlyphID(UInt32, numGlyphs: UInt16)
-        case unsupportedGSUBLookupFlag(UInt16)
         case malformedGSUB(reason: String)
 
         var errorDescription: String? {
@@ -19,8 +18,6 @@ struct OpenTypeShaper {
                 "OpenType shaping cannot attach combining mark U+\(Self.hex(scalar.value)) at scalar offset \(scalarOffset)."
             case let .invalidGlyphID(glyphID, numGlyphs):
                 "OpenType shaping references glyph \(glyphID), but the font declares \(numGlyphs) glyphs."
-            case let .unsupportedGSUBLookupFlag(lookupFlag):
-                "OpenType shaping does not yet support GSUB lookup flag 0x\(Self.hex(UInt32(lookupFlag)))."
             case let .malformedGSUB(reason):
                 "The GSUB table is malformed: \(reason)"
             }
@@ -36,8 +33,6 @@ struct OpenTypeShaper {
                 "Place combining marks after a supported Latin base scalar before shaping."
             case .invalidGlyphID:
                 "Use OpenType substitution tables whose glyph ids are within the maxp glyph count."
-            case .unsupportedGSUBLookupFlag:
-                "Use lookup flag zero for this shaping increment, or keep the text on an explicit fallback path."
             case .malformedGSUB:
                 "Replace the font with one whose GSUB lookup, feature, and coverage offsets are valid."
             }
@@ -430,10 +425,12 @@ private struct GSUBLigatureParser {
     private func lookup(at offset: Int) throws -> LookupTable {
         try reader.requireRange(offset: offset, count: 6)
         let lookupType = try reader.uint16(at: offset)
-        let lookupFlag = try reader.uint16(at: offset + 2)
-        guard lookupFlag == 0 else {
-            throw OpenTypeShaper.ValidationError.unsupportedGSUBLookupFlag(lookupFlag)
-        }
+        // The lookupFlag at offset+2 (RIGHT_TO_LEFT, IGNORE_BASE_GLYPHS/LIGATURES/
+        // MARKS, mark-filtering-set, mark-attachment-type) is not consulted: honoring
+        // the IGNORE flags needs GDEF, and simple Latin `liga`/`rlig` ligation is
+        // unaffected by them in practice. Matching the general `GSUBTable` reader,
+        // tolerate the flag rather than aborting the whole document, so a font that
+        // merely sets IgnoreMarks on its ligature lookup (e.g. Noto) still shapes.
         let subtableCount = try Int(reader.uint16(at: offset + 4))
         try reader.requireRange(offset: offset + 6, count: subtableCount * 2)
         var subtableOffsets: [Int] = []
