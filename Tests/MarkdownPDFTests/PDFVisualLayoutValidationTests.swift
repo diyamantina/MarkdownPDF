@@ -499,10 +499,12 @@ struct PDFVisualLayoutValidationTests {
         #expect(normalizedText.contains("DeepListLevelThreeMarker"))
         #expect(normalizedText.contains("QuoteBulletTwoMarker"))
         #expect(normalizedText.contains("Crazy Torture Exit Marker"))
-        // Accented Latin renders via WinAnsi; the combining-mark sample still
-        // falls back (the combining acute is not a WinAnsi scalar).
+        // Accented Latin renders via WinAnsi; a decomposed combining-mark sample is
+        // NFC-normalized to its precomposed WinAnsi byte, so it extracts as "café",
+        // not "cafe?" (#37).
         #expect(normalizedText.contains("Café"))
-        #expect(normalizedText.contains("cafe?"))
+        #expect(normalizedText.contains("café"))
+        #expect(!normalizedText.contains("cafe?"))
 
         let tsvResult = try PDFValidation.pdftotextTSV(url: url)
         try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")

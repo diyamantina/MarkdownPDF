@@ -1,8 +1,17 @@
+import Foundation
+
 enum PDFTextEncoding {
     /// Text used for the page's `/ActualText` span and as the source string the
-    /// content-stream encoder walks. It is the original Unicode, unchanged, so
-    /// extraction and copy recover the real characters even where the drawn
-    /// glyph is a fallback. (Formerly this substituted "?" for non-ASCII.)
+    /// base-14 content-stream encoder walks. It is the original Unicode, unchanged,
+    /// so extraction and copy recover the real characters even where the drawn glyph
+    /// is a fallback. (Formerly this substituted "?" for non-ASCII.)
+    ///
+    /// NFC normalization for the base-14 path is applied downstream, not here: at
+    /// ``PDFSyntax/LiteralString/serialized`` for the emitted WinAnsi bytes (so a
+    /// decomposed diacritic draws as its single precomposed byte) and at
+    /// ``portableScalars(for:)`` for the matching measured width. Keeping this
+    /// faithful means the two consumers each normalize once and the value stays the
+    /// authored text.
     static func portableText(for text: String) -> String {
         text
     }
@@ -71,11 +80,13 @@ enum PDFTextEncoding {
         }
     }
 
-    /// Scalars used to measure run width: the original scalars, with any scalar
-    /// the base-14 WinAnsi set cannot draw mapped to the fallback glyph so the
-    /// measured width matches what is painted.
+    /// Scalars used to measure run width: the NFC-normalized scalars (matching what
+    /// ``portableText(for:)`` draws), with any scalar the base-14 WinAnsi set cannot
+    /// draw mapped to the fallback glyph so the measured width matches what is
+    /// painted. Normalizing here keeps the measured advance in step with the drawn
+    /// bytes for a decomposed diacritic that folds to one WinAnsi code point.
     static func portableScalars(for text: String) -> [UnicodeScalar] {
-        text.unicodeScalars.map { isRepresentable($0) ? $0 : replacementScalar }
+        text.precomposedStringWithCanonicalMapping.unicodeScalars.map { isRepresentable($0) ? $0 : replacementScalar }
     }
 
     /// The byte written to the content stream for a scalar under

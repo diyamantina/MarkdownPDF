@@ -670,6 +670,60 @@ struct MarkdownPDFRendererTests {
         #expect(!catalog.covers("\u{2211}", font: .helvetica))
     }
 
+    @Test("The base-14 path NFC-normalizes decomposed diacritics to a WinAnsi byte")
+    func base14NFCNormalizesDecomposedDiacritics() {
+        // A decomposed diacritic (base + combining mark) drew the mark as `?` because
+        // the mark is not a WinAnsi code point. NFC folds it to the precomposed
+        // scalar, which is one WinAnsi byte. See #37.
+        //
+        // Compare UnicodeScalar arrays, not Strings: Swift `String ==`/`contains` use
+        // canonical equivalence, so `"cafe\u{0301}" == "caf\u{00E9}"` is already true
+        // and a String assertion would pass even without the fix.
+
+        // Width scalars track the drawn form: one representable scalar, not base + `?`.
+        #expect(PDFTextEncoding.portableScalars(for: "cafe\u{0301}") == ["c", "a", "f", "\u{00E9}"])
+        #expect(PDFTextEncoding.portableScalars(for: "nin\u{0303}o") == ["n", "i", "\u{00F1}", "o"])
+        #expect(PDFTextEncoding.portableScalars(for: "s\u{030C}") == ["\u{0161}"]) // s + caron -> š (CP1252 0x9A)
+        #expect(PDFTextEncoding.portableScalars(for: "u\u{0308}ber") == ["\u{00FC}", "b", "e", "r"])
+
+        // Already-precomposed text and plain ASCII are unchanged (idempotent).
+        #expect(PDFTextEncoding.portableScalars(for: "caf\u{00E9}") == ["c", "a", "f", "\u{00E9}"])
+        #expect(PDFTextEncoding.portableScalars(for: "hello") == ["h", "e", "l", "l", "o"])
+
+        // A character with no WinAnsi precomposed form stays `?` on base-14 (needs an
+        // embedded font); NFC does not invent a glyph.
+        #expect(PDFTextEncoding.portableScalars(for: "\u{010D}") == ["?"]) // Croatian č
+
+        // Byte emission: the decomposed form serializes to the same WinAnsi bytes as
+        // the precomposed form, and never emits the `?` fallback byte (0x3F). The
+        // serialized output is pure ASCII, so this String compare is byte-exact.
+        #expect(PDFSyntax.LiteralString("cafe\u{0301}").serialized == PDFSyntax.LiteralString("caf\u{00E9}").serialized)
+        #expect(!PDFSyntax.LiteralString("cafe\u{0301}").serialized.contains("?"))
+    }
+
+    @Test("NFC normalization does not touch the embedded path's run text")
+    func nfcDoesNotAlterEmbeddedRunText() {
+        // The embedded shaper reads run.text directly and attaches the combining mark
+        // itself, so the run text must stay decomposed. Compare scalar arrays, since
+        // String equality would not distinguish the decomposed and precomposed forms.
+        let run = PDFTextRun(text: "cafe\u{0301}", font: .helvetica, size: 10)
+        #expect(Array(run.text.unicodeScalars) == ["c", "a", "f", "e", "\u{0301}"])
+    }
+
+    @Test("Document strings (outline and Info title) NFC-normalize like page content")
+    func documentStringsNFCNormalize() throws {
+        // The outline/Info `/Title`, named destinations, and tagged `Alt` are
+        // LiteralStrings that bypass the run path, so before the byte-boundary fix a
+        // decomposed diacritic in a heading or title still degraded to `?` in the
+        // bookmark while the page body rendered `é`. See #37.
+        let options = PDFOptions(title: "Caf\u{0065}\u{0301} Title", tableOfContents: .enabled)
+        let data = try MarkdownPDFRenderer(options: options).render(markdown: "# Caf\u{0065}\u{0301} Heading\n\nBody text.")
+        // Read the raw PDF as Latin-1 so high bytes survive and the ASCII `Cafe?`
+        // fallback, if present anywhere (title, outline, body), is detectable.
+        let raw = String(String.UnicodeScalarView(data.map { UnicodeScalar($0) }))
+        #expect(!raw.contains("Cafe?"), "a decomposed diacritic degraded to ? in a document string")
+    }
+
     @Test("Named page sizes set the page MediaBox")
     func namedPageSizesSetTheMediaBox() throws {
         #expect(PDFOptions.PageSize.a0 == PDFOptions.PageSize(width: 2383.94, height: 3370.39))
