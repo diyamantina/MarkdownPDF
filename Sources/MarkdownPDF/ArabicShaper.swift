@@ -344,34 +344,44 @@ struct ArabicShaper {
         case let .ligature(rules):
             applyLigatures(rules, to: glyphs)
         case let .contextual(rules):
-            applyContextual(rules, to: glyphs, gsub: gsub)
+            applyContextual(rules, to: glyphs, gsub: gsub, ignoreMarks: lookup.lookupFlag & Self.ignoreMarksFlag != 0)
         case .unsupported:
             glyphs
         }
     }
 
+    /// GSUB/GPOS lookup flag bit that tells a lookup to skip mark glyphs (GDEF class 3)
+    /// when matching, so a contextual rule reaches across an interposed harakat.
+    private static let ignoreMarksFlag: UInt16 = 0x0008
+
     /// Applies coverage-based (format 3) contextual rules over the buffer. At each
-    /// position the rule's backtrack, input, and lookahead coverages must all match
-    /// (contiguously: mark skipping via GDEF/lookup flag is a later refinement, so
-    /// contextual matches across an interposed mark are conservatively missed rather
-    /// than mis-made). On a match every nested single substitution named by the rule's
-    /// `SequenceLookupRecord`s is applied at its input position. Nested lookups of
-    /// other types are a documented gap (the Noto rlig/ccmp rules use single subs).
+    /// position the rule's backtrack, input, and lookahead coverages must all match. A
+    /// lookup that sets `IgnoreMarks` skips mark glyphs (GDEF class 3) when matching, so
+    /// a contextual rule reaches across an interposed harakat (e.g. the lam-alef
+    /// refinement still fires on a vocalized lam-alef). On a match every nested single
+    /// substitution named by the rule's `SequenceLookupRecord`s is applied at its
+    /// matched buffer position. Nested lookups of other types are a documented gap (the
+    /// Noto rlig/ccmp rules use single subs).
     private func applyContextual(
         _ rules: [GSUBContextualRule],
         to glyphs: [ShapedGlyph],
         gsub: GSUBTable,
+        ignoreMarks: Bool,
     ) -> [ShapedGlyph] {
         guard !rules.isEmpty else {
             return glyphs
         }
+        let isMark: (UInt16) -> Bool = ignoreMarks ? { gdef?.isMark($0) ?? false } : { _ in false }
         var output = glyphs
         var index = 0
         while index < output.count {
             var advanced = false
-            for rule in rules where Self.matches(rule, in: output, at: index) {
-                applyRecords(rule.lookupRecords, in: &output, inputStart: index, inputCount: rule.input.count, gsub: gsub)
-                index += max(rule.input.count, 1)
+            for rule in rules {
+                guard let positions = Self.matchedInputPositions(rule, in: output, at: index, isMark: isMark) else {
+                    continue
+                }
+                applyRecords(rule.lookupRecords, at: positions, in: &output, gsub: gsub)
+                index = (positions.last ?? index) + 1
                 advanced = true
                 break
             }
@@ -382,54 +392,99 @@ struct ArabicShaper {
         return output
     }
 
-    /// Whether `rule`'s backtrack/input/lookahead coverages all match the buffer with
-    /// the input beginning at `index`. Pure in its arguments (no font state), so the
-    /// backtrack/lookahead index math is unit-testable on its own.
-    static func matches(_ rule: GSUBContextualRule, in glyphs: [ShapedGlyph], at index: Int) -> Bool {
-        let inputEnd = index + rule.input.count
-        guard rule.input.count >= 1, inputEnd <= glyphs.count else {
-            return false
+    /// The buffer positions of `rule`'s input glyphs when its backtrack, input, and
+    /// lookahead coverages all match with the input beginning at `index`, or nil. Mark
+    /// glyphs (per `isMark`) are skipped between matched positions, so a rule matches
+    /// across an interposed mark. Pure in its arguments (font state enters only through
+    /// `isMark`), so the index math is unit-testable on its own.
+    static func matchedInputPositions(
+        _ rule: GSUBContextualRule,
+        in glyphs: [ShapedGlyph],
+        at index: Int,
+        isMark: (UInt16) -> Bool,
+    ) -> [Int]? {
+        guard rule.input.count >= 1, index < glyphs.count, !isMark(glyphs[index].glyphID),
+              rule.input[0].contains(glyphs[index].glyphID)
+        else {
+            return nil
         }
-        for offset in rule.input.indices where !rule.input[offset].contains(glyphs[index + offset].glyphID) {
-            return false
-        }
-        // Backtrack is stored in text order: the last entry is the glyph immediately
-        // before the input, so entry `k` sits at `index - (count - k)`.
-        guard index >= rule.backtrack.count else {
-            return false
-        }
-        for offset in rule.backtrack.indices {
-            let position = index - (rule.backtrack.count - offset)
-            if !rule.backtrack[offset].contains(glyphs[position].glyphID) {
-                return false
+        var positions = [index]
+        for coverage in rule.input.dropFirst() {
+            guard let next = nextPosition(after: positions[positions.count - 1], in: glyphs, isMark: isMark),
+                  coverage.contains(glyphs[next].glyphID)
+            else {
+                return nil
             }
+            positions.append(next)
         }
-        guard inputEnd + rule.lookahead.count <= glyphs.count else {
-            return false
+        // Backtrack is stored in text order (nearest to input is last), so walk backward
+        // matching from the last entry.
+        var back = index
+        for coverage in rule.backtrack.reversed() {
+            guard let previous = previousPosition(before: back, in: glyphs, isMark: isMark),
+                  coverage.contains(glyphs[previous].glyphID)
+            else {
+                return nil
+            }
+            back = previous
         }
-        for offset in rule.lookahead.indices where !rule.lookahead[offset].contains(glyphs[inputEnd + offset].glyphID) {
-            return false
+        var ahead = positions[positions.count - 1]
+        for coverage in rule.lookahead {
+            guard let next = nextPosition(after: ahead, in: glyphs, isMark: isMark),
+                  coverage.contains(glyphs[next].glyphID)
+            else {
+                return nil
+            }
+            ahead = next
         }
-        return true
+        return positions
     }
 
-    /// Applies each record's nested single substitution at its input position. A
-    /// record whose `sequenceIndex` falls outside the matched input window is skipped
-    /// (as HarfBuzz does): a spec-invalid font could otherwise name a position past
-    /// the input and substitute a glyph outside the rule's match, corrupting an
-    /// unrelated cluster.
+    /// Whether `rule` matches at `index` with no mark skipping. Retained for the
+    /// contiguous-match unit tests; the applier uses ``matchedInputPositions``.
+    static func matches(_ rule: GSUBContextualRule, in glyphs: [ShapedGlyph], at index: Int) -> Bool {
+        matchedInputPositions(rule, in: glyphs, at: index, isMark: { _ in false }) != nil
+    }
+
+    private static func nextPosition(after index: Int, in glyphs: [ShapedGlyph], isMark: (UInt16) -> Bool) -> Int? {
+        var cursor = index + 1
+        while cursor < glyphs.count {
+            if !isMark(glyphs[cursor].glyphID) {
+                return cursor
+            }
+            cursor += 1
+        }
+        return nil
+    }
+
+    private static func previousPosition(before index: Int, in glyphs: [ShapedGlyph], isMark: (UInt16) -> Bool) -> Int? {
+        var cursor = index - 1
+        while cursor >= 0 {
+            if !isMark(glyphs[cursor].glyphID) {
+                return cursor
+            }
+            cursor -= 1
+        }
+        return nil
+    }
+
+    /// Applies each record's nested single substitution at its matched buffer position.
+    /// A record whose `sequenceIndex` falls outside the matched input is skipped (as
+    /// HarfBuzz does): a spec-invalid font could otherwise name a position past the
+    /// input and substitute a glyph outside the rule's match.
     private func applyRecords(
         _ records: [SequenceLookupRecord],
+        at positions: [Int],
         in glyphs: inout [ShapedGlyph],
-        inputStart: Int,
-        inputCount: Int,
         gsub: GSUBTable,
     ) {
         for record in records {
             let sequenceIndex = Int(record.sequenceIndex)
-            let position = inputStart + sequenceIndex
-            guard sequenceIndex < inputCount,
-                  position < glyphs.count,
+            guard sequenceIndex < positions.count else {
+                continue
+            }
+            let position = positions[sequenceIndex]
+            guard position < glyphs.count,
                   let nested = gsub.parsedLookup(at: record.lookupListIndex),
                   case let .single(map) = nested.kind,
                   let substitute = map[glyphs[position].glyphID],

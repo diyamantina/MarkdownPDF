@@ -80,6 +80,10 @@ struct ArabicShaperTests {
         // font's exact glyph pair rather than the canonical presentation ligature.
         "\u{0644}\u{0627}", "\u{0644}\u{0623}", "\u{0644}\u{0625}", "\u{0644}\u{0622}", // لا لأ لإ لآ
         "\u{0633}\u{0644}\u{0627}\u{0645}", // سلام
+        // Vocalized lam-alef: the harakat between lam and alef must be skipped
+        // (IgnoreMarks) so the contextual refinement still fires, matching hb.
+        "\u{0644}\u{064E}\u{0627}", // لَا  lam + fatha + alef
+        "\u{0644}\u{064E}\u{0622}", // لَآ  lam + fatha + alef madda
     ]
 
     @Test(
