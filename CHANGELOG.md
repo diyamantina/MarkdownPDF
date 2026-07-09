@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A cmap segment that resolves a real character to glyph 0 (`.notdef`) is now read
+  as unmapped rather than as a found glyph. In `cmap` format 4 the `idRangeOffset
+  == 0` branch returned `code + idDelta` without a zero check (and the glyph-array
+  branch checked only the pre-`idDelta` value), and format 12 returned a group's
+  computed id without checking for 0, so a font mapping a character to `.notdef`
+  made `covers(_:font:)` report it as covered while it rendered `.notdef`. Under a
+  conformance profile that shipped a document referencing `.notdef` in content
+  while claiming PDF/UA-1 or PDF/A-2a. Both format-4 branches and the format-12
+  path now report a resolved glyph 0 as absent, so the missing-glyph policy and the
+  coverage probe handle it correctly
+  ([#35](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/35)).
 - A visible scalar the embedded font's cmap lacks (an emoji, a CJK glyph the
   subset omits, a stray combining mark) no longer aborts the whole document. The
   glyph mapper's default `.reject` policy threw `missingGlyph` and dropped every

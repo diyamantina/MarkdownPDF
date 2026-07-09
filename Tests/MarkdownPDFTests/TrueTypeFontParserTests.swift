@@ -522,6 +522,7 @@ enum SyntheticTrueTypeFont {
         invalidMaxpVersion: Bool = false,
         malformedCMapLength: Bool = false,
         cmapFormat4UsesGlyphArray: Bool = false,
+        cmapFormat4MapsLetterAToNotdef: Bool = false,
         invalidCMapFormat4SegmentRange: Bool = false,
         invalidCMapFormat4SegmentOrder: Bool = false,
         invalidCMapFormat4ReservedPad: Bool = false,
@@ -558,6 +559,7 @@ enum SyntheticTrueTypeFont {
                 format: cmapFormat,
                 malformedLength: malformedCMapLength,
                 format4UsesGlyphArray: cmapFormat4UsesGlyphArray,
+                format4MapsLetterAToNotdef: cmapFormat4MapsLetterAToNotdef,
                 invalidFormat4SegmentRange: invalidCMapFormat4SegmentRange,
                 invalidFormat4SegmentOrder: invalidCMapFormat4SegmentOrder,
                 invalidFormat4ReservedPad: invalidCMapFormat4ReservedPad,
@@ -787,6 +789,7 @@ enum SyntheticTrueTypeFont {
         format: UInt16,
         malformedLength: Bool,
         format4UsesGlyphArray: Bool,
+        format4MapsLetterAToNotdef: Bool = false,
         invalidFormat4SegmentRange: Bool,
         invalidFormat4SegmentOrder: Bool,
         invalidFormat4ReservedPad: Bool,
@@ -814,7 +817,11 @@ enum SyntheticTrueTypeFont {
                     ),
                 )
             } else {
-                data.append(format4GlyphSetCMapSubtable(malformedLength: malformedLength, glyphSet: glyphSet))
+                data.append(format4GlyphSetCMapSubtable(
+                    malformedLength: malformedLength,
+                    mapsLetterAToNotdef: format4MapsLetterAToNotdef,
+                    glyphSet: glyphSet,
+                ))
             }
         case 12:
             if glyphSet.profile == .basic {
@@ -842,9 +849,16 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func format4GlyphSetCMapSubtable(malformedLength: Bool, glyphSet: GlyphSet) -> Data {
+    private static func format4GlyphSetCMapSubtable(
+        malformedLength: Bool,
+        mapsLetterAToNotdef: Bool = false,
+        glyphSet: GlyphSet,
+    ) -> Data {
         if glyphSet.profile == .latinWitness {
-            return format4LatinWitnessCMapSubtable(malformedLength: malformedLength)
+            return format4LatinWitnessCMapSubtable(
+                malformedLength: malformedLength,
+                mapsLetterAToNotdef: mapsLetterAToNotdef,
+            )
         }
 
         let entries = glyphSet.encodedGlyphs
@@ -880,7 +894,10 @@ enum SyntheticTrueTypeFont {
         return data
     }
 
-    private static func format4LatinWitnessCMapSubtable(malformedLength: Bool) -> Data {
+    private static func format4LatinWitnessCMapSubtable(
+        malformedLength: Bool,
+        mapsLetterAToNotdef: Bool = false,
+    ) -> Data {
         var data = Data()
         appendUInt16(4, to: &data)
         appendUInt16(malformedLength ? 24 : 40, to: &data)
@@ -897,7 +914,10 @@ enum SyntheticTrueTypeFont {
         appendUInt16(0x0041, to: &data)
         appendUInt16(0xFFFF, to: &data)
         appendInt16(-31, to: &data)
-        appendInt16(-63, to: &data)
+        // The A-Z segment normally uses idDelta -63 (A=0x41 -> glyph 2). At -65, A
+        // maps to glyph 0 (.notdef), exercising the idRangeOffset == 0 branch's
+        // resolved-to-notdef guard.
+        appendInt16(mapsLetterAToNotdef ? -65 : -63, to: &data)
         appendInt16(1, to: &data)
         appendUInt16(0, to: &data)
         appendUInt16(0, to: &data)

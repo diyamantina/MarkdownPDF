@@ -97,6 +97,49 @@ struct TrueTypeGlyphMapperTests {
         }
     }
 
+    @Test("A format 4 idDelta segment resolving a real code to glyph 0 is treated as unmapped")
+    func format4IdDeltaResolvingToNotdefIsUnmapped() throws {
+        // A cmap segment whose idDelta drives 'A' to glyph 0 must report the
+        // character as absent, not as "found the missing glyph": glyph 0 is
+        // .notdef. Otherwise covers() reports true and the scalar silently renders
+        // notdef (and ships under a conformance claim). See #35.
+        let fontData = SyntheticTrueTypeFont.data(
+            cmapFormat4MapsLetterAToNotdef: true,
+            glyphProfile: .latinWitness,
+            includeGlyphOutlines: true,
+        )
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        expectGlyphMappingError {
+            _ = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "A", fontSize: 12)
+        } verify: { error in
+            guard case let .missingGlyph(scalar) = error else {
+                Issue.record("Expected missing glyph for a code that resolves to glyph 0")
+                return
+            }
+            #expect(scalar == "A")
+        }
+
+        // 'B' still resolves to a real glyph, so only the notdef-resolving code is affected.
+        let mapping = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "B", fontSize: 12)
+        #expect(mapping.glyphs.map(\.glyphID) == [1])
+    }
+
+    @Test("A format 12 group resolving a real code to glyph 0 is treated as unmapped")
+    func format12ResolvingToNotdefIsUnmapped() throws {
+        // startGlyphID 0 maps 'A' to glyph 0 (.notdef); that must read as unmapped.
+        let fontData = SyntheticTrueTypeFont.data(cmapFormat: 12, cmapFormat12StartGlyphID: 0)
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        expectGlyphMappingError {
+            _ = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "A", fontSize: 12)
+        } verify: { error in
+            guard case let .missingGlyph(scalar) = error else {
+                Issue.record("Expected missing glyph for a code that resolves to glyph 0")
+                return
+            }
+            #expect(scalar == "A")
+        }
+    }
+
     @Test("Maps format 4 glyph id arrays")
     func mapsFormat4GlyphIDArrays() throws {
         let fontData = SyntheticTrueTypeFont.data(cmapFormat4UsesGlyphArray: true)

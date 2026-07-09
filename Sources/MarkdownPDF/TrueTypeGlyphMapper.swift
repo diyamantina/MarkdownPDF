@@ -255,7 +255,13 @@ private struct Format4CMap {
         }
 
         if segment.idRangeOffset == 0 {
-            return UInt16(truncatingIfNeeded: Int(code) + Int(segment.idDelta))
+            // Glyph 0 is .notdef: a segment resolving a real code to it means the
+            // character is unmapped, not "found the missing glyph". Report it as
+            // absent so the caller's missing-glyph policy (reject / notdef fallback)
+            // and `covers()` see it correctly. The glyph-array branch already
+            // rejects a raw 0; the idDelta sum can reach 0 too, so check it here.
+            let glyphID = UInt16(truncatingIfNeeded: Int(code) + Int(segment.idDelta))
+            return glyphID == 0 ? nil : glyphID
         }
 
         let glyphOffset = segment.idRangeOffsetLocation
@@ -268,7 +274,9 @@ private struct Format4CMap {
         guard rawGlyphID != 0 else {
             return nil
         }
-        return UInt16(truncatingIfNeeded: Int(rawGlyphID) + Int(segment.idDelta))
+        // The idDelta offset can still drive a non-zero raw index to 0.
+        let glyphID = UInt16(truncatingIfNeeded: Int(rawGlyphID) + Int(segment.idDelta))
+        return glyphID == 0 ? nil : glyphID
     }
 }
 
@@ -327,6 +335,8 @@ private struct Format12CMap {
         guard glyphID <= UInt32(UInt16.max) else {
             throw TrueTypeGlyphMappingError.invalidGlyphID(glyphID, numGlyphs: UInt16.max)
         }
-        return UInt16(glyphID)
+        // Glyph 0 is .notdef; a group resolving a real code to it means the code is
+        // unmapped, so report absent rather than "found the missing glyph".
+        return glyphID == 0 ? nil : UInt16(glyphID)
     }
 }
