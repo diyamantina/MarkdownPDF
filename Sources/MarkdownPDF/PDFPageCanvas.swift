@@ -178,6 +178,12 @@ final class PDFPageCanvas {
     /// the text line matrix independently of the glyph advances `showCIDText` applies,
     /// so the pen is tracked here from each glyph's own advance plus its offset; the
     /// font `/W` advances are not relied on for placement in this path.
+    ///
+    /// The `/ToUnicode` CMap keeps the run recoverable (character codes and order are
+    /// unchanged from the single-show path). One extractor, Poppler's `pdftotext`,
+    /// inserts spurious spaces inside a positioned run because its word-segmentation
+    /// heuristic keys off the per-glyph moves; extractors that honor `/ToUnicode`
+    /// (mutool, Preview, Acrobat) recover the text intact.
     private func positionedTextOperators(
         _ glyphs: [ShapedTextMapping.Glyph],
         font: PDFSyntax.Name,

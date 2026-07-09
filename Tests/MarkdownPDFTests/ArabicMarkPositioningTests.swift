@@ -25,10 +25,13 @@ struct ArabicMarkPositioningTests {
             "\u{0645}\u{064E}", // مَ  meem + fatha
             "\u{0643}\u{064E}\u{062A}\u{064E}\u{0628}\u{064E}", // كَتَبَ kataba
             "\u{0628}\u{0650}\u{0633}\u{0645}", // بِسم
-            // Two stacked below-marks: the second attaches to the first via mkmk
-            // (Noto keeps these two separate rather than composing them), exercising
-            // the mark-to-mark stacking path.
+            // Two below-marks, both attached to the base (Noto keeps them separate):
+            // the wavy hamza does not mkmk-stack onto the kasra in this font.
             "\u{0628}\u{0650}\u{065F}", // beh + kasra + wavy hamza below
+            // A genuine mkmk stack: two superscript alefs, the second attached to the
+            // first (its offset builds on the first's), exercising the accumulation in
+            // the mark-to-mark path. hb stacks them at @354,39 then @352,279.
+            "\u{0628}\u{0670}\u{0670}", // beh + superscript alef + superscript alef
         ],
     )
     func shapedOffsetsMatchHarfBuzz(_ word: String) throws {

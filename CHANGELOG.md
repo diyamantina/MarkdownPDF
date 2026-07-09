@@ -17,9 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each positioned glyph with a text-line move off the baseline. A run with no mark
   offsets is still shown in a single operator, byte-identical to before. Verified
   against `hb-shape`: the shaped offsets match glyph for glyph across vocalized words
-  (single harakat, a six-mark word, and a two-mark below stack exercising `mkmk`), and
-  vocalized Arabic renders with marks on their bases while `/ToUnicode` still recovers
-  the vowels ([#48](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48)).
+  (single harakat, a six-mark word, and a genuine two-superscript-alef stack exercising
+  `mkmk`), and vocalized Arabic renders with marks on their bases while `/ToUnicode`
+  still recovers the vowels. One caveat: because a positioned run shows each glyph in
+  its own operator, Poppler's `pdftotext` inserts spurious spaces inside it (its word
+  segmentation keys off the per-glyph moves); extractors that honor `/ToUnicode` (mutool,
+  Preview, Acrobat) recover the text intact
+  ([#48](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48)).
 - Arabic contextual (GSUB type 5/6) lam-alef refinement. Before, lam-alef collapsed to
   the canonical single presentation ligature (uniFEFB/uniFEFC); a font like Noto Naskh
   refines it with a coverage-based contextual `rlig` lookup into its own two-glyph pair.
