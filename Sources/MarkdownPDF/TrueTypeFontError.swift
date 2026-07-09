@@ -14,6 +14,8 @@ enum TrueTypeFontError: Error, Equatable, LocalizedError {
     case bitmapOnlyEmbedding(fsType: UInt16)
     case subsettingRequired(fsType: UInt16)
     case unsupportedFontFormat(format: String, guidance: String)
+    case fontCollectionFaceIndexOutOfRange(index: Int, count: Int)
+    case malformedFontCollection(reason: String)
 
     var errorDescription: String? {
         switch self {
@@ -43,6 +45,10 @@ enum TrueTypeFontError: Error, Equatable, LocalizedError {
             "The OS/2 fsType value 0x\(Self.hex(fsType)) forbids subsetting."
         case let .unsupportedFontFormat(format, _):
             "The \(format) font format is not supported for embedding yet."
+        case let .fontCollectionFaceIndexOutOfRange(index, count):
+            "Font collection face index \(index) is out of range; the collection has \(count) face(s) [0...\(count - 1)]."
+        case let .malformedFontCollection(reason):
+            "The font collection header is malformed: \(reason)"
         }
     }
 
@@ -72,6 +78,10 @@ enum TrueTypeFontError: Error, Equatable, LocalizedError {
             "Choose a font that permits subsetting or use an embedding policy that does not require subsets."
         case let .unsupportedFontFormat(_, guidance):
             guidance
+        case .fontCollectionFaceIndexOutOfRange:
+            "Pass a face index within the collection's range, or 0 for the first face."
+        case .malformedFontCollection:
+            "Replace the font with a valid TrueType/OpenType Collection file."
         }
     }
 

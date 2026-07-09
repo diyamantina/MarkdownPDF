@@ -127,6 +127,7 @@ struct TrueTypeFontParser {
         _ data: Data,
         embeddingPolicy: EmbeddingPolicy = .requireSubsetting,
         parseMathTable: Bool = false,
+        faceIndex: Int = 0,
     ) throws -> Metadata {
         let bytes = [UInt8](data)
         guard !bytes.isEmpty else {
@@ -134,17 +135,25 @@ struct TrueTypeFontParser {
         }
 
         let reader = TrueTypeByteReader(table: "sfnt", bytes: bytes)
-        let scalerType = try reader.uint32(at: 0)
+        // A single font's sfnt table directory is at offset 0. A TrueType/OpenType
+        // Collection ('ttcf') stores an array of per-face directory offsets that all
+        // index into this one shared file; select the requested face's directory.
+        // Table records carry absolute file offsets, so once the directory is read
+        // the rest of parsing, glyph mapping, and subsetting are identical to a
+        // single-face font.
+        let directoryOffset = try Self.tableDirectoryOffset(reader: reader, faceIndex: faceIndex)
+
+        let scalerType = try reader.uint32(at: directoryOffset)
         try Self.rejectUnsupportedContainer(scalerType: scalerType)
         guard Self.supportedScalerTypes.contains(scalerType) else {
             throw TrueTypeFontError.unsupportedScalerType(scalerType)
         }
 
-        let numTables = try Int(reader.uint16(at: 4))
+        let numTables = try Int(reader.uint16(at: directoryOffset + 4))
         let directoryLength = 12 + numTables * 16
-        try reader.requireRange(offset: 0, count: directoryLength)
+        try reader.requireRange(offset: directoryOffset, count: directoryLength)
 
-        let records = try tableRecords(reader: reader, count: numTables)
+        let records = try tableRecords(reader: reader, count: numTables, directoryOffset: directoryOffset)
         let recordsByTag = Dictionary(uniqueKeysWithValues: records.map { ($0.tag, $0) })
         try Self.rejectUnsupportedOutline(tags: Set(recordsByTag.keys))
         try Self.requiredTables.forEach { tag in
@@ -202,12 +211,16 @@ struct TrueTypeFontParser {
         )
     }
 
-    private func tableRecords(reader: TrueTypeByteReader, count: Int) throws -> [TableRecord] {
+    private func tableRecords(
+        reader: TrueTypeByteReader,
+        count: Int,
+        directoryOffset: Int = 0,
+    ) throws -> [TableRecord] {
         var records: [TableRecord] = []
         var seenTags: Set<String> = []
 
         for index in 0 ..< count {
-            let offset = 12 + index * 16
+            let offset = directoryOffset + 12 + index * 16
             let tag = try reader.tag(at: offset)
             guard seenTags.insert(tag).inserted else {
                 throw TrueTypeFontError.duplicateTable(tag)
@@ -614,8 +627,44 @@ struct TrueTypeFontParser {
         0x7472_7565,
     ]
 
+    /// Resolves the sfnt table-directory offset for the requested face. Returns 0
+    /// for a plain single-face font. For a TrueType/OpenType Collection ('ttcf') it
+    /// reads the collection header and returns the selected face's directory offset.
+    ///
+    /// The header is: `ttcf` tag, a uint32 version (0x00010000 or 0x00020000, the v2
+    /// DSIG fields after the offset array are ignored), a uint32 `numFonts`, then
+    /// `numFonts` uint32 offsets, each pointing from the start of the file to a
+    /// face's ordinary sfnt directory. Grounded in reportlab `ttfonts.py`
+    /// (`readTTCHeader`/`getSubfont`) and corroborated by openpdf, libharu, hexapdf.
+    private static func tableDirectoryOffset(reader: TrueTypeByteReader, faceIndex: Int) throws -> Int {
+        let magic = try reader.uint32(at: 0)
+        guard magic == 0x7474_6366 else { // not 'ttcf' -> single face, directory at 0
+            return 0
+        }
+        let version = try reader.uint32(at: 4)
+        guard version == 0x0001_0000 || version == 0x0002_0000 else {
+            throw TrueTypeFontError.malformedFontCollection(
+                reason: "unsupported collection version 0x\(hex(version))",
+            )
+        }
+        let numFonts = try Int(reader.uint32(at: 8))
+        guard numFonts > 0 else {
+            throw TrueTypeFontError.malformedFontCollection(reason: "the collection declares zero faces")
+        }
+        guard faceIndex >= 0, faceIndex < numFonts else {
+            throw TrueTypeFontError.fontCollectionFaceIndexOutOfRange(index: faceIndex, count: numFonts)
+        }
+        return try Int(reader.uint32(at: 12 + faceIndex * 4))
+    }
+
+    private static func hex(_ value: UInt32) -> String {
+        String(format: "%08X", locale: Locale(identifier: "en_US_POSIX"), value)
+    }
+
     /// Reject container formats that wrap or replace a plain TrueType sfnt with a
     /// typed, actionable error rather than a generic unsupported-scaler failure.
+    /// (A `.ttc`/`.otc` collection is resolved to a face by ``tableDirectoryOffset``
+    /// before this runs, so the scaler seen here is always a single face's.)
     private static func rejectUnsupportedContainer(scalerType: UInt32) throws {
         switch scalerType {
         case 0x4F54_544F: // 'OTTO'
@@ -632,11 +681,6 @@ struct TrueTypeFontParser {
             throw TrueTypeFontError.unsupportedFontFormat(
                 format: "WOFF2",
                 guidance: "Decompress the WOFF2 web font to a plain SFNT font before embedding; WOFF2 (Brotli) support is not implemented.",
-            )
-        case 0x7474_6366: // 'ttcf'
-            throw TrueTypeFontError.unsupportedFontFormat(
-                format: "TrueType/OpenType Collection",
-                guidance: "Extract a single face from the .ttc collection and embed that face; whole-collection embedding is not supported.",
             )
         default:
             break

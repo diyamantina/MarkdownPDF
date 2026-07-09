@@ -100,7 +100,11 @@ struct PDFEmbeddedFontCatalog {
             return
         }
 
-        let metadata = try TrueTypeFontParser().parse(source.data, parseMathTable: parseMathTables)
+        let metadata = try TrueTypeFontParser().parse(
+            source.data,
+            parseMathTable: parseMathTables,
+            faceIndex: source.faceIndex,
+        )
         let resource = PDFEmbeddedFontResource(
             resourceName: resourceName,
             fontProgram: source.data,

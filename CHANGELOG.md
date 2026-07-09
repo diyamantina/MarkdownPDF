@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Embedding a face from a TrueType/OpenType Collection (`.ttc`/`.otc`). A collection
+  was rejected outright, which blocked embedding the system fonts that cover CJK,
+  Arabic, and Hebrew (they ship as collections). The parser now reads the `ttcf`
+  header and follows the selected face's directory offset; because table records
+  carry absolute file offsets, glyph mapping and subsetting are unchanged.
+  `PDFOptions.EmbeddedFontSource` gains a `faceIndex` (default 0) to pick the face,
+  and an out-of-range index reports a typed error. Algorithm grounded in the
+  reference-engine corpus (reportlab, openpdf, libharu, hexapdf)
+  ([#41](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/41)).
+
 ### Fixed
 - Heading anchor slugs are stable across Unicode normalization forms, so an
   internal link resolves whether the heading or the link was authored precomposed
