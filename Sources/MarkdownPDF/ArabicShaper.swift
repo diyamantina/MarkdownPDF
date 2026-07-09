@@ -231,13 +231,14 @@ struct ArabicShaper {
             let clusterScalars = Array(scalars[range])
             let advanceWidth = Int(glyph.glyphID) < advanceWidths.count ? advanceWidths[Int(glyph.glyphID)] : 0
             let advance = unitsPerEm > 0 ? Double(advanceWidth) / unitsPerEm * fontSize : 0
+            let cid = metadata.compositeCID(forGlyph: glyph.glyphID)
             clusters.append(ShapedTextMapping.Cluster(
                 sourceScalarRange: range,
                 normalizedText: String(String.UnicodeScalarView(clusterScalars)),
                 glyphs: [ShapedTextMapping.Glyph(
                     glyphID: glyph.glyphID,
-                    cid: glyph.glyphID,
-                    pdfCharacterCode: glyph.glyphID,
+                    cid: cid,
+                    pdfCharacterCode: cid,
                     advanceWidth: advanceWidth,
                     advance: advance,
                     // A positional form maps one base scalar to different glyphs by

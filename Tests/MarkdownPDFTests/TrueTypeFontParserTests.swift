@@ -361,9 +361,9 @@ struct TrueTypeFontParserTests {
     func rejectsUnsupportedFontContainerFormats() {
         // A TrueType/OpenType Collection ('ttcf') is no longer in this list: it is a
         // supported container now (a face is selected from it), covered by the
-        // collection tests above.
+        // collection tests above. Nor is 'OTTO' (OpenType/CFF): it is a supported
+        // outline format now, covered by the CFF render integration tests.
         let cases: [(signature: [UInt8], format: String)] = [
-            ([0x4F, 0x54, 0x54, 0x4F], "OpenType CFF"), // OTTO
             ([0x77, 0x4F, 0x46, 0x46], "WOFF"), // wOFF
             ([0x77, 0x4F, 0x46, 0x32], "WOFF2"), // wOF2
         ]

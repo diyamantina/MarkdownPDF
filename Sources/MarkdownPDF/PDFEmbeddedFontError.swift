@@ -9,6 +9,7 @@ enum PDFEmbeddedFontError: Error, Equatable, LocalizedError {
     case unsupportedShapedToUnicodeCluster(sourceRange: Range<Int>, glyphCount: Int, scalarCount: Int)
     case unsupportedComplexScriptScalar(scalar: UnicodeScalar)
     case unavailableMirroredGlyphCode(source: UnicodeScalar, display: UnicodeScalar)
+    case missingCFFTable(resourceName: String)
 
     var errorDescription: String? {
         switch self {
@@ -28,6 +29,8 @@ enum PDFEmbeddedFontError: Error, Equatable, LocalizedError {
             "Embedded-font PDF emission does not yet support complex-script scalar U+\(Self.hex(scalar.value))."
         case let .unavailableMirroredGlyphCode(source, display):
             "Embedded-font PDF emission cannot allocate a mirrored glyph code for U+\(Self.hex(source.value)) displayed as U+\(Self.hex(display.value))."
+        case let .missingCFFTable(resourceName):
+            "Embedded font resource \(resourceName) was routed to the CFF path but its `CFF ` table could not be located."
         }
     }
 
@@ -49,6 +52,8 @@ enum PDFEmbeddedFontError: Error, Equatable, LocalizedError {
             "Keep complex-script text on an explicit unsupported path until shaping, ordering, extraction, and geometry witnesses cover that script."
         case .unavailableMirroredGlyphCode:
             "Use a font with spare CID space for mirrored punctuation or keep the input on an explicit unsupported path."
+        case .missingCFFTable:
+            "Re-parse the font so its `CFF ` table record is present before taking the CFF embedding path."
         }
     }
 

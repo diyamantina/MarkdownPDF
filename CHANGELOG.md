@@ -29,6 +29,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and an out-of-range index reports a typed error. Algorithm grounded in the
   reference-engine corpus (reportlab, openpdf, libharu, hexapdf)
   ([#41](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/41)).
+- Embedding OpenType fonts with PostScript (CFF, Adobe Type 2) outlines (`OTTO`),
+  which most CJK system fonts use instead of `glyf`. Such a font was rejected outright;
+  it now embeds and renders. A new `CFF ` table reader parses the header, Name and Top
+  DICT INDEXes, the CharStrings INDEX (glyph count), and the charset, and detects
+  CID-keyed fonts from the `ROS` operator, exposing each glyph id's CID. A CID-keyed
+  CFF (the CJK shape) is embedded whole as a `CIDFontType0` descendant font with a
+  `CIDFontType0C` `FontFile3`, and the content stream addresses each glyph by the CID
+  its charset assigns, which the viewer maps back through the embedded CFF's own
+  charset (so there is no `CIDToGIDMap`). A name-keyed (non-CID) CFF embeds as a
+  `CIDFontType0` with an `OpenType` `FontFile3`: a single-face source is embedded whole,
+  and a face inside a collection is first reconstructed into a standalone single-face
+  sfnt. It is never emitted as a bare `Type1C` program, which under a `CIDFontType0`
+  descendant is a composite/simple mismatch that fails PDF/A and PDF/UA validation.
+  Widths (`/W`) and `/ToUnicode` are emitted as on the `glyf` path. Every CFF read is
+  bounds-checked and malformed input throws a typed error rather than trapping. Verified
+  end to end against a system CJK font and a system name-keyed CFF: `qpdf --check` and
+  `mutool clean` pass, `pdftotext` recovers the characters, a Poppler-vs-MuPDF raster
+  witness confirms real glyphs with correct widths, and veraPDF reports the
+  collection-face path compliant with PDF/A-2a and PDF/UA-1. Whole-font only for now:
+  charstring subsetting (to shrink the embedded program) and de-duplicating an identical
+  font program shared across roles (a heading and body role currently embed one copy
+  each) are tracked optimizations. The `glyf` embedding path is byte-for-byte unchanged.
+  Grounded in the Adobe CFF and Type 2 Charstring specs and PDF 32000-1 §9.7.4
+  ([#49](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/49)).
 
 ### Fixed
 - Embedding a font with non-spec table checksums no longer fails. Apple system
