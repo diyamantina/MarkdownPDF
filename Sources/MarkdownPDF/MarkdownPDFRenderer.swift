@@ -1241,8 +1241,18 @@ private struct Layout {
         }
         let size = fontSize(for: .paragraph)
         let shaper = VerticalTextShaper(fontData: entry.resource.fontProgram, metadata: entry.resource.metadata)
-        let glyphs = try shaper.shape(text, fontSize: size)
-        guard !glyphs.isEmpty else {
+        // A source line is a vertical line: each becomes its own column. A font without
+        // vertical metrics, or one that cannot draw any of the text (a Latin-only face
+        // handed a CJK block maps everything to `.notdef`), is not a vertical setup; the
+        // text falls back to a code block rather than being lost as tofu.
+        let lines = try text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { try shaper.shape($0.trimmingCharacters(in: .whitespaces), fontSize: size) }
+        let glyphCount = lines.reduce(0) { $0 + $1.count }
+        guard shaper.hasVerticalMetrics, lines.contains(where: { line in line.contains { $0.glyphID != 0 } }) else {
+            try renderCodeBlock(code, info: nil)
+            return
+        }
+        guard glyphCount > 0 else {
             return
         }
         let origin = shaper.verticalOrigin(fontSize: size)
@@ -1269,6 +1279,8 @@ private struct Layout {
             }
             let element = beginStructureElement(.paragraph)
             defer { endStructureElement(element) }
+            let marked = beginMarkedContentForCurrentElement()
+            defer { endMarkedContentIfNeeded(marked) }
             let mapping = try shaper.mapping(for: pageGlyphs, fontSize: size)
             try currentPage.drawVerticalText(
                 mapping: mapping,
@@ -1281,21 +1293,32 @@ private struct Layout {
             pagePositions = []
         }
 
-        for glyph in glyphs {
-            if penY < bottomY {
-                columnCenter -= columnStep
+        func advanceColumn() throws {
+            columnCenter -= columnStep
+            penY = topY - origin
+            if columnCenter < options.margins.left + size / 2 {
+                try flushPage()
+                startNewPage()
+                columnCenter = firstColumnCenter
                 penY = topY - origin
-                if columnCenter < options.margins.left + size / 2 {
-                    try flushPage()
-                    startNewPage()
-                    columnCenter = firstColumnCenter
-                    penY = topY - origin
-                }
             }
-            let advanceWidth = Double(glyph.advanceWidth) * scale
-            pageGlyphs.append(glyph)
-            pagePositions.append(PDFPageCanvas.Point(x: columnCenter - advanceWidth / 2, y: penY))
-            penY -= glyph.advance
+        }
+
+        var isFirstLine = true
+        for line in lines {
+            if !isFirstLine {
+                try advanceColumn()
+            }
+            isFirstLine = false
+            for glyph in line {
+                if penY < bottomY {
+                    try advanceColumn()
+                }
+                let advanceWidth = Double(glyph.advanceWidth) * scale
+                pageGlyphs.append(glyph)
+                pagePositions.append(PDFPageCanvas.Point(x: columnCenter - advanceWidth / 2, y: penY))
+                penY -= glyph.advance
+            }
         }
         try flushPage()
         y = bottomY

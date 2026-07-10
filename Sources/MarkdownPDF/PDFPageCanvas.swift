@@ -227,9 +227,12 @@ final class PDFPageCanvas {
     /// Draws a vertical (top-to-bottom) CJK run: each glyph is placed at its own baseline
     /// `positions[i]` with a text-line move, upright, its horizontal advance overridden by
     /// the explicit position (the pen is not relied on, exactly as the mark-positioned
-    /// path). The `/ToUnicode` CMap keeps the run recoverable in logical (reading) order.
-    /// Placement is explicit, so no vertical writing-mode CMap or `/W2` is needed; a
-    /// viewer's vertical text-selection geometry, which would read `/W2`, is the known gap.
+    /// path). The content is emitted in logical (reading) order, so a reading-order text
+    /// extractor (`pdftotext -raw`, MuPDF) recovers it exactly; a geometry-only extractor
+    /// (default `pdftotext`) re-sorts a multi-column block left to right and scrambles it,
+    /// because placement is explicit and the PDF carries no vertical writing mode or `/W2`,
+    /// which also leaves a viewer's vertical text-selection geometry approximate. These are
+    /// the known gaps of explicit vertical placement without a vertical CMap.
     func drawVerticalText(
         mapping: ShapedTextMapping,
         positions: [Point],
@@ -238,9 +241,12 @@ final class PDFPageCanvas {
         color: PDFColor = .black,
     ) throws {
         let glyphs = mapping.glyphs
-        guard !glyphs.isEmpty, glyphs.count == positions.count else {
+        guard !glyphs.isEmpty else {
             return
         }
+        // The renderer builds one position per glyph; a mismatch is a caller bug that would
+        // otherwise silently drop or misplace glyphs, so fail fast rather than draw garbage.
+        precondition(glyphs.count == positions.count, "vertical draw needs one position per glyph")
         try resourceUsage.useEmbeddedFont(fontResource, mapping: mapping)
         setFillColor(color)
         let font = PDFSyntax.Name(fontResource.resourceName)
