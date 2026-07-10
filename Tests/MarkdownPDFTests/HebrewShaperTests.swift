@@ -44,6 +44,8 @@ struct HebrewShaperTests {
             "\u{05D1}\u{05B4}\u{05BD}", // בִֽ (hiriq + meteg)
             "\u{05D2}\u{05BD}\u{059A}", // gimel+meteg+yetiv (two type-8 subtables cover the accent; only the first must apply, not both)
             "\u{05E2}\u{05B9}\u{05A4}\u{05A5}", // ayin+holam, mahapakh+merkha (nested pair adjusts both accents, not just the first)
+            "\u{05D1}\u{05BD}\u{05B7}", // bet + meteg + patah, typed out of canonical order (reordered to patah then meteg before shaping)
+            "\u{05DC}\u{05B4}\u{05BC}", // lamed + hiriq + dagesh, non-canonical (dagesh reordered ahead of the vowel to compose)
         ],
     )
     func composedHebrewMatchesHarfBuzz(_ word: String) throws {

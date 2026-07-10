@@ -49,10 +49,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same document rendered before and after has an identical hash). Verified against
   `hb-shape` over a 5116-combination sweep in canonical mark order (every consonant with
   every niqqud, each vowel with meteg or dagesh, and each vowel with a cantillation accent,
-  singly and stacked) at zero divergences. Marks typed in a non-canonical order are not yet
-  reordered to canonical (combining-class) order before shaping the way the reference
-  normalizes them, so such input can still place a mark differently; that Unicode canonical
-  reordering is the remaining Hebrew frontier
+  singly and stacked) at zero divergences
+  ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
+- Canonical (combining-class) ordering of Hebrew marks before shaping. Niqqud or
+  cantillation marks typed out of order (for example meteg before its vowel) are now
+  stably reordered by canonical combining class before composition, the way the reference
+  shaper normalizes a mark run, so the same text places its marks identically regardless of
+  the order the marks were typed. Every Hebrew combining mark is reordered by raw canonical
+  combining class (unlike Arabic, which follows UTR #53 for some marks): the reference's
+  order was confirmed to equal stable canonical order as `shape(run) == shape(canonical(run))`
+  over every permutation of a broad mark set, and the engine then verified against `hb-shape`
+  over 244 permuted-order combinations at zero divergences. Already-canonical input is
+  unchanged, so the earlier sweeps still hold. One unrelated case is still divergent and
+  pre-dates this change: a shin dot or sin dot placed on a letter other than shin (a
+  combination Hebrew never uses) is over-composed rather than left as separate marks
   ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
 - Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
   tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a

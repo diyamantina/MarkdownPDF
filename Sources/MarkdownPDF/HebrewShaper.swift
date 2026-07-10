@@ -142,16 +142,20 @@ struct HebrewShaper {
         return try ShapedTextMapping(sourceText: orderedText, clusters: clusters)
     }
 
-    /// Moves each consonant's letter-modifying marks (dagesh, shin dot, sin dot) to
-    /// directly after the consonant, ahead of the vowels in the same cluster, so `ccmp`
-    /// can compose the presentation form. Within each mark run the modifiers keep their
-    /// relative order and the other marks keep theirs (a stable partition); a run with no
-    /// modifier is unchanged.
+    /// Normalizes a Hebrew run for shaping in two steps. First it reorders each mark run
+    /// into Unicode canonical (combining-class) order, so niqqud or accents typed out of
+    /// order match the reference shaper, which normalizes before shaping. Then it moves
+    /// each consonant's letter-modifying marks (dagesh, shin dot, sin dot) to directly
+    /// after the consonant, ahead of the vowels in the same cluster, so `ccmp` can compose
+    /// the presentation form. Within each mark run the modifiers keep their relative order
+    /// and the other marks keep theirs (a stable partition). Both steps preserve the scalar
+    /// set, so the result is canonically equivalent to the input.
     static func reorderedForShaping(_ scalars: [UnicodeScalar]) -> [UnicodeScalar] {
-        guard scalars.contains(where: isLetterModifier) else {
-            return scalars
+        let canonical = CanonicalCombiningClass.canonicallyOrderedHebrew(scalars)
+        guard canonical.contains(where: isLetterModifier) else {
+            return canonical
         }
-        var result = scalars
+        var result = canonical
         var index = 0
         while index < result.count {
             guard isHebrewMark(result[index]) else {
