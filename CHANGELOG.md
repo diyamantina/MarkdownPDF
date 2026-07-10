@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-10
+
 ### Added
+- Vertical (tategaki) Japanese and Chinese text. A fenced ` ```vertical ` (or ` ```tategaki `)
+  block now sets its text top to bottom in a right-hand column, columns advancing right to
+  left and flowing onto further pages when one fills; a source line break starts a new
+  column. A new vertical shaper applies the font's `vert` feature so brackets and the
+  ideographic comma and full stop take their vertical forms while ideographs stand upright,
+  and reads vertical advances from `vmtx`; the shaped glyph ids and advances match CoreText's
+  vertical typesetter exactly. Each glyph is drawn upright at its own baseline, so the run
+  stays recoverable in reading order through `/ToUnicode` (a reading-order extractor recovers
+  it; a geometry-only extractor re-sorts a multi-column block), and the block is PDF/UA-1 and
+  PDF/A-2a conformant. A font without vertical metrics falls back to a code block rather than
+  rendering the text as tofu. Latin runs are set upright (not rotated) for now.
+- CID-keyed CFF (CJK) font subsetting. A CJK OpenType font's `CFF ` program runs to
+  ten-plus megabytes; it was embedded whole for every document, so a one-line Chinese or
+  Japanese PDF carried the entire font. It is now subset to the glyphs the document draws:
+  the used charstrings are desubroutinized (subroutine calls inlined) so the subset needs no
+  subroutine INDEXes and no renumbering, glyph ids are compacted, and the charset, FDSelect,
+  and Private DICTs are rebuilt while each glyph keeps its CID so PDF addressing is unchanged.
+  A Hiragino CJK page dropped from an eleven-megabyte font embed to a three-kilobyte subset,
+  verified against fontTools to draw outlines identical to the originals across the whole
+  font, and still validates PDF/A-2a and PDF/UA-1. A font the subsetter cannot rewrite
+  (name-keyed, or one with an explicit FontMatrix) falls back to the whole program.
 - Hebrew shaping: composition and niqqud positioning. Pointed Hebrew now composes its
   presentation forms (shin dot, sin dot, letter+dagesh) and places the vowel points on
   their letters, instead of drawing the marks at nominal positions. A new Hebrew shaper
