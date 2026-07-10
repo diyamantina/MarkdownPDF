@@ -11,6 +11,13 @@ import Foundation
 /// engine embeds as a bare `CIDFontType0C` program. A name-keyed CFF embeds as a whole
 /// sfnt on a different path and is left to it. Derived from the Adobe CFF specification
 /// (Adobe Tech Note 5176).
+///
+/// The subset carries the glyph outlines and the width fields, but omits the hinting
+/// entries (BlueValues, Stem/StdHW/StdVW) and the Top DICT FontBBox: these are spec-legal
+/// to default, do not change which pixels a glyph covers, and only affect grid-fitting at
+/// small sizes. Width fields are read as integers; a font whose `defaultWidthX`/
+/// `nominalWidthX` is a real number would be misread, but the PDF's own `/W` array (from
+/// `hmtx`) drives every advance, so the glyph still advances correctly.
 enum CFFSubsetter {
     enum SubsetError: Error, Equatable {
         case notCIDKeyed

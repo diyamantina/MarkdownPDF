@@ -126,14 +126,41 @@ struct CFFRenderIntegrationTests {
         let options = PDFOptions(embeddedFonts: .allRoles(
             PDFOptions.EmbeddedFontSource(data: data, baseName: "HiraginoSansGB", faceIndex: 0),
         ))
-        // A handful of CJK characters. The whole Hiragino `CFF ` table is over ten
-        // megabytes; a subset of a dozen glyphs is a few kilobytes, so the rendered PDF
-        // staying far below the whole-font size is a robust witness that the subsetter
-        // ran and the writer did not fall back to embedding the whole program.
+        // A handful of CJK characters, including two whose charstrings call subroutines
+        // that consume operands their caller pushed (U+819B 膛, whose hint count would be
+        // miscounted, and U+3B3B 㬻, which leaves a subroutine index on the stack across a
+        // call). The whole Hiragino `CFF ` table is over ten megabytes; a subset of a dozen
+        // glyphs is a few kilobytes, so the rendered PDF staying far below the whole-font
+        // size is a robust witness that the subsetter ran, desubroutinized these glyphs
+        // without aborting, and did not fall back to embedding the whole program.
         let pdf = try MarkdownPDFRenderer(options: options)
-            .render(markdown: "\u{6F22}\u{5B57}\u{65E5}\u{672C}\u{8A9E}\u{4E2D}\u{6587}")
+            .render(markdown: "\u{6F22}\u{5B57}\u{65E5}\u{672C}\u{8A9E}\u{4E2D}\u{6587}\u{819B}\u{3B3B}")
         #expect(pdf.count < 200_000, "expected a subset embed (\(pdf.count) bytes); the whole CFF is > 10 MB")
         #expect(PDFInspector(pdf).text.contains("/CIDFontType0C"))
+    }
+
+    @Test("Every glyph of a real CID-keyed CFF desubroutinizes without aborting")
+    func desubroutinizesEveryGlyph() throws {
+        guard let data = fontData(Self.cidKeyedCFFPath) else {
+            return
+        }
+        let metadata = try TrueTypeFontParser().parse(data, faceIndex: 0)
+        let record = try #require(metadata.table(named: "CFF "))
+        let start = Int(record.offset)
+        let end = start + Int(record.length)
+        let program = try CFFFontProgram(bytes: [UInt8](data[start ..< end]))
+        // The operand stack is shared across subroutine frames; a per-frame model miscounts
+        // hints (silent corruption) or drops a subroutine index (a thrown abort). Exercising
+        // every glyph guards both: any regression makes at least one glyph throw here.
+        for glyphID in 0 ..< program.glyphCount {
+            let fd = program.fdSelect[glyphID]
+            let desubroutinizer = CFFCharstringDesubroutinizer(
+                globalSubrs: program.globalSubrs,
+                localSubrs: program.privateDicts[fd].localSubrs,
+            )
+            let output = try desubroutinizer.desubroutinize(program.charStrings[glyphID])
+            #expect(!output.isEmpty, "glyph \(glyphID) desubroutinized to nothing")
+        }
     }
 
     /// The CID codes drawn by `<hex> Tj` operators, in draw order (stream compression
