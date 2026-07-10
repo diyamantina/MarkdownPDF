@@ -60,10 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   order was confirmed to equal stable canonical order as `shape(run) == shape(canonical(run))`
   over every permutation of a broad mark set, and the engine then verified against `hb-shape`
   over 244 permuted-order combinations at zero divergences. Already-canonical input is
-  unchanged, so the earlier sweeps still hold. One unrelated case is still divergent and
-  pre-dates this change: a shin dot or sin dot placed on a letter other than shin (a
-  combination Hebrew never uses) is over-composed rather than left as separate marks
+  unchanged, so the earlier sweeps still hold
   ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
+- Composition is abandoned for an invalid Hebrew cluster, matching the reference. A shin
+  dot or sin dot on a base other than shin does not occur in Hebrew; the reference shaper
+  responds by leaving every mark in that cluster separate rather than composing any of
+  them, including a dagesh that would otherwise compose with its letter. The `ccmp`
+  composition now skips such a cluster, so its marks stay separate. A run with no invalid
+  cluster, which is every well-formed Hebrew run, still composes in one pass exactly as
+  before. Verified against `hb-shape`: the invalid dagesh-plus-dot combinations on
+  non-shin bases now match, while shin with dagesh and shin dot still composes to its
+  presentation glyph ([#53](https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53)).
 - Canonical ordering of the core Arabic harakat before shaping. When the short vowels,
   tanwin, shadda, or sukun (U+064B..U+0652) are typed out of order (e.g. shadda before a
   vowel), they are reordered by combining class before shaping so they stack the way the

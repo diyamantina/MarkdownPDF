@@ -83,8 +83,8 @@ struct HebrewShaper {
 
         var glyphs = baseGlyphs.indices.map { ShapedGlyph(glyphID: baseGlyphs[$0], sourceScalarRange: $0 ..< $0 + 1) }
         if let gsub {
-            glyphs = GSUBFeatureApplier(gsub: gsub, gdef: gdef, numGlyphs: metadata.maxp.numGlyphs)
-                .apply(feature: "ccmp", to: glyphs)
+            let applier = GSUBFeatureApplier(gsub: gsub, gdef: gdef, numGlyphs: metadata.maxp.numGlyphs)
+            glyphs = Self.composed(glyphs, scalars: scalars, applier: applier)
         }
         if let gpos, gpos.hasMarkPositioning, let gdef {
             let placements = GPOSMarkPositioner.placements(for: glyphs.map(\.glyphID), gpos: gpos, gdef: gdef)
@@ -175,6 +175,60 @@ struct HebrewShaper {
             index = end
         }
         return result
+    }
+
+    /// Applies the `ccmp` composition, but never to a cluster that carries a shin dot or
+    /// sin dot on a base other than shin. That combination does not occur in Hebrew, and
+    /// the reference shaper responds by leaving the whole cluster's marks separate rather
+    /// than composing any of them (including a dagesh that would otherwise compose with its
+    /// letter). When no cluster is invalid, which is every well-formed Hebrew run, the run
+    /// composes in one pass exactly as before, so valid text is untouched.
+    private static func composed(
+        _ glyphs: [ShapedGlyph],
+        scalars: [UnicodeScalar],
+        applier: GSUBFeatureApplier,
+    ) -> [ShapedGlyph] {
+        let clusters = clusterRanges(scalars)
+        guard clusters.contains(where: { isInvalidDotCluster(scalars[$0]) }) else {
+            return applier.apply(feature: "ccmp", to: glyphs)
+        }
+        // The glyph buffer is one glyph per scalar at this point (composition has not run
+        // yet), so a scalar cluster range indexes the parallel glyphs directly.
+        var result: [ShapedGlyph] = []
+        for range in clusters {
+            let clusterGlyphs = Array(glyphs[range])
+            if isInvalidDotCluster(scalars[range]) {
+                result.append(contentsOf: clusterGlyphs)
+            } else {
+                result.append(contentsOf: applier.apply(feature: "ccmp", to: clusterGlyphs))
+            }
+        }
+        return result
+    }
+
+    /// Splits the scalars into clusters, each a starter (a base letter, class 0) followed
+    /// by its combining marks, so composition can be decided per cluster.
+    private static func clusterRanges(_ scalars: [UnicodeScalar]) -> [Range<Int>] {
+        var ranges: [Range<Int>] = []
+        var index = 0
+        while index < scalars.count {
+            var end = index + 1
+            while end < scalars.count, CanonicalCombiningClass.of(scalars[end]) != 0 {
+                end += 1
+            }
+            ranges.append(index ..< end)
+            index = end
+        }
+        return ranges
+    }
+
+    /// Whether a cluster carries a shin dot or sin dot on a base other than shin, the
+    /// invalid combination the reference shaper leaves uncomposed.
+    private static func isInvalidDotCluster(_ scalars: ArraySlice<UnicodeScalar>) -> Bool {
+        guard let base = scalars.first, base.value != 0x05E9 else {
+            return false
+        }
+        return scalars.contains { $0.value == 0x05C1 || $0.value == 0x05C2 }
     }
 
     /// The Hebrew marks that attach to the consonant itself (composed by `ccmp`), as
