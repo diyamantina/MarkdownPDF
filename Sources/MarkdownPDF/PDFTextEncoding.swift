@@ -114,25 +114,39 @@ enum PDFTextEncoding {
 
     /// An ASCII stand-in the base-14 WinAnsi fonts can draw for a scalar they would
     /// otherwise paint as "?", so line art, diagrams, and technical notation keep their
-    /// shape instead of dissolving into question marks. It covers only characters with an
-    /// honest single-character ASCII match: the Box Drawing and Block Elements blocks
-    /// (tree and table art), Geometric Shapes (diagram markers), the cardinal and double
-    /// arrows, super- and sub-scripts (folded to their base character), and the dash,
-    /// minus, prime, and Unicode-space variants. Characters with no faithful ASCII form
-    /// (☀, ♠, ✓, most symbols and dingbats) are left to the "?" fallback rather than folded
-    /// to something misleading. This changes the drawn (and, on the base-14 path, the
-    /// extracted) glyph, the same trade the "?" fallback already made, but leaves a readable
-    /// result; a font that covers the real characters (an embedded face) still draws them
-    /// and is unaffected.
+    /// shape instead of dissolving into question marks. Two sources feed it, in order:
+    ///
+    /// 1. The Unicode compatibility decomposition (NFKD), which *is* the fold the standard
+    ///    defines for a presentation variant. When a scalar's compatibility decomposition is
+    ///    a single ASCII character, that character is the answer: super- and sub-scripts fold
+    ///    to their base digit or letter, fullwidth forms to their ASCII twin, circled digits
+    ///    to their digit, and every Unicode space to a plain space. (Parenthesized numbers
+    ///    decompose to three scalars, `(1)`, so they are not folded here.)
+    ///    This comes from `UnicodeData.txt` (via Foundation), not from a hand-written list,
+    ///    so it stays complete and correct as the standard grows. A decomposition that is
+    ///    empty, non-ASCII, or more than one scalar (½, a ligature, the super/sub *minus*
+    ///    which decomposes to U+2212) is not used here and falls through to step 2.
+    ///
+    /// 2. A visual table for the shapes Unicode does *not* decompose to ASCII: the Box
+    ///    Drawing and Block Elements blocks (tree and table art), Geometric Shapes, the
+    ///    cardinal and double arrows, stars and the sun to "*", card suits to their initial
+    ///    S/H/C/D, checkmarks to "v", ballot crosses to "x", religious and heavy crosses to
+    ///    "+", heavy and dingbat arrows to ">", and the minus, prime, and extra-dash forms. These
+    ///    have no Unicode ASCII equivalent, so each is a deliberate visual approximation.
+    ///
+    /// Characters with no faithful ASCII form (☂, ☯, ♫, ⚙, and most pictographs) are left to
+    /// the "?" fallback rather than folded to something misleading. This changes the drawn
+    /// (and, on the base-14 path, the extracted) glyph, the same trade the "?" fallback
+    /// already made, but leaves a readable result; a font that covers the real characters (an
+    /// embedded face) still draws them and is unaffected.
     static func asciiApproximation(for scalar: UnicodeScalar) -> UnicodeScalar? {
         let value = scalar.value
-        // Superscript and subscript digits fold to the base digit.
-        if value == 0x2070 || (0x2074 ... 0x2079).contains(value) { // superscript 0, 4-9
-            return UnicodeScalar(0x30 + (value == 0x2070 ? 0 : value - 0x2074 + 4))
+        // Step 1: the Unicode compatibility decomposition, when it lands on one ASCII scalar.
+        let decomposed = String(scalar).decomposedStringWithCompatibilityMapping.unicodeScalars
+        if decomposed.count == 1, let only = decomposed.first, only != scalar, only.value < 0x80 {
+            return only
         }
-        if (0x2080 ... 0x2089).contains(value) { // subscript 0-9
-            return UnicodeScalar(0x30 + value - 0x2080)
-        }
+        // Step 2: the visual table for shapes Unicode does not decompose to ASCII.
         switch value {
         // Box drawing: horizontal, vertical, diagonals, then corners/tees/crosses.
         case 0x2500, 0x2501, 0x2504, 0x2505, 0x2508, 0x2509,
@@ -178,38 +192,44 @@ enum PDFTextEncoding {
             return "-"
         case 0x2195, 0x21D5, 0x21A8:
             return "|"
-        // Super- and sub-script signs and the common letters.
-        case 0x207A, 0x208A:
-            return "+"
+        // The superscript and subscript MINUS decompose to U+2212 (non-ASCII), so NFKD
+        // leaves them; fold the minus sign and both scripts to the hyphen here.
         case 0x207B, 0x208B, 0x2212:
-            return "-" // superscript/subscript minus, and the minus sign
-        case 0x207C, 0x208C:
-            return "="
-        case 0x207D, 0x208D:
-            return "("
-        case 0x207E, 0x208E:
-            return ")"
-        case 0x2071:
-            return "i"
-        case 0x207F, 0x2099:
-            return "n"
-        case 0x2090:
-            return "a"
-        case 0x2091:
-            return "e"
-        case 0x2092:
-            return "o"
-        case 0x2093:
-            return "x"
-        // Prime marks and the dash / hyphen / space variants.
+            return "-"
+        // Prime marks and the dashes WinAnsi cannot draw (en/em dash are WinAnsi already).
         case 0x2032, 0x2035:
             return "'"
         case 0x2033, 0x2034, 0x2036, 0x2037:
-            return "\""
+            return "\"" // double/triple prime: NFKD is repeated primes, one quote is the single-char stand-in
         case 0x2010, 0x2011, 0x2012, 0x2015, 0x2043:
             return "-"
-        case 0x2000 ... 0x200A, 0x202F, 0x205F, 0x3000:
-            return " "
+        // Stars, asterisks, sparkles, snowflakes, and the sun: the asterisk is the ASCII
+        // star, and the dingbat block U+2722...U+274A is entirely star and asterisk forms.
+        case 0x2600, 0x2605, 0x2606, 0x2721, 0x2722 ... 0x274A:
+            return "*"
+        // Religious and heavy crosses (the daggers U+2020/U+2021 are WinAnsi, so they draw
+        // as real daggers and never reach here).
+        case 0x2626, 0x2628, 0x2629, 0x2719 ... 0x2720:
+            return "+"
+        // Checkmarks fold to a tick-shaped "v".
+        case 0x2611, 0x2713, 0x2714:
+            return "v"
+        // Ballot and heavy crosses fold to "x".
+        case 0x2612, 0x2715 ... 0x2718, 0x274C, 0x274E:
+            return "x"
+        // Card suits fold to their initial, the standard card notation.
+        case 0x2660, 0x2664:
+            return "S"
+        case 0x2661, 0x2665, 0x2764, 0x2765:
+            return "H"
+        case 0x2662, 0x2666:
+            return "D"
+        case 0x2663, 0x2667:
+            return "C"
+        // Heavy and dingbat arrows point right (their dominant direction); U+27B0 is a
+        // curly loop, not an arrow, so it is excluded from the run.
+        case 0x2794, 0x2798 ... 0x27AF, 0x27B1 ... 0x27BE:
+            return ">"
         default:
             return nil
         }
