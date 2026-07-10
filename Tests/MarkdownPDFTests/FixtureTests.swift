@@ -76,8 +76,13 @@ struct FixtureTests {
             let inspector = PDFInspector(data)
 
             #expect(inspector.text.hasPrefix("%PDF-1.4"))
-            #expect(inspector.text.contains("/BaseFont /Helvetica"))
-            #expect(!inspector.text.contains("/FontFile"))
+            if fixtureName == "crazy-markdown-torture.md" {
+                #expect(inspector.text.contains("/FontFile2"))
+                #expect(inspector.text.contains("/ToUnicode"))
+            } else {
+                #expect(inspector.text.contains("/BaseFont /Helvetica"))
+                #expect(!inspector.text.contains("/FontFile"))
+            }
             #expect(inspector.pageCount >= expectedMinimumPageCount(for: fixtureName))
             #expect(inspector.hasValidXrefOffsets())
             #expect(inspector.streamLengthsMatch())
@@ -194,13 +199,11 @@ struct FixtureTests {
         #expect(normalizedText.contains("Reference-style chart placeholder"))
         #expect(!extractedText.contains("Unsupported Mermaid diagram:"))
         #expect(normalizedText.contains("Crazy chart"))
-        // WinAnsi renders precomposed accented Latin (Café, naïve). A decomposed
-        // diacritic is NFC-normalized to its precomposed WinAnsi byte, so the
-        // combining sample extracts as "café", not "cafe?". CJK has no WinAnsi form
-        // and still falls back to "?" until a font is embedded (#37).
+        // The non-WinAnsi content selects the bundled font. Its precomposed and
+        // decomposed Latin plus the CJK fallback remain recoverable in extraction.
         #expect(normalizedText.contains("Café"))
         #expect(normalizedText.contains("naïve"))
-        #expect(normalizedText.contains("??")) // kanji 漢字, beyond WinAnsi
+        #expect(normalizedText.contains("漢字"))
         #expect(normalizedText.contains("café"))
         #expect(!normalizedText.contains("cafe?"))
         #expect(normalizedText.contains("Crazy Torture Exit Marker"))
@@ -518,9 +521,10 @@ struct FixtureTests {
         #expect(extracted.contains("Katakana"))
         #expect(extracted.contains("nihon"))
         #expect(extracted.contains("hiragana"))
-        // CJK scalars use the portable substitution rather than passing through raw.
-        #expect(!extracted.contains("你好"))
-        #expect(!extracted.contains("ひらがな"))
+        // DejaVu lacks these CJK glyphs, so the page shows its visible missing-glyph
+        // signal while ActualText keeps the author's text recoverable.
+        #expect(extracted.contains("你好"))
+        #expect(extracted.contains("ひらがな"))
         #expect(inspector.hasValidXrefOffsets())
         #expect(inspector.streamLengthsMatch())
     }

@@ -25,6 +25,21 @@ struct CFFFontTests {
         #expect(font.charset == [0, 357, 4559, 8001])
     }
 
+    @Test("Rewrites the CID subset's internal PostScript name")
+    func rewritesCIDSubsetPostScriptName() throws {
+        let program = try CFFFontProgram(bytes: cffBytes("cid-cff-sample.cff"))
+        let subsetName = "ABCDEF+CIDSample"
+
+        let bytes = try CFFSubsetter.subset(
+            program: program,
+            usedGlyphIDs: Set(0 ..< program.glyphCount),
+            postScriptName: subsetName,
+        )
+        let subset = try CFFFontProgram(bytes: bytes)
+
+        #expect(String(decoding: subset.fontName, as: UTF8.self) == subsetName)
+    }
+
     @Test("Rejects malformed CFF input with a typed error, never trapping")
     func rejectsMalformedCFF() throws {
         // Empty, truncated header, and a wrong major version each throw a typed error.

@@ -676,12 +676,21 @@ struct PDFDocumentStructureTests {
         let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
         let metadata = try TrueTypeFontParser().parse(fontData)
         let mapping = try TrueTypeGlyphMapper(data: fontData, metadata: metadata).map(text: "WAVE", fontSize: 14)
-        let subset = try TrueTypeFontSubsetter(data: fontData, metadata: metadata).subset(glyphs: mapping.glyphs)
+        let subsetBaseName = "AAAAAA+LengthWitness"
+        let subset = try TrueTypeFontSubsetter(data: fontData, metadata: metadata).subset(
+            glyphs: mapping.glyphs,
+            postScriptName: subsetBaseName,
+        )
         let canvas = PDFPageCanvas()
 
         try canvas.drawCIDText(
             mapping: mapping,
-            fontResource: PDFEmbeddedFontResource(resourceName: "EF1", fontProgram: fontData, metadata: metadata),
+            fontResource: PDFEmbeddedFontResource(
+                resourceName: "EF1",
+                fontProgram: fontData,
+                metadata: metadata,
+                baseName: "LengthWitness",
+            ),
             fontSize: 14,
             x: 40,
             y: 120,
@@ -696,6 +705,8 @@ struct PDFDocumentStructureTests {
         let text = String(decoding: data, as: UTF8.self)
 
         #expect(text.contains("/Length1 \(subset.fontProgram.count)"))
+        #expect(text.contains("/BaseFont /\(subsetBaseName)"))
+        #expect(text.contains("/FontName /\(subsetBaseName)"))
         #expect(text.contains("/CIDToGIDMap "))
         #expect(!text.contains("/CIDToGIDMap /Identity"))
         #expect(text.contains("/W [2 [600] 6 [600] 23 [600] 24 [900]]"))

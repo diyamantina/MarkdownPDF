@@ -35,12 +35,9 @@ struct PDFEmbeddedFontUsage: Equatable {
                 let unicode = string(from: unicodeScalars)
                 // A scalar the font cannot draw resolves to the .notdef glyph (id 0).
                 // Every such scalar shares code 0, so it cannot carry a unique
-                // ToUnicode value: emit no mapping rather than collide (distinct
-                // missing scalars would otherwise conflict at code 0). That one
-                // unrenderable scalar then does not extract as text, which is the
-                // honest degradation; the rest of the page, including the real
-                // glyphs' ToUnicode, is preserved instead of the whole document
-                // aborting with `missingGlyph`.
+                // ToUnicode value. Emit no mapping rather than collide. The canvas
+                // wraps a run containing notdef in ActualText, preserving authored
+                // extraction while the visible glyph still signals missing coverage.
                 let toUnicodeMapping = glyph.glyphID == 0
                     ? nil
                     : PDFToUnicodeCMap.Mapping(code: glyph.pdfCharacterCode, unicode: unicode)

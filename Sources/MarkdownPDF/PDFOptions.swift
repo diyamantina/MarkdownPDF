@@ -143,15 +143,15 @@ public struct PDFOptions: Equatable, Sendable {
         )
     }
 
-    /// Caller-provided font data for one Markdown text role.
+    /// Custom font data for one Markdown text role.
     ///
-    /// MarkdownPDF never discovers system fonts in the portable renderer and
-    /// never bundles font binaries in the public repository. Pass complete font
-    /// data here when the document should embed that role. A TrueType (`glyf`)
-    /// font embeds as a subsetted Type 0 / CIDFontType2 font; an OpenType/CFF
-    /// (`OTTO`, PostScript outlines) font embeds whole as a Type 0 / CIDFontType0
-    /// font. The caller remains responsible for the font license, and rendering
-    /// rejects fonts whose OS/2 embedding bits forbid the profile.
+    /// MarkdownPDF never discovers system fonts in the portable renderer. Pass
+    /// complete font data here to use a custom face instead of the bundled DejaVu
+    /// or base-font paths. A TrueType (`glyf`) font embeds as a subsetted Type 0 /
+    /// CIDFontType2 font; an OpenType/CFF (`OTTO`, PostScript outlines) font embeds
+    /// whole as a Type 0 / CIDFontType0 font. The caller remains responsible for
+    /// the custom font's license, and rendering rejects fonts whose OS/2 embedding
+    /// bits forbid the profile.
     public struct EmbeddedFontSource: Equatable, Sendable {
         public var data: Data
         public var baseName: String?
@@ -170,15 +170,17 @@ public struct PDFOptions: Equatable, Sendable {
         }
     }
 
-    /// Opt-in embedded-font role mapping for the portable renderer.
+    /// Embedded-font role mapping for the portable renderer.
     ///
-    /// The default value is ``disabled``, so MarkdownPDF continues to use PDF
-    /// base fonts and emits no font files unless the caller supplies font data.
+    /// The default value is ``disabled``, which means no caller-selected font.
+    /// Documents whose parsed text is entirely WinAnsi stay on PDF base fonts and
+    /// emit no font program. When that default encounters a non-WinAnsi scalar,
+    /// the renderer selects the bundled ``dejaVu`` roles for the whole document.
+    /// Callers can also select ``dejaVu`` explicitly or provide custom sources.
     /// Each non-nil role is parsed, validated, and written directly in Swift on
-    /// macOS and Linux (a `glyf` font is also subsetted; a CFF font embeds
-    /// whole). Roles left nil fall back to the matching
-    /// standard PDF base-font role. This API does not perform macOS font
-    /// discovery and does not imply iOS support.
+    /// macOS and Linux. A `glyf` font is subsetted; a CFF font embeds whole. Roles
+    /// left nil fall back to the matching standard PDF base-font role. This API
+    /// does not perform macOS font discovery and does not imply iOS support.
     public struct EmbeddedFonts: Equatable, Sendable {
         public var regular: EmbeddedFontSource?
         public var bold: EmbeddedFontSource?

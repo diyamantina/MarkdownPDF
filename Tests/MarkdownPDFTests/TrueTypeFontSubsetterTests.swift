@@ -20,6 +20,24 @@ struct TrueTypeFontSubsetterTests {
         _ = try TrueTypeFontParser().parse(subset.fontProgram, validateChecksums: true)
     }
 
+    @Test("Rewrites the subset's internal PostScript name")
+    func rewritesSubsetPostScriptName() throws {
+        let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)
+        let metadata = try TrueTypeFontParser().parse(fontData)
+        let glyphs = try TrueTypeGlyphMapper(data: fontData, metadata: metadata)
+            .map(text: "WAVE", fontSize: 12)
+            .glyphs
+        let subsetName = "ABCDEF+SyntheticWitness"
+
+        let subset = try TrueTypeFontSubsetter(data: fontData, metadata: metadata).subset(
+            glyphs: glyphs,
+            postScriptName: subsetName,
+        )
+
+        #expect(subset.metadata.names.namesByID[6] == subsetName)
+        _ = try TrueTypeFontParser().parse(subset.fontProgram, validateChecksums: true)
+    }
+
     @Test("Builds deterministic compact subsets and CIDToGID streams")
     func buildsDeterministicCompactSubsetsAndCIDToGIDStreams() throws {
         let fontData = SyntheticTrueTypeFont.data(glyphProfile: .latinWitness, includeGlyphOutlines: true)

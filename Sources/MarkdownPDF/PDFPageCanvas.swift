@@ -168,14 +168,19 @@ final class PDFPageCanvas {
         } else {
             positionedTextOperators(orderedGlyphs, font: font, fontSize: fontSize, x: x, y: y)
         }
-        // An RTL run drawn in visual order defeats a text extractor's bidi reversal for a
-        // composed base+mark glyph (its multi-scalar ToUnicode flips, landing the mark
-        // before its letter). Wrap such a run in an `/ActualText` span carrying the
-        // logical text so extraction recovers it exactly. Runs without such a glyph
-        // (all Arabic, unpointed Hebrew, LTR) are untouched and stay byte-identical.
-        if rightToLeft, mapping.needsActualTextOverride {
-            let visual = String(String.UnicodeScalarView(mapping.toUnicodeText.unicodeScalars.reversed()))
-            let utf16: [UInt16] = [0xFEFF] + Array(visual.utf16)
+        // A missing glyph shares code 0 with every other missing glyph, so it cannot
+        // carry a unique ToUnicode entry. Preserve the authored run through ActualText
+        // while the font's .notdef outline provides the visible missing-glyph signal.
+        //
+        // An RTL run drawn in visual order also needs this override when a composed
+        // base+mark glyph would otherwise make extraction place the mark first. The
+        // replacement is visual order because extractors reapply bidi to ActualText.
+        let containsNotdef = mapping.glyphs.contains { $0.glyphID == 0 }
+        if containsNotdef || (rightToLeft && mapping.needsActualTextOverride) {
+            let actualText = rightToLeft
+                ? String(String.UnicodeScalarView(mapping.toUnicodeText.unicodeScalars.reversed()))
+                : mapping.toUnicodeText
+            let utf16: [UInt16] = [0xFEFF] + Array(actualText.utf16)
             operators = [.beginActualTextUTF16(PDFSyntax.HexString(twoByteCodes: utf16))]
                 + operators + [.endMarkedContent]
         }

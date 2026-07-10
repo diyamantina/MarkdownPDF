@@ -25,6 +25,14 @@ struct TrueTypeFontSubsetter {
         var locations: [Int]
     }
 
+    private struct NameRecord {
+        var platformID: UInt16
+        var encodingID: UInt16
+        var languageID: UInt16
+        var nameID: UInt16
+        var bytes: [UInt8]
+    }
+
     var fontData: Data
     var metadata: TrueTypeFontParser.Metadata
 
@@ -66,7 +74,10 @@ struct TrueTypeFontSubsetter {
         }
     }
 
-    func subset(glyphs: [TrueTypeGlyphMapper.Glyph]) throws -> Subset {
+    func subset(
+        glyphs: [TrueTypeGlyphMapper.Glyph],
+        postScriptName: String? = nil,
+    ) throws -> Subset {
         guard !glyphs.isEmpty else {
             throw TrueTypeFontSubsetError.emptyGlyphSet
         }
@@ -88,6 +99,7 @@ struct TrueTypeFontSubsetter {
             glyphIDMap: glyphIDMap,
             glyphTable: glyphTable,
             scalarMappings: scalarMappings(for: glyphs, glyphIDMap: glyphIDMap),
+            postScriptName: postScriptName,
         )
         let fontProgram = Self.fontProgram(scalerType: metadata.scalerType, tables: tables)
         // Validate checksums when re-parsing our OWN rebuilt subset. Input-font
@@ -173,6 +185,7 @@ struct TrueTypeFontSubsetter {
         glyphIDMap: [UInt16: UInt16],
         glyphTable: GlyphTable,
         scalarMappings: [UnicodeScalar: UInt16],
+        postScriptName: String?,
     ) throws -> [String: Data] {
         var tables = try Dictionary(
             uniqueKeysWithValues: metadata.tables.map { record in
@@ -196,7 +209,136 @@ struct TrueTypeFontSubsetter {
         )
         tables["head"] = try headTable()
         tables["cmap"] = cmapTable(scalarMappings: scalarMappings)
+        if let postScriptName {
+            tables["name"] = try nameTable(postScriptName: postScriptName)
+        }
         return tables
+    }
+
+    /// Rebuilds the TrueType `name` table with every PostScript-name record
+    /// (name ID 6) set to the PDF subset name. Other name strings and format 1
+    /// language-tag strings are preserved byte-for-byte.
+    private func nameTable(postScriptName: String) throws -> Data {
+        let bytes = try [UInt8](tableData(for: "name"))
+        let reader = TrueTypeByteReader(table: "name", bytes: bytes)
+        try reader.requireRange(offset: 0, count: 6)
+        let format = try reader.uint16(at: 0)
+        let originalCount = try Int(reader.uint16(at: 2))
+        let originalStringOffset = try Int(reader.uint16(at: 4))
+        try reader.requireRange(offset: 6, count: originalCount * 12)
+
+        var records: [NameRecord] = []
+        records.reserveCapacity(originalCount + 1)
+        for index in 0 ..< originalCount {
+            let offset = 6 + index * 12
+            let platformID = try reader.uint16(at: offset)
+            let encodingID = try reader.uint16(at: offset + 2)
+            let languageID = try reader.uint16(at: offset + 4)
+            let nameID = try reader.uint16(at: offset + 6)
+            let length = try Int(reader.uint16(at: offset + 8))
+            let stringOffset = try Int(reader.uint16(at: offset + 10))
+            let start = originalStringOffset + stringOffset
+            try reader.requireRange(offset: start, count: length)
+            let nameBytes = nameID == 6
+                ? Self.encodedName(postScriptName, platformID: platformID)
+                : Array(bytes[start ..< start + length])
+            records.append(NameRecord(
+                platformID: platformID,
+                encodingID: encodingID,
+                languageID: languageID,
+                nameID: nameID,
+                bytes: nameBytes,
+            ))
+        }
+        if !records.contains(where: { $0.nameID == 6 }) {
+            records.append(NameRecord(
+                platformID: 3,
+                encodingID: 1,
+                languageID: 0x0409,
+                nameID: 6,
+                bytes: Self.encodedName(postScriptName, platformID: 3),
+            ))
+        }
+
+        let languageTags = try languageTagStrings(
+            format: format,
+            originalCount: originalCount,
+            originalStringOffset: originalStringOffset,
+            bytes: bytes,
+            reader: reader,
+        )
+        let languageTagRecordSize = format == 1 ? 2 + languageTags.count * 4 : 0
+        let stringOffset = 6 + records.count * 12 + languageTagRecordSize
+        guard records.count <= Int(UInt16.max), stringOffset <= Int(UInt16.max) else {
+            throw TrueTypeFontError.malformedTable(tag: "name", reason: "subset name table exceeds UInt16 limits")
+        }
+
+        var table = Data()
+        var storage = Data()
+        Self.appendUInt16(format, to: &table)
+        Self.appendUInt16(UInt16(records.count), to: &table)
+        Self.appendUInt16(UInt16(stringOffset), to: &table)
+        for record in records {
+            guard record.bytes.count <= Int(UInt16.max), storage.count <= Int(UInt16.max) else {
+                throw TrueTypeFontError.malformedTable(tag: "name", reason: "subset name string exceeds UInt16 limits")
+            }
+            Self.appendUInt16(record.platformID, to: &table)
+            Self.appendUInt16(record.encodingID, to: &table)
+            Self.appendUInt16(record.languageID, to: &table)
+            Self.appendUInt16(record.nameID, to: &table)
+            Self.appendUInt16(UInt16(record.bytes.count), to: &table)
+            Self.appendUInt16(UInt16(storage.count), to: &table)
+            storage.append(contentsOf: record.bytes)
+        }
+        if format == 1 {
+            Self.appendUInt16(UInt16(languageTags.count), to: &table)
+            for languageTag in languageTags {
+                guard languageTag.count <= Int(UInt16.max), storage.count <= Int(UInt16.max) else {
+                    throw TrueTypeFontError.malformedTable(
+                        tag: "name",
+                        reason: "subset language-tag string exceeds UInt16 limits",
+                    )
+                }
+                Self.appendUInt16(UInt16(languageTag.count), to: &table)
+                Self.appendUInt16(UInt16(storage.count), to: &table)
+                storage.append(contentsOf: languageTag)
+            }
+        }
+        table.append(storage)
+        return table
+    }
+
+    private func languageTagStrings(
+        format: UInt16,
+        originalCount: Int,
+        originalStringOffset: Int,
+        bytes: [UInt8],
+        reader: TrueTypeByteReader,
+    ) throws -> [[UInt8]] {
+        guard format == 1 else {
+            return []
+        }
+        let recordOffset = 6 + originalCount * 12
+        try reader.requireRange(offset: recordOffset, count: 2)
+        let count = try Int(reader.uint16(at: recordOffset))
+        try reader.requireRange(offset: recordOffset + 2, count: count * 4)
+        return try (0 ..< count).map { index in
+            let offset = recordOffset + 2 + index * 4
+            let length = try Int(reader.uint16(at: offset))
+            let stringOffset = try Int(reader.uint16(at: offset + 2))
+            let start = originalStringOffset + stringOffset
+            try reader.requireRange(offset: start, count: length)
+            return Array(bytes[start ..< start + length])
+        }
+    }
+
+    private static func encodedName(_ name: String, platformID: UInt16) -> [UInt8] {
+        guard platformID == 0 || platformID == 3 else {
+            return Array(name.utf8)
+        }
+        return name.utf16.flatMap { unit in
+            [UInt8((unit >> 8) & 0xFF), UInt8(unit & 0xFF)]
+        }
     }
 
     private func scalarMappings(

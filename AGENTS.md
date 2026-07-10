@@ -28,9 +28,9 @@ or PDF libraries.
 
 - Generate PDF bytes directly in Swift.
 - Keep the core portable: it must build on macOS, Linux, Windows, and WASI.
-- Do not embed font files in the public repo.
-- Use standard PDF base fonts by default. Apple system font names remain
-  available through `PDFOptions.FontSet.appleSystem`.
+- Bundle only the approved DejaVu faces and their exact upstream license. Keep
+  WinAnsi-only documents on standard PDF base fonts by default. Apple system
+  font names remain available through `PDFOptions.FontSet.appleSystem`.
 - Treat CommonMark plus GFM tables and images as the
   compatibility target.
 - Keep public API small and testable.

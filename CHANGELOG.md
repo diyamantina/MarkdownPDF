@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-10
+
+### Added
+- Bundled DejaVu Sans regular, bold, and oblique faces plus DejaVu Sans Mono as
+  licensed Swift package resources. `PDFOptions.EmbeddedFonts.dejaVu` selects
+  them explicitly. By default, parsed documents containing a scalar outside
+  WinAnsi now select all four roles and embed only used glyphs, while WinAnsi-only
+  documents retain compact PDF base fonts. Bundle lookup is cached and degrades
+  to the base-font path when an installation omits package resources. Runs that
+  reach a missing glyph retain authored extraction through `/ActualText`.
+  Reduced font programs carry deterministic six-letter PDF subset tags.
+
 ## [0.7.0] - 2026-07-10
 
 ### Added

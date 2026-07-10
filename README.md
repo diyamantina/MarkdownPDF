@@ -19,10 +19,11 @@ CoreGraphics, WebKit, wkhtmltopdf, Chromium, LaTeX, browser renderers,
 JavaScript, Python, shell renderers, or C Markdown/PDF libraries.
 
 > **Text coverage and help wanted.** ASCII and the full WinAnsi (Western
-> European) set render with no embedded font; Central European, Cyrillic, Greek,
-> and CJK render with an embedded font. Full Unicode is in progress and
-> **contributions are very welcome**: Arabic and Hebrew shaping, CJK by default,
-> coverage-driven font fallback, and color emoji. See
+> European) set render with no embedded font. Content outside WinAnsi selects
+> bundled DejaVu automatically, covering Central European Latin, Cyrillic,
+> Greek, technical symbols, and more. Full Unicode is in progress and
+> **contributions are very welcome**: CJK glyph coverage, per-run multi-font
+> fallback, and color emoji. See
 > [Help Wanted: International Text](#help-wanted-international-text) and epic
 > #210.
 
@@ -86,8 +87,11 @@ The generic renderer currently covers:
 - Local JPEG and PNG images resolved relative to the input document.
 - PDF document title metadata, heading outlines, and internal heading links.
 - Opt-in generated table of contents with final page numbers and internal links.
-- Standard PDF base fonts by default, without embedding font files.
-- Opt-in embedded TrueType font data through `PDFOptions.EmbeddedFonts`, using
+- Standard PDF base fonts for WinAnsi-only documents, without embedding a font
+  program.
+- Automatic bundled DejaVu for parsed content outside WinAnsi, plus explicit
+  selection through `PDFOptions.EmbeddedFonts.dejaVu`.
+- Custom embedded TrueType font data through `PDFOptions.EmbeddedFonts`, using
   Type 0 / CIDFontType2 fonts, ToUnicode maps, and subsetted FontFile2 streams.
 - Opt-in portable syntax coloring for supported fenced code-block language
   hints, using direct DeviceRGB text operators.
@@ -118,14 +122,14 @@ under `Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/`
 ## Not Yet Supported
 
 The default profile renders ASCII and the full WinAnsi (Western European) set
-with no embedded font (advances for the rarer symbols are approximate pending
-exact Core14 AFM metrics). Central European Latin, Cyrillic, Greek, and CJK
-render with a caller-supplied embedded font through `PDFOptions.EmbeddedFonts`.
+with no embedded font. If parsed content contains a scalar outside WinAnsi, the
+whole document switches coherently to subsetted bundled DejaVu roles. Custom
+fonts remain available through `PDFOptions.EmbeddedFonts` for scripts DejaVu
+does not cover.
 
-Not yet handled: base-14 `Symbol`/`ZapfDingbats` pictograph routing, CJK by
-default, complex-script shaping (Arabic joining, Hebrew niqqud), full
-coverage-driven font fallback, and color emoji. Each has a per-item issue and a
-how-to-contribute note under [Help Wanted: International
+Not yet handled: base-14 `Symbol`/`ZapfDingbats` pictograph routing, bundled CJK
+glyph coverage, full per-run coverage-driven font fallback, and color emoji.
+Each has a per-item issue and a how-to-contribute note under [Help Wanted: International
 Text](#help-wanted-international-text) and epic
 #210. The guiding
 principle throughout: render every character the active fonts can represent, and
@@ -268,10 +272,20 @@ let markdown = "# Embedded\n\nThe font file is embedded as a subset."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
 
-Embedded fonts are opt in. The caller is responsible for the font license. The
-portable renderer rejects fonts whose OS/2 embedding bits do not allow the
-subset profile. macOS font discovery is not part of the shared core, and this
-does not claim iOS support.
+Force the four bundled DejaVu roles for any document:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(embeddedFonts: .dejaVu)
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
+Without an explicit font choice, non-WinAnsi content selects bundled DejaVu and
+WinAnsi-only content remains on base fonts. The caller is responsible for the
+license of custom font data. The portable renderer rejects custom fonts whose
+OS/2 embedding bits do not allow the subset profile. macOS font discovery is not
+part of the shared core, and this does not claim iOS support.
 
 Use the Linux-facing product:
 
@@ -335,10 +349,9 @@ uploads those files as `markdownpdf-witness-linux` and
 `markdownpdf-witness-macos` artifacts for pull request review.
 
 Embedded-font tests use generated Swift TrueType fixtures for deterministic
-coverage and CI-installed open fonts for an external smoke test. Linux CI uses
-DejaVu Sans, macOS CI uses Liberation Sans, and both pass the chosen font path
-through `MARKDOWNPDF_OPEN_FONT_PATH`; the public repository does not commit font
-binaries.
+coverage, the bundled DejaVu faces for default-selection tests, and installed
+open fonts for an external smoke test. The external witness path is passed
+through `MARKDOWNPDF_OPEN_FONT_PATH`.
 
 See [Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFValidationTooling.md](Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFValidationTooling.md)
 and [Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFVisualLayoutValidation.md](Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFVisualLayoutValidation.md)
@@ -402,10 +415,10 @@ The catalog landing page groups every article under Topics.
 - `MarkdownPDFMac` is a macOS target hook, not a separate backend yet. It is
   compiled into the package only on a macOS host.
 - iOS support is not implemented or tested.
-- The default portable text profile emits printable ASCII. Unsupported Unicode
-  scalars, including Latin-1 letters, Windows-1252 punctuation, emoji, complex
-  scripts, combining marks, and bidirectional text, render as `?` unless the
-  caller enables an embedded TrueType font profile that covers those scalars.
+- The default portable text profile keeps WinAnsi content on base fonts. A
+  parsed scalar outside WinAnsi selects subsetted bundled DejaVu roles. If
+  DejaVu lacks a glyph, its visible missing-glyph signal is used and
+  `/ActualText` preserves the authored run for extraction.
 - Issue #95 completed the
   hard fixture corpus pass with duplicate headings, generated ToC pressure,
   internal and external links, nested quotes, lists, wide tables, reused local
@@ -450,8 +463,7 @@ The catalog landing page groups every article under Topics.
   PDF page sizes through `PDFOptions.PageSize`: the A-series A0 through A6 plus
   `letter`, `legal`, and `tabloid`.
 - Apple system font names remain available through
-  `PDFOptions.FontSet.appleSystem`, but the public repo does not embed font
-  files.
+  `PDFOptions.FontSet.appleSystem`. They are names only and are never embedded.
 - Research source snapshots, when present, are evidence only. They are not
   package dependencies. See
   [Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/SourceSnapshotPolicy.md](Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/SourceSnapshotPolicy.md).
@@ -463,9 +475,11 @@ The catalog landing page groups every article under Topics.
 - No runtime shell-out to another renderer or validator during rendering.
 - No PDFKit, CoreGraphics, WebKit, browser renderers, LaTeX, JavaScript, Python,
   shell renderers, or C Markdown/PDF libraries in implementation.
-- No embedded font files in the public repo.
-- Standard PDF base fonts by default, with Apple system font names available
-  through `PDFOptions.FontSet.appleSystem`.
+- Only the approved DejaVu faces and their exact upstream license are bundled.
+- Standard PDF base fonts for WinAnsi-only documents, with content-driven
+  subsetted DejaVu for text outside WinAnsi.
+- Apple system font names remain available through
+  `PDFOptions.FontSet.appleSystem` and are never embedded.
 - Linux generation support through Foundation and byte-level PDF serialization.
 - Small, testable public API.
 
@@ -611,10 +625,10 @@ flowchart TD
 
 ## Help Wanted: International Text
 
-MarkdownPDF renders Western European text out of the box, and any script a
-supplied embedded font covers (Central European Latin, Cyrillic, Greek, CJK)
-renders today. Reaching correct, default international coverage is a focused body
-of work, and external contributions are very welcome. Each item below is a
+MarkdownPDF renders Western European text with base fonts and automatically
+selects bundled DejaVu for content outside WinAnsi. Any script a custom embedded
+font covers also renders today. Reaching complete international coverage is a
+focused body of work, and external contributions are very welcome. Each item below is a
 self-contained, documented issue under epic
 #210; the design write-up
 is in `Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/InternationalTextRendering.md`.
@@ -623,13 +637,16 @@ What is shipped:
 
 - **ASCII and WinAnsi (Western European)** in the default base-14 profile, with no
   embedded font: accented Latin, curly quotes, dashes, and common symbols.
-- **Embedded fonts** render anything they cover, including Central European Latin
-  (Croatian, Serbian, Czech, Polish, Hungarian), Cyrillic, Greek, and CJK.
+- **Bundled DejaVu** is selected automatically outside WinAnsi and covers Central
+  European Latin, Cyrillic, Greek, box drawing, arrows, stars, suits, checks, and
+  super- and subscripts.
+- **Custom embedded fonts** render any additional scripts they cover, including
+  CJK.
 
 What is not there yet (help wanted):
 
-- #212 **Coverage-driven
-  font fallback** (the keystone): route each grapheme to a covering font
+- #212 **Per-run coverage-driven
+  font fallback**: route each grapheme to a covering font
   (including the base-14 `Symbol`/`ZapfDingbats` faces), fall back recoverably,
   never with a silent `?`. Includes variable-font instancing and TrueType
   Collection (`.ttc`) face selection.

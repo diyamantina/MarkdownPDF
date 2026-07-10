@@ -27,7 +27,11 @@ enum CFFSubsetter {
     /// The subset `CFF ` program containing `usedGlyphIDs` (glyph 0, `.notdef`, is always
     /// included). Glyph ids are compacted, so the caller must map its original glyph ids to
     /// the subset's new ids; ``keptGlyphIDs`` returns that ordered mapping.
-    static func subset(program: CFFFontProgram, usedGlyphIDs: Set<Int>) throws -> [UInt8] {
+    static func subset(
+        program: CFFFontProgram,
+        usedGlyphIDs: Set<Int>,
+        postScriptName: String? = nil,
+    ) throws -> [UInt8] {
         guard program.isCIDKeyed else {
             throw SubsetError.notCIDKeyed
         }
@@ -55,7 +59,13 @@ enum CFFSubsetter {
             fds.append(fd)
         }
 
-        return assemble(program: program, charStrings: charStrings, cids: cids, fds: fds)
+        return assemble(
+            program: program,
+            charStrings: charStrings,
+            cids: cids,
+            fds: fds,
+            postScriptName: postScriptName,
+        )
     }
 
     /// The original glyph ids the subset keeps, in the subset's new-id order: glyph 0 first,
@@ -72,6 +82,7 @@ enum CFFSubsetter {
         charStrings: [[UInt8]],
         cids: [Int],
         fds: [Int],
+        postScriptName: String?,
     ) -> [UInt8] {
         // Re-emit the ROS strings: a standard-string SID (< 391) is referenced directly; a
         // custom SID's string is added to the subset's String INDEX and given a new SID.
@@ -110,7 +121,7 @@ enum CFFSubsetter {
 
         // Fixed-size prefix pieces (Top DICT uses 5-byte offsets, so its size is invariant).
         let header: [UInt8] = [1, 0, 4, 4]
-        let nameIndexBytes = writeIndex([program.fontName])
+        let nameIndexBytes = writeIndex([postScriptName.map { Array($0.utf8) } ?? program.fontName])
         let stringIndexBytes = writeIndex(newStrings)
         let globalSubrBytes = writeIndex([])
 

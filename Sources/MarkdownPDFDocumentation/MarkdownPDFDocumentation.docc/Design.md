@@ -19,12 +19,14 @@ CommonMark plus GFM tables and images.
 - Keep source Pure Swift.
 - Render PDFs without PDFKit, CoreGraphics, WebKit, browser automation, LaTeX,
   or C libraries.
-- Use standard PDF base fonts by default without embedding font files.
+- Keep WinAnsi-only documents on standard PDF base fonts without embedding a
+  font program.
 - Support Markdown block and inline syntax, including tables and images.
 
 ## Non-Goals
 
-- No font redistribution.
+- No font redistribution beyond the licensed DejaVu faces bundled by the
+  package.
 - No browser-quality CSS layout.
 - No runtime shell-out to another conversion tool.
 
@@ -73,15 +75,18 @@ The default font set references standard PDF base names:
 - `Helvetica-Oblique`
 - `Courier`
 
-The repo does not embed or redistribute font files. Standard PDF base fonts are
-portable across PDF viewers, which keeps the early renderer predictable while
-supporting proportional text layout.
+WinAnsi-only documents use standard PDF base fonts. They remain compact and
+portable across PDF viewers without an embedded font program. If parsed content
+contains any scalar outside WinAnsi and the caller did not select custom fonts,
+the renderer binds the bundled DejaVu Sans regular, bold, and oblique faces plus
+DejaVu Sans Mono for the whole document. This document-level switch keeps font
+measurement, wrapping, drawing, and extraction on one coherent path. Only glyphs
+the document uses are included in each emitted subset.
 
-The default portable text profile is printable ASCII. Unsupported Unicode
-scalars are replaced with `?` before text is measured and serialized, so rendered
-text, extracted text, and geometry witnesses observe the same replacement glyphs.
-Complex scripts, bidirectional text, shaping, Type0 fonts, and `/ToUnicode` maps
-belong to a later embedded-font profile.
+Callers can force the same four roles with `PDFOptions(embeddedFonts: .dejaVu)`.
+If package resources are unavailable, `.dejaVu` degrades to `.disabled` and the
+base-font path remains usable. Fonts supplied through `PDFOptions.EmbeddedFonts`
+continue to override automatic selection.
 
 Apple system font names remain available through
 `PDFOptions.FontSet.appleSystem`:

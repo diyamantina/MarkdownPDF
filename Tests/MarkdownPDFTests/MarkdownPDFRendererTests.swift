@@ -591,6 +591,8 @@ struct MarkdownPDFRendererTests {
         // document, not an aborted stub.
         let inspector = try PDFInspector(data)
         #expect(inspector.text.contains("/ToUnicode"))
+        let extracted = try PDFValidation.pdftotext(data: data, name: "notdef-actual-text").output
+        #expect(extracted.contains("AB\(missing)CD"))
     }
 
     @Test("Several distinct missing scalars in one run do not collide at notdef's code 0")
@@ -611,6 +613,8 @@ struct MarkdownPDFRendererTests {
         // The uppercase letters the font does draw still recover through ToUnicode.
         let inspector = try PDFInspector(data)
         #expect(inspector.text.contains("/ToUnicode"))
+        let extracted = try PDFValidation.pdftotext(data: data, name: "multiple-notdef-actual-text").output
+        #expect(extracted.contains("AB😀CD emoji then 中 cjk tail"))
     }
 
     @Test("A font resource that draws only notdef renders without trapping on an empty ToUnicode")
@@ -630,6 +634,8 @@ struct MarkdownPDFRendererTests {
         // The all-notdef font carries no `/ToUnicode`, which is legal in a plain PDF.
         let inspector = try PDFInspector(data)
         #expect(!inspector.text.contains("/ToUnicode"))
+        let extracted = try PDFValidation.pdftotext(data: data, name: "all-notdef-actual-text").output
+        #expect(extracted.contains("xyz"))
     }
 
     @Test("A conformance profile refuses a missing glyph rather than drawing notdef", arguments: [

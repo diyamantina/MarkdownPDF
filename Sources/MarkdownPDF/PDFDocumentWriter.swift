@@ -179,6 +179,7 @@ struct PDFDocumentWriter {
     private struct Builder {
         var streamCompression: PDFOptions.StreamCompression
         private var registry = PDFObjectRegistry()
+        private var nextSubsetTagValue: UInt32 = 0
 
         init(streamCompression: PDFOptions.StreamCompression) {
             self.streamCompression = streamCompression
@@ -214,10 +215,10 @@ struct PDFDocumentWriter {
             let resource = usage.resource
             let widths = try cidFontWidths(for: usage)
             // Dispatch on outline type. An OpenType/CFF font (`metadata.cff != nil`)
-            // takes the FontFile3 / CIDFontType0 path and embeds the whole `CFF `
-            // program; a TrueType (`glyf`) font takes the FontFile2 / CIDFontType2
-            // subsetting path, byte-for-byte unchanged.
-            let descendantRef = if resource.metadata.cff != nil {
+            // takes the FontFile3 / CIDFontType0 path and subsets a CID-keyed
+            // program when supported. A TrueType (`glyf`) font takes the FontFile2 /
+            // CIDFontType2 subsetting path.
+            let descendant = if resource.metadata.cff != nil {
                 try addCFFDescendantFont(usage: usage, resource: resource, widths: widths)
             } else {
                 try addGlyfDescendantFont(usage: usage, resource: resource, widths: widths)
@@ -237,8 +238,8 @@ struct PDFDocumentWriter {
             let fontRef = addDictionary(
                 PDFType0FontObject(
                     resourceName: resource.resourceName,
-                    baseName: resource.baseName,
-                    descendantFont: descendantRef,
+                    baseName: descendant.baseName,
+                    descendantFont: descendant.reference,
                     toUnicodeMap: toUnicodeRef,
                 ).pdfDictionary,
             )
@@ -263,26 +264,35 @@ struct PDFDocumentWriter {
             usage: PDFEmbeddedFontUsage,
             resource: PDFEmbeddedFontResource,
             widths: PDFCIDFontWidths,
-        ) throws -> PDFSyntax.Reference {
+        ) throws -> EmbeddedDescendantFont {
+            let subsetBaseName = nextSubsetBaseName(resource.baseName)
             let subset = try TrueTypeFontSubsetter(
                 data: resource.fontProgram,
                 metadata: resource.metadata,
-            ).subset(glyphs: usage.glyphs)
+            ).subset(
+                glyphs: usage.glyphs,
+                postScriptName: subsetBaseName,
+            )
             let fontFileRef = addData(PDFFontFile2Stream(
                 fontProgram: subset.fontProgram,
                 streamCompression: streamCompression,
             ).pdfStream.serialized)
             let descriptorRef = addDictionary(
-                embeddedFontDescriptor(resource, fontFile: .trueType(fontFileRef)).pdfDictionary,
+                embeddedFontDescriptor(
+                    resource,
+                    fontName: subsetBaseName,
+                    fontFile: .trueType(fontFileRef),
+                ).pdfDictionary,
             )
             let cidToGIDMap = addCIDToGIDMap(subset.cidToGIDMap)
-            return addDictionary(
-                PDFCIDFontType2Object(
-                    baseName: resource.baseName,
+            return EmbeddedDescendantFont(
+                reference: addDictionary(PDFCIDFontType2Object(
+                    baseName: subsetBaseName,
                     fontDescriptor: descriptorRef,
                     widths: widths,
                     cidToGIDMap: cidToGIDMap,
-                ).pdfDictionary,
+                ).pdfDictionary),
+                baseName: subsetBaseName,
             )
         }
 
@@ -296,7 +306,7 @@ struct PDFDocumentWriter {
             usage: PDFEmbeddedFontUsage,
             resource: PDFEmbeddedFontResource,
             widths: PDFCIDFontWidths,
-        ) throws -> PDFSyntax.Reference {
+        ) throws -> EmbeddedDescendantFont {
             guard let cff = resource.metadata.cff,
                   let record = resource.metadata.table(named: "CFF ")
             else {
@@ -318,19 +328,30 @@ struct PDFDocumentWriter {
             // mismatch that fails PDF/A and PDF/UA, so it is never done.
             let isCollection = program.starts(with: [0x74, 0x74, 0x63, 0x66]) // 'ttcf'
             let fontFile: PDFFontFile3Stream
+            let emittedBaseName: String
             if cff.isCIDKeyed {
                 // Subset the CID-keyed `CFF ` to the glyphs the document uses; the subset
                 // keeps each glyph's CID (its charset is rebuilt for the compacted ids), so
                 // the PDF's CID addressing is unchanged. A font the subsetter cannot rewrite
                 // falls back to the whole program: larger, but always correct.
                 let wholeCFF = program.subdata(in: (program.startIndex + start) ..< (program.startIndex + end))
+                let subsetBaseName = nextSubsetBaseName(resource.baseName)
+                let subsetCFF = Self.subsetCFF(
+                    wholeCFF,
+                    usage: usage,
+                    postScriptName: subsetBaseName,
+                )
                 fontFile = PDFFontFile3Stream(
-                    fontProgram: Self.subsetCFF(wholeCFF, usage: usage) ?? wholeCFF,
+                    fontProgram: subsetCFF ?? wholeCFF,
                     subtype: .cidFontType0C,
                     streamCompression: streamCompression,
                 )
+                emittedBaseName = subsetCFF == nil
+                    ? resource.baseName
+                    : subsetBaseName
             } else if !isCollection {
                 fontFile = PDFFontFile3Stream(fontProgram: program, subtype: .openType, streamCompression: streamCompression)
+                emittedBaseName = resource.baseName
             } else {
                 fontFile = try PDFFontFile3Stream(
                     fontProgram: SingleFaceSFNTAssembler.assemble(
@@ -341,29 +362,58 @@ struct PDFDocumentWriter {
                     subtype: .openType,
                     streamCompression: streamCompression,
                 )
+                emittedBaseName = resource.baseName
             }
             let fontFileRef = addData(fontFile.pdfStream.serialized)
             let descriptorRef = addDictionary(
-                embeddedFontDescriptor(resource, fontFile: .fontFile3(fontFileRef)).pdfDictionary,
-            )
-            return addDictionary(
-                PDFCIDFontType0Object(
-                    baseName: resource.baseName,
-                    fontDescriptor: descriptorRef,
-                    widths: widths,
+                embeddedFontDescriptor(
+                    resource,
+                    fontName: emittedBaseName,
+                    fontFile: .fontFile3(fontFileRef),
                 ).pdfDictionary,
             )
+            return EmbeddedDescendantFont(
+                reference: addDictionary(PDFCIDFontType0Object(
+                    baseName: emittedBaseName,
+                    fontDescriptor: descriptorRef,
+                    widths: widths,
+                ).pdfDictionary),
+                baseName: emittedBaseName,
+            )
+        }
+
+        /// PDF 1.7 section 9.6.4 requires every subset font name to begin with
+        /// six uppercase letters and a plus sign, with a distinct tag for each
+        /// subset in one file. Embedded usages arrive in stable resource order,
+        /// so this document-local sequence is deterministic.
+        private mutating func nextSubsetBaseName(_ baseName: String) -> String {
+            var value = nextSubsetTagValue
+            nextSubsetTagValue &+= 1
+            var tagBytes = [UInt8](repeating: 0x41, count: 6)
+            for index in tagBytes.indices.reversed() {
+                tagBytes[index] = 0x41 + UInt8(value % 26)
+                value /= 26
+            }
+            return "\(String(decoding: tagBytes, as: UTF8.self))+\(baseName)"
         }
 
         /// The CID-keyed `CFF ` program subset to the glyphs `usage` draws, or nil when the
         /// font cannot be parsed or subset (the caller then embeds the whole program). The
         /// subset preserves each glyph's CID, so no PDF-side glyph remapping is needed.
-        private static func subsetCFF(_ wholeCFF: Data, usage: PDFEmbeddedFontUsage) -> Data? {
+        private static func subsetCFF(
+            _ wholeCFF: Data,
+            usage: PDFEmbeddedFontUsage,
+            postScriptName: String,
+        ) -> Data? {
             guard let program = try? CFFFontProgram(bytes: [UInt8](wholeCFF)), program.isCIDKeyed else {
                 return nil
             }
             let usedGlyphIDs = Set(usage.glyphs.map { Int($0.glyphID) })
-            guard let subset = try? CFFSubsetter.subset(program: program, usedGlyphIDs: usedGlyphIDs) else {
+            guard let subset = try? CFFSubsetter.subset(
+                program: program,
+                usedGlyphIDs: usedGlyphIDs,
+                postScriptName: postScriptName,
+            ) else {
                 return nil
             }
             return Data(subset)
@@ -512,6 +562,7 @@ struct PDFDocumentWriter {
 
         private func embeddedFontDescriptor(
             _ resource: PDFEmbeddedFontResource,
+            fontName: String,
             fontFile: PDFFontDescriptor.EmbeddedFontFile,
         ) -> PDFFontDescriptor {
             let metadata = resource.metadata
@@ -527,7 +578,7 @@ struct PDFDocumentWriter {
                 Int((Double(value) * 1000.0 / unitsPerEm).rounded())
             }
             return PDFFontDescriptor(
-                fontName: resource.baseName,
+                fontName: fontName,
                 flags: 32,
                 fontBoundingBox: [
                     scaled(boundingBox.xMin),
@@ -542,6 +593,11 @@ struct PDFDocumentWriter {
                 stemV: 80,
                 embeddedFontFile: fontFile,
             )
+        }
+
+        private struct EmbeddedDescendantFont {
+            var reference: PDFSyntax.Reference
+            var baseName: String
         }
 
         private func cidFontWidths(for usage: PDFEmbeddedFontUsage) throws -> PDFCIDFontWidths {

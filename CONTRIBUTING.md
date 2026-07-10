@@ -63,7 +63,8 @@ MarkdownPDF follows the conventions documented in
 - Direct PDF byte generation. Rendering does not shell out to another renderer.
 - No PDFKit, CoreGraphics, WebKit, browser renderers, LaTeX, JavaScript, Python,
   shell renderers, or C Markdown/PDF libraries in implementation.
-- No font files committed to this repo. Standard PDF base fonts are the default.
+- Only the approved DejaVu faces and their exact upstream license are bundled.
+  WinAnsi-only documents retain standard PDF base fonts by default.
 - The core builds on macOS and Linux.
 - Dependencies are injected through initializers. Platform-specific behavior
   sits behind a protocol seam.

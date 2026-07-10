@@ -15,15 +15,35 @@ public struct MarkdownPDFRenderer: Sendable {
         let document = MarkdownParser(
             options: MarkdownParser.Options(mathTypesetting: options.mathTypesetting.isEnabled),
         ).parse(markdown)
-        if options.tableOfContents.isEnabled {
-            return try renderWithTableOfContents(document, assetsBaseURL: assetsBaseURL)
+        let resolvedOptions = resolvedOptions(for: document)
+        if resolvedOptions.tableOfContents.isEnabled {
+            return try renderWithTableOfContents(
+                document,
+                options: resolvedOptions,
+                assetsBaseURL: assetsBaseURL,
+            )
         }
 
-        return try renderDocument(document, assetsBaseURL: assetsBaseURL).pdfData()
+        return try renderDocument(
+            document,
+            options: resolvedOptions,
+            assetsBaseURL: assetsBaseURL,
+        ).pdfData()
+    }
+
+    private func resolvedOptions(for document: MarkdownDocument) -> PDFOptions {
+        guard options.embeddedFonts == .disabled, document.containsNonWinAnsiText else {
+            return options
+        }
+
+        var resolvedOptions = options
+        resolvedOptions.embeddedFonts = .dejaVu
+        return resolvedOptions
     }
 
     private func renderDocument(
         _ document: MarkdownDocument,
+        options: PDFOptions,
         assetsBaseURL: URL?,
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
     ) throws -> Layout {
@@ -34,18 +54,20 @@ public struct MarkdownPDFRenderer: Sendable {
 
     private func renderWithTableOfContents(
         _ document: MarkdownDocument,
+        options: PDFOptions,
         assetsBaseURL: URL?,
     ) throws -> Data {
         let maximumPasses = 6
-        var entries = try renderDocument(document, assetsBaseURL: assetsBaseURL)
+        var entries = try renderDocument(document, options: options, assetsBaseURL: assetsBaseURL)
             .tableOfContentsEntries(maximumDepth: options.tableOfContents.maximumDepth)
         guard !entries.isEmpty else {
-            return try renderDocument(document, assetsBaseURL: assetsBaseURL).pdfData()
+            return try renderDocument(document, options: options, assetsBaseURL: assetsBaseURL).pdfData()
         }
 
         for _ in 0 ..< maximumPasses {
             let layout = try renderDocument(
                 document,
+                options: options,
                 assetsBaseURL: assetsBaseURL,
                 tableOfContentsEntries: entries,
             )
@@ -57,6 +79,63 @@ public struct MarkdownPDFRenderer: Sendable {
         }
 
         throw MarkdownPDFError.tableOfContentsDidNotConverge(maxPasses: maximumPasses)
+    }
+}
+
+private extension MarkdownDocument {
+    var containsNonWinAnsiText: Bool {
+        blocks.contains(where: \.containsNonWinAnsiText)
+    }
+}
+
+private extension MarkdownBlock {
+    var containsNonWinAnsiText: Bool {
+        switch self {
+        case let .heading(_, content), let .paragraph(content):
+            content.contains(where: \.containsNonWinAnsiText)
+        case let .blockQuote(blocks):
+            blocks.contains(where: \.containsNonWinAnsiText)
+        case let .unorderedList(items), let .orderedList(_, items):
+            items.contains { $0.blocks.contains(where: \.containsNonWinAnsiText) }
+        case let .codeBlock(_, code), let .html(code):
+            code.containsNonWinAnsiScalar
+        case let .displayMath(math):
+            math.source.containsNonWinAnsiScalar
+        case let .table(table):
+            (table.headers + table.rows.flatMap(\.self))
+                .contains { $0.contains(where: \.containsNonWinAnsiText) }
+        case let .footnoteDefinition(_, blocks):
+            blocks.contains(where: \.containsNonWinAnsiText)
+        case .thematicBreak, .pageBreak:
+            false
+        }
+    }
+}
+
+private extension MarkdownInline {
+    var containsNonWinAnsiText: Bool {
+        switch self {
+        case let .text(text), let .code(text):
+            text.containsNonWinAnsiScalar
+        case let .inlineMath(math):
+            math.source.containsNonWinAnsiScalar
+        case let .emphasis(children), let .strong(children), let .strikethrough(children):
+            children.contains(where: \.containsNonWinAnsiText)
+        case let .link(children, _, _):
+            children.contains(where: \.containsNonWinAnsiText)
+        case let .image(alt, _, _):
+            alt.containsNonWinAnsiScalar
+        case .softBreak, .lineBreak, .footnoteReference:
+            false
+        }
+    }
+}
+
+private extension String {
+    var containsNonWinAnsiScalar: Bool {
+        PDFTextEncoding.strippingInvisibleFormatControls(self)
+            .unicodeScalars
+            .contains { !PDFTextEncoding.isRepresentable($0) }
     }
 }
 

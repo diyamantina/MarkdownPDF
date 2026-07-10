@@ -665,8 +665,8 @@ struct PDFVisualLayoutValidationTests {
         let inspector = PDFInspector(data)
 
         #expect(inspector.pageCount == 1)
-        #expect(!inspector.text.contains("/ToUnicode"))
-        #expect(!inspector.text.contains("/FontFile"))
+        #expect(inspector.text.contains("/ToUnicode"))
+        #expect(inspector.text.contains("/FontFile2"))
         try PDFValidation.writeArtifact(data, name: "text-encoding-profile.pdf")
 
         let qpdf = try PDFValidation.qpdfCheck(url: url)
@@ -680,9 +680,10 @@ struct PDFVisualLayoutValidationTests {
         // through the base-14 WinAnsi encoding with no embedded font.
         #expect(textResult.output.contains("Latin: Café niño NBSP done."))
         #expect(textResult.output.contains("WinAnsi: \u{201C}quoted\u{201D} \u{20AC}."))
-        // The "Unicode" line holds scalars beyond WinAnsi; they still fall back
-        // until an embedded font is supplied (epic #210).
-        #expect(textResult.output.contains("Unicode: ? ? ?."))
+        // Non-WinAnsi content selects the bundled font. Scalars it covers render
+        // directly; an unsupported emoji draws .notdef but remains extractable
+        // through the run's ActualText override.
+        #expect(textResult.output.contains("Unicode: č π 🚀."))
 
         let tsvResult = try PDFValidation.pdftotextTSV(url: url)
         try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")

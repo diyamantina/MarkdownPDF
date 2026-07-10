@@ -124,15 +124,14 @@ struct BoxDrawingTransliterationTests {
         #expect(PDFTextEncoding.encodedByte(for: "\u{2153}") == UInt8(ascii: "?")) // ⅓
     }
 
-    @Test("A code-block tree renders as an ASCII diagram, not question marks")
+    @Test("A code-block tree selects bundled glyphs, not question marks")
     func rendersTree() throws {
         let tree = "```\nCV\n\u{251C}\u{2500}\u{2500} ContactInfo\n\u{251C}\u{2500}\u{2500} WorkExperience\n\u{2502}   \u{2514}\u{2500}\u{2500} Company\n\u{2514}\u{2500}\u{2500} Period\n```"
         let pdf = try MarkdownPDFRenderer(options: PDFOptions()).render(markdown: tree)
         let url = try PDFValidation.temporaryPDF(name: "box-drawing-tree", data: pdf)
         let text = try PDFValidation.pdftotext(url: url).output
-        // The diagram is drawn with ASCII line art and carries no stray "?".
-        #expect(text.contains("+-- ContactInfo"))
-        #expect(text.contains("|"))
+        #expect(text.contains("├── ContactInfo"))
+        #expect(text.contains("│"))
         #expect(!text.contains("?"), "box-drawing must not render as '?':\n\(text)")
     }
 }

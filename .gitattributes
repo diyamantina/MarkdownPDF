@@ -6,3 +6,7 @@ researchcode/** linguist-generated
 
 # Helper scripts are not the project language.
 scripts/*.py linguist-vendored
+
+# Bundled font programs are resources, not project source.
+Sources/MarkdownPDF/Fonts/** linguist-vendored
+Sources/MarkdownPDF/Fonts/LICENSE-DejaVu.txt -whitespace

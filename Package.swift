@@ -53,6 +53,7 @@ let package = Package(
             dependencies: [
                 .product(name: "MathTypeset", package: "MathTypeset"),
             ],
+            resources: [.copy("Fonts")],
         ),
         .target(
             name: "MarkdownPDFDocumentation",
