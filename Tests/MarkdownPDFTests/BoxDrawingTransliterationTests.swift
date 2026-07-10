@@ -2,10 +2,11 @@ import Foundation
 @testable import MarkdownPDF
 import Testing
 
-/// Box-drawing and block-element line art (tree diagrams, ASCII tables) has no glyph in
-/// the base-14 WinAnsi fonts, so it used to render as a wall of "?". It now folds to an
-/// ASCII stand-in ("-", "|", "+", "/", "\", "X", "#") that keeps the diagram readable.
-@Suite("Box drawing transliteration")
+/// Line art and technical notation with no base-14 WinAnsi glyph (box drawing, block
+/// elements, geometric shapes, arrows, super/subscripts, and dash/prime/space variants)
+/// used to render as a wall of "?". Each now folds to an honest single-character ASCII
+/// stand-in; symbols with no faithful ASCII form stay "?" rather than fold to nonsense.
+@Suite("ASCII fallback transliteration")
 struct BoxDrawingTransliterationTests {
     @Test("Folds box-drawing scalars to their ASCII stand-in, not '?'")
     func foldsToAscii() {
@@ -38,6 +39,33 @@ struct BoxDrawingTransliterationTests {
         #expect(PDFTextEncoding.encodedByte(for: "\u{2603}") == UInt8(ascii: "?")) // snowman
         // The measured scalar matches the drawn stand-in, so advances stay in step.
         #expect(PDFTextEncoding.portableScalars(for: "\u{251C}\u{2500}") == ["+", "-"])
+    }
+
+    @Test("Folds arrows, shapes, super/subscripts, and dash/prime/space variants")
+    func foldsOtherAsciiArt() throws {
+        let cases: [(UnicodeScalar, Character)] = [
+            // arrows
+            ("\u{2192}", ">"), ("\u{2190}", "<"), ("\u{2191}", "^"), ("\u{2193}", "v"),
+            ("\u{21D2}", ">"), ("\u{2194}", "-"), ("\u{2195}", "|"),
+            // geometric shapes
+            ("\u{25B2}", "^"), ("\u{25B6}", ">"), ("\u{25BC}", "v"), ("\u{25C0}", "<"),
+            ("\u{25CF}", "#"), ("\u{25CB}", "o"), ("\u{25C6}", "#"), ("\u{25A0}", "#"), ("\u{25A1}", "o"),
+            // super/subscripts fold to the base character
+            ("\u{2070}", "0"), ("\u{2074}", "4"), ("\u{2079}", "9"), ("\u{2080}", "0"), ("\u{2089}", "9"),
+            ("\u{207F}", "n"), ("\u{2071}", "i"), ("\u{207A}", "+"), ("\u{208B}", "-"),
+            // prime, minus, hyphen, and space variants
+            ("\u{2212}", "-"), ("\u{2032}", "'"), ("\u{2033}", "\""), ("\u{2011}", "-"), ("\u{2009}", " "),
+        ]
+        for (scalar, expected) in cases {
+            #expect(
+                PDFTextEncoding.encodedByte(for: scalar) == expected.asciiValue,
+                "U+\(String(scalar.value, radix: 16)) should fold to '\(expected)'",
+            )
+        }
+        // A symbol with no faithful ASCII form is left to "?", not folded to nonsense.
+        for symbol in ["\u{2665}", "\u{2600}", "\u{2713}", "\u{2660}"] { // heart, sun, check, spade
+            #expect(try PDFTextEncoding.encodedByte(for: #require(symbol.unicodeScalars.first)) == UInt8(ascii: "?"))
+        }
     }
 
     @Test("A code-block tree renders as an ASCII diagram, not question marks")

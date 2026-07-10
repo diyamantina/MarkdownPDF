@@ -113,36 +113,105 @@ enum PDFTextEncoding {
     }
 
     /// An ASCII stand-in the base-14 WinAnsi fonts can draw for a scalar they would
-    /// otherwise paint as "?", so line art keeps its shape instead of dissolving into
-    /// question marks. Covers the Box Drawing (U+2500..U+257F) and Block Elements
-    /// (U+2580..U+259F) blocks, the source of the tree and table diagrams that appear
-    /// in code blocks: horizontal runs fold to "-", vertical runs to "|", corners,
-    /// tees, and crosses to "+", the diagonals to "/", "\", "X", and shaded blocks to
-    /// "#". This changes the drawn (and, on the base-14 path, the extracted) glyph, the
-    /// same trade the "?" fallback already made, but leaves a readable diagram instead
-    /// of a wall of question marks; a font that covers the real characters (an embedded
-    /// monospace face) still draws them and is unaffected. Returns nil for everything
-    /// else.
+    /// otherwise paint as "?", so line art, diagrams, and technical notation keep their
+    /// shape instead of dissolving into question marks. It covers only characters with an
+    /// honest single-character ASCII match: the Box Drawing and Block Elements blocks
+    /// (tree and table art), Geometric Shapes (diagram markers), the cardinal and double
+    /// arrows, super- and sub-scripts (folded to their base character), and the dash,
+    /// minus, prime, and Unicode-space variants. Characters with no faithful ASCII form
+    /// (☀, ♠, ✓, most symbols and dingbats) are left to the "?" fallback rather than folded
+    /// to something misleading. This changes the drawn (and, on the base-14 path, the
+    /// extracted) glyph, the same trade the "?" fallback already made, but leaves a readable
+    /// result; a font that covers the real characters (an embedded face) still draws them
+    /// and is unaffected.
     static func asciiApproximation(for scalar: UnicodeScalar) -> UnicodeScalar? {
-        switch scalar.value {
+        let value = scalar.value
+        // Superscript and subscript digits fold to the base digit.
+        if value == 0x2070 || (0x2074 ... 0x2079).contains(value) { // superscript 0, 4-9
+            return UnicodeScalar(0x30 + (value == 0x2070 ? 0 : value - 0x2074 + 4))
+        }
+        if (0x2080 ... 0x2089).contains(value) { // subscript 0-9
+            return UnicodeScalar(0x30 + value - 0x2080)
+        }
+        switch value {
+        // Box drawing: horizontal, vertical, diagonals, then corners/tees/crosses.
         case 0x2500, 0x2501, 0x2504, 0x2505, 0x2508, 0x2509,
              0x254C, 0x254D, 0x2550, 0x2574, 0x2576, 0x2578, 0x257A, 0x257C, 0x257E:
-            "-"
+            return "-"
         case 0x2502, 0x2503, 0x2506, 0x2507, 0x250A, 0x250B,
              0x254E, 0x254F, 0x2551, 0x2575, 0x2577, 0x2579, 0x257B, 0x257D, 0x257F:
-            "|"
+            return "|"
         case 0x2571:
-            "/"
+            return "/"
         case 0x2572:
-            "\\"
+            return "\\"
         case 0x2573:
-            "X"
+            return "X"
         case 0x2500 ... 0x257F: // remaining box drawing: corners, tees, crosses
-            "+"
+            return "+"
         case 0x2580 ... 0x259F: // block elements and shades
-            "#"
+            return "#"
+        // Geometric shapes: triangles point their way, filled shapes to "#", outlines to "o".
+        case 0x25B2 ... 0x25B5: // up triangles
+            return "^"
+        case 0x25B6 ... 0x25BB: // right triangles
+            return ">"
+        case 0x25BC ... 0x25BF: // down triangles
+            return "v"
+        case 0x25C0 ... 0x25C5: // left triangles
+            return "<"
+        case 0x25A1, 0x25A2, 0x25AB, 0x25AD, 0x25AF, 0x25B1, 0x25C7, 0x25CA, 0x25CB,
+             0x25CE, 0x25E6, 0x25EF, 0x25FB, 0x25FD: // outline shapes / circles
+            return "o"
+        case 0x25A0 ... 0x25FF: // remaining filled shapes
+            return "#"
+        // Cardinal and double-headed arrows.
+        case 0x2190, 0x21D0, 0x21E0, 0x21A4, 0x21BC, 0x21BD, 0x2B05:
+            return "<"
+        case 0x2192, 0x21D2, 0x21E2, 0x21A6, 0x21C0, 0x21C1, 0x2B95, 0x2B0E:
+            return ">"
+        case 0x2191, 0x21D1, 0x21E1, 0x21A5, 0x2B06:
+            return "^"
+        case 0x2193, 0x21D3, 0x21E3, 0x21A7, 0x2B07:
+            return "v"
+        case 0x2194, 0x21D4:
+            return "-"
+        case 0x2195, 0x21D5, 0x21A8:
+            return "|"
+        // Super- and sub-script signs and the common letters.
+        case 0x207A, 0x208A:
+            return "+"
+        case 0x207B, 0x208B, 0x2212:
+            return "-" // superscript/subscript minus, and the minus sign
+        case 0x207C, 0x208C:
+            return "="
+        case 0x207D, 0x208D:
+            return "("
+        case 0x207E, 0x208E:
+            return ")"
+        case 0x2071:
+            return "i"
+        case 0x207F, 0x2099:
+            return "n"
+        case 0x2090:
+            return "a"
+        case 0x2091:
+            return "e"
+        case 0x2092:
+            return "o"
+        case 0x2093:
+            return "x"
+        // Prime marks and the dash / hyphen / space variants.
+        case 0x2032, 0x2035:
+            return "'"
+        case 0x2033, 0x2034, 0x2036, 0x2037:
+            return "\""
+        case 0x2010, 0x2011, 0x2012, 0x2015, 0x2043:
+            return "-"
+        case 0x2000 ... 0x200A, 0x202F, 0x205F, 0x3000:
+            return " "
         default:
-            nil
+            return nil
         }
     }
 
