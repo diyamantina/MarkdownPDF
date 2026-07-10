@@ -33,6 +33,13 @@ struct TrueTypeByteReader {
         return bytes[offset]
     }
 
+    /// The bytes in `range`, bounds-checked. Used to copy out a CFF object (a charstring
+    /// or subroutine) verbatim for a font rewrite.
+    func bytes(in range: Range<Int>) throws -> [UInt8] {
+        try requireRange(offset: range.lowerBound, count: range.count)
+        return Array(bytes[range])
+    }
+
     func uint16(at offset: Int) throws -> UInt16 {
         try requireRange(offset: offset, count: 2)
         return UInt16(bytes[offset]) << 8 | UInt16(bytes[offset + 1])

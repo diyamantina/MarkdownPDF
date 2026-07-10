@@ -118,6 +118,24 @@ struct CFFRenderIntegrationTests {
         #expect(drawnCIDs(singleGlyphPDF) == [expectedCID], "the drawn CID must be the charset CID, not the glyph id")
     }
 
+    @Test("A CID-keyed CFF embeds only the glyphs the document uses")
+    func cidKeyedCFFSubsetsUsedGlyphs() throws {
+        guard let data = fontData(Self.cidKeyedCFFPath) else {
+            return
+        }
+        let options = PDFOptions(embeddedFonts: .allRoles(
+            PDFOptions.EmbeddedFontSource(data: data, baseName: "HiraginoSansGB", faceIndex: 0),
+        ))
+        // A handful of CJK characters. The whole Hiragino `CFF ` table is over ten
+        // megabytes; a subset of a dozen glyphs is a few kilobytes, so the rendered PDF
+        // staying far below the whole-font size is a robust witness that the subsetter
+        // ran and the writer did not fall back to embedding the whole program.
+        let pdf = try MarkdownPDFRenderer(options: options)
+            .render(markdown: "\u{6F22}\u{5B57}\u{65E5}\u{672C}\u{8A9E}\u{4E2D}\u{6587}")
+        #expect(pdf.count < 200_000, "expected a subset embed (\(pdf.count) bytes); the whole CFF is > 10 MB")
+        #expect(PDFInspector(pdf).text.contains("/CIDFontType0C"))
+    }
+
     /// The CID codes drawn by `<hex> Tj` operators, in draw order (stream compression
     /// is off by default, so the content stream is plain text). Mirrors the Arabic
     /// integration test's extractor.

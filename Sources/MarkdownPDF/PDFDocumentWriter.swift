@@ -218,7 +218,7 @@ struct PDFDocumentWriter {
             // program; a TrueType (`glyf`) font takes the FontFile2 / CIDFontType2
             // subsetting path, byte-for-byte unchanged.
             let descendantRef = if resource.metadata.cff != nil {
-                try addCFFDescendantFont(resource: resource, widths: widths)
+                try addCFFDescendantFont(usage: usage, resource: resource, widths: widths)
             } else {
                 try addGlyfDescendantFont(usage: usage, resource: resource, widths: widths)
             }
@@ -293,6 +293,7 @@ struct PDFDocumentWriter {
         /// name-keyed CFF goes out as an `OpenType` sfnt (reconstructed to a single
         /// face first if it came from a collection).
         private mutating func addCFFDescendantFont(
+            usage: PDFEmbeddedFontUsage,
             resource: PDFEmbeddedFontResource,
             widths: PDFCIDFontWidths,
         ) throws -> PDFSyntax.Reference {
@@ -316,16 +317,22 @@ struct PDFDocumentWriter {
             // as `Type1C` under a `CIDFontType0` descendant would be a composite/simple
             // mismatch that fails PDF/A and PDF/UA, so it is never done.
             let isCollection = program.starts(with: [0x74, 0x74, 0x63, 0x66]) // 'ttcf'
-            let fontFile: PDFFontFile3Stream = if cff.isCIDKeyed {
-                PDFFontFile3Stream(
-                    fontProgram: program.subdata(in: (program.startIndex + start) ..< (program.startIndex + end)),
+            let fontFile: PDFFontFile3Stream
+            if cff.isCIDKeyed {
+                // Subset the CID-keyed `CFF ` to the glyphs the document uses; the subset
+                // keeps each glyph's CID (its charset is rebuilt for the compacted ids), so
+                // the PDF's CID addressing is unchanged. A font the subsetter cannot rewrite
+                // falls back to the whole program: larger, but always correct.
+                let wholeCFF = program.subdata(in: (program.startIndex + start) ..< (program.startIndex + end))
+                fontFile = PDFFontFile3Stream(
+                    fontProgram: Self.subsetCFF(wholeCFF, usage: usage) ?? wholeCFF,
                     subtype: .cidFontType0C,
                     streamCompression: streamCompression,
                 )
             } else if !isCollection {
-                PDFFontFile3Stream(fontProgram: program, subtype: .openType, streamCompression: streamCompression)
+                fontFile = PDFFontFile3Stream(fontProgram: program, subtype: .openType, streamCompression: streamCompression)
             } else {
-                try PDFFontFile3Stream(
+                fontFile = try PDFFontFile3Stream(
                     fontProgram: SingleFaceSFNTAssembler.assemble(
                         program: program,
                         scalerType: resource.metadata.scalerType,
@@ -346,6 +353,20 @@ struct PDFDocumentWriter {
                     widths: widths,
                 ).pdfDictionary,
             )
+        }
+
+        /// The CID-keyed `CFF ` program subset to the glyphs `usage` draws, or nil when the
+        /// font cannot be parsed or subset (the caller then embeds the whole program). The
+        /// subset preserves each glyph's CID, so no PDF-side glyph remapping is needed.
+        private static func subsetCFF(_ wholeCFF: Data, usage: PDFEmbeddedFontUsage) -> Data? {
+            guard let program = try? CFFFontProgram(bytes: [UInt8](wholeCFF)), program.isCIDKeyed else {
+                return nil
+            }
+            let usedGlyphIDs = Set(usage.glyphs.map { Int($0.glyphID) })
+            guard let subset = try? CFFSubsetter.subset(program: program, usedGlyphIDs: usedGlyphIDs) else {
+                return nil
+            }
+            return Data(subset)
         }
 
         mutating func addStream(dictionary: PDFSyntax.Dictionary, data: Data) -> PDFSyntax.Reference {
