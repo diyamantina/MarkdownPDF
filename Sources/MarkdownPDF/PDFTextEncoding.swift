@@ -86,15 +86,64 @@ enum PDFTextEncoding {
     /// painted. Normalizing here keeps the measured advance in step with the drawn
     /// bytes for a decomposed diacritic that folds to one WinAnsi code point.
     static func portableScalars(for text: String) -> [UnicodeScalar] {
-        text.precomposedStringWithCanonicalMapping.unicodeScalars.map { isRepresentable($0) ? $0 : replacementScalar }
+        text.precomposedStringWithCanonicalMapping.unicodeScalars.map { scalar in
+            // Measure the glyph that is actually drawn: the scalar itself, or its ASCII
+            // stand-in, or the "?" fallback, so the advance matches the painted byte.
+            if isRepresentable(scalar) {
+                return scalar
+            }
+            return asciiApproximation(for: scalar) ?? replacementScalar
+        }
     }
 
     /// The byte written to the content stream for a scalar under
     /// `/WinAnsiEncoding`. WinAnsi-representable scalars map to their CP1252
-    /// byte; anything else falls back to "?" (the original codepoint is still
-    /// preserved in the `/ActualText` span, so the text stays recoverable).
+    /// byte; a scalar with an ASCII stand-in (box-drawing and block-element line
+    /// art) draws that stand-in; anything else falls back to "?" (the original
+    /// codepoint is preserved in the `/ActualText` span, so the text stays
+    /// recoverable whichever glyph is drawn).
     static func encodedByte(for scalar: UnicodeScalar) -> UInt8 {
-        winAnsiByte(for: scalar) ?? UInt8(replacementScalar.value)
+        if let byte = winAnsiByte(for: scalar) {
+            return byte
+        }
+        if let approximation = asciiApproximation(for: scalar), let byte = winAnsiByte(for: approximation) {
+            return byte
+        }
+        return UInt8(replacementScalar.value)
+    }
+
+    /// An ASCII stand-in the base-14 WinAnsi fonts can draw for a scalar they would
+    /// otherwise paint as "?", so line art keeps its shape instead of dissolving into
+    /// question marks. Covers the Box Drawing (U+2500..U+257F) and Block Elements
+    /// (U+2580..U+259F) blocks, the source of the tree and table diagrams that appear
+    /// in code blocks: horizontal runs fold to "-", vertical runs to "|", corners,
+    /// tees, and crosses to "+", the diagonals to "/", "\", "X", and shaded blocks to
+    /// "#". This changes the drawn (and, on the base-14 path, the extracted) glyph, the
+    /// same trade the "?" fallback already made, but leaves a readable diagram instead
+    /// of a wall of question marks; a font that covers the real characters (an embedded
+    /// monospace face) still draws them and is unaffected. Returns nil for everything
+    /// else.
+    static func asciiApproximation(for scalar: UnicodeScalar) -> UnicodeScalar? {
+        switch scalar.value {
+        case 0x2500, 0x2501, 0x2504, 0x2505, 0x2508, 0x2509,
+             0x254C, 0x254D, 0x2550, 0x2574, 0x2576, 0x2578, 0x257A, 0x257C, 0x257E:
+            "-"
+        case 0x2502, 0x2503, 0x2506, 0x2507, 0x250A, 0x250B,
+             0x254E, 0x254F, 0x2551, 0x2575, 0x2577, 0x2579, 0x257B, 0x257D, 0x257F:
+            "|"
+        case 0x2571:
+            "/"
+        case 0x2572:
+            "\\"
+        case 0x2573:
+            "X"
+        case 0x2500 ... 0x257F: // remaining box drawing: corners, tees, crosses
+            "+"
+        case 0x2580 ... 0x259F: // block elements and shades
+            "#"
+        default:
+            nil
+        }
     }
 
     /// Whether the base-14 fonts can draw `scalar` through WinAnsiEncoding.
