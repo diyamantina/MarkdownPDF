@@ -16,6 +16,9 @@ struct VerticalTextShaper {
         /// The vertical advance in `fontSize` units: how far the pen descends after this
         /// glyph.
         var advance: Double
+        /// The glyph's horizontal advance in font units, kept to centre the upright glyph
+        /// in its column and to emit the PDF `/W` entry.
+        var advanceWidth: UInt16
         /// The source scalar, kept so the renderer can build `/ToUnicode` and classify the
         /// glyph (ideograph vs punctuation) for orientation.
         var scalar: UnicodeScalar
@@ -77,16 +80,52 @@ struct VerticalTextShaper {
 
         let unitsPerEm = metadata.head.unitsPerEm
         let scale = unitsPerEm > 0 ? fontSize / Double(unitsPerEm) : 0
+        let advanceWidths = metadata.hmtx.advanceWidths
         return glyphs.map { glyph in
             let advanceUnits = verticalMetrics?.advanceHeight(glyphID: glyph.glyphID, unitsPerEm: unitsPerEm) ?? unitsPerEm
             let scalar = scalars[glyph.sourceScalarRange.lowerBound]
+            let advanceWidth = Int(glyph.glyphID) < advanceWidths.count ? advanceWidths[Int(glyph.glyphID)] : unitsPerEm
             return VerticalGlyph(
                 glyphID: glyph.glyphID,
                 cid: metadata.compositeCID(forGlyph: glyph.glyphID),
                 advance: Double(advanceUnits) * scale,
+                advanceWidth: advanceWidth,
                 scalar: scalar,
             )
         }
+    }
+
+    /// The typographic ascent in `fontSize` units: the descent from a vertical line cell's
+    /// top to the glyph baseline, so an em cell hangs from the line's top.
+    func verticalOrigin(fontSize: Double) -> Double {
+        let unitsPerEm = metadata.head.unitsPerEm
+        let scale = unitsPerEm > 0 ? fontSize / Double(unitsPerEm) : 0
+        return Double(metadata.hhea.ascender) * scale
+    }
+
+    /// A `ShapedTextMapping` for a run of already-shaped vertical glyphs (one page's worth),
+    /// so the PDF `/W` and `/ToUnicode` come out per glyph. Advances are the horizontal
+    /// ones; the renderer positions the glyphs vertically itself.
+    func mapping(for glyphs: [VerticalGlyph], fontSize: Double) throws -> ShapedTextMapping {
+        let unitsPerEm = metadata.head.unitsPerEm
+        let scale = unitsPerEm > 0 ? fontSize / Double(unitsPerEm) : 0
+        let clusters = glyphs.enumerated().map { index, glyph in
+            ShapedTextMapping.Cluster(
+                sourceScalarRange: index ..< index + 1,
+                normalizedText: String(glyph.scalar),
+                glyphs: [ShapedTextMapping.Glyph(
+                    glyphID: glyph.glyphID,
+                    cid: glyph.cid,
+                    pdfCharacterCode: glyph.cid,
+                    advanceWidth: glyph.advanceWidth,
+                    advance: Double(glyph.advanceWidth) * scale,
+                    offset: .zero,
+                    cmapScalar: UnicodeScalar(0x100000 + UInt32(glyph.glyphID)),
+                )],
+                toUnicodeScalars: [glyph.scalar],
+            )
+        }
+        return try ShapedTextMapping(sourceText: String(String.UnicodeScalarView(glyphs.map(\.scalar))), clusters: clusters)
     }
 
     private static func tableRange(named tag: String, fontData: Data, metadata: TrueTypeFontParser.Metadata) -> Range<Int>? {

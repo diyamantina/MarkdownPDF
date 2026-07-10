@@ -224,6 +224,38 @@ final class PDFPageCanvas {
         return operators
     }
 
+    /// Draws a vertical (top-to-bottom) CJK run: each glyph is placed at its own baseline
+    /// `positions[i]` with a text-line move, upright, its horizontal advance overridden by
+    /// the explicit position (the pen is not relied on, exactly as the mark-positioned
+    /// path). The `/ToUnicode` CMap keeps the run recoverable in logical (reading) order.
+    /// Placement is explicit, so no vertical writing-mode CMap or `/W2` is needed; a
+    /// viewer's vertical text-selection geometry, which would read `/W2`, is the known gap.
+    func drawVerticalText(
+        mapping: ShapedTextMapping,
+        positions: [Point],
+        fontResource: PDFEmbeddedFontResource,
+        fontSize: Double,
+        color: PDFColor = .black,
+    ) throws {
+        let glyphs = mapping.glyphs
+        guard !glyphs.isEmpty, glyphs.count == positions.count else {
+            return
+        }
+        try resourceUsage.useEmbeddedFont(fontResource, mapping: mapping)
+        setFillColor(color)
+        let font = PDFSyntax.Name(fontResource.resourceName)
+        var operators: [PDFContentStream.Operator] = [.beginText, .setFont(font, size: fontSize)]
+        var previous = Point(x: 0, y: 0)
+        for (index, glyph) in glyphs.enumerated() {
+            let position = positions[index]
+            operators.append(.moveText(x: position.x - previous.x, y: position.y - previous.y))
+            operators.append(.showCIDText([glyph.pdfCharacterCode]))
+            previous = position
+        }
+        operators.append(.endText)
+        contentStream.append(operators)
+    }
+
     func addHeadingDestination(_ destination: PDFHeadingDestination) {
         headingDestinations.append(destination)
     }

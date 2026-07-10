@@ -468,6 +468,8 @@ private struct Layout {
                 try renderMermaidBlock(code)
             } else if isChartCodeBlock(info) {
                 try renderChartFenceBlock(code)
+            } else if isVerticalCodeBlock(info) {
+                try renderVerticalBlock(code)
             } else {
                 try renderCodeBlock(code, info: info)
             }
@@ -1216,6 +1218,87 @@ private struct Layout {
 
     private func isChartCodeBlock(_ info: String?) -> Bool {
         codeBlockLanguage(info) == "chart"
+    }
+
+    private func isVerticalCodeBlock(_ info: String?) -> Bool {
+        let language = codeBlockLanguage(info)
+        return language == "vertical" || language == "tategaki"
+    }
+
+    /// Renders a fenced `vertical` block as top-to-bottom (tategaki) CJK: glyphs stack down
+    /// a line from the top of the page, lines advance right to left, and the run flows onto
+    /// further pages when it fills one. The `vert` feature gives brackets and the
+    /// ideographic comma and full stop their vertical forms; ideographs stand upright.
+    /// Without an embedded (CJK-covering) font there is nothing to shape vertically, so the
+    /// text falls back to an ordinary code block rather than being lost.
+    private mutating func renderVerticalBlock(_ code: String) throws {
+        let text = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        let paragraphStyle = style(for: .paragraph)
+        let font = standardFont(for: paragraphStyle.fontRole)
+        guard !text.isEmpty, let entry = embeddedFonts.entry(for: font) else {
+            try renderCodeBlock(code, info: nil)
+            return
+        }
+        let size = fontSize(for: .paragraph)
+        let shaper = VerticalTextShaper(fontData: entry.resource.fontProgram, metadata: entry.resource.metadata)
+        let glyphs = try shaper.shape(text, fontSize: size)
+        guard !glyphs.isEmpty else {
+            return
+        }
+        let origin = shaper.verticalOrigin(fontSize: size)
+        let unitsPerEm = Double(entry.resource.metadata.head.unitsPerEm)
+        let scale = unitsPerEm > 0 ? size / unitsPerEm : 0
+        let columnStep = size * 1.6 // one em plus inter-line gap
+
+        // A vertical block takes the whole page region; start it on a fresh page.
+        if y < pageTopY - 1 {
+            startNewPage()
+        }
+        let topY = pageTopY
+        let bottomY = options.margins.bottom
+        let firstColumnCenter = options.pageSize.width - options.margins.right - size / 2
+
+        var pageGlyphs: [VerticalTextShaper.VerticalGlyph] = []
+        var pagePositions: [PDFPageCanvas.Point] = []
+        var columnCenter = firstColumnCenter
+        var penY = topY - origin
+
+        func flushPage() throws {
+            guard !pageGlyphs.isEmpty else {
+                return
+            }
+            let element = beginStructureElement(.paragraph)
+            defer { endStructureElement(element) }
+            let mapping = try shaper.mapping(for: pageGlyphs, fontSize: size)
+            try currentPage.drawVerticalText(
+                mapping: mapping,
+                positions: pagePositions,
+                fontResource: entry.resource,
+                fontSize: size,
+                color: paragraphStyle.color,
+            )
+            pageGlyphs = []
+            pagePositions = []
+        }
+
+        for glyph in glyphs {
+            if penY < bottomY {
+                columnCenter -= columnStep
+                penY = topY - origin
+                if columnCenter < options.margins.left + size / 2 {
+                    try flushPage()
+                    startNewPage()
+                    columnCenter = firstColumnCenter
+                    penY = topY - origin
+                }
+            }
+            let advanceWidth = Double(glyph.advanceWidth) * scale
+            pageGlyphs.append(glyph)
+            pagePositions.append(PDFPageCanvas.Point(x: columnCenter - advanceWidth / 2, y: penY))
+            penY -= glyph.advance
+        }
+        try flushPage()
+        y = bottomY
     }
 
     private func codeBlockLanguage(_ info: String?) -> String? {
