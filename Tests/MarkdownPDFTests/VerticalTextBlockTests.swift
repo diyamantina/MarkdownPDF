@@ -64,7 +64,11 @@ struct VerticalTextBlockTests {
         let distinct = Array(Set(twoLineXs.map { ($0 / 5).rounded() * 5 }))
         #expect(distinct.count == 2, "two lines should be two columns, got \(distinct)")
         // The first-drawn glyph's column is to the right of the last-drawn glyph's column.
-        try #expect(#require(twoLineXs.first) > #require(twoLineXs.last))
+        // Unwrap before comparing: on Swift 6.1 the right operand of a binary
+        // #expect is a non-throwing autoclosure, so a nested #require does not compile.
+        let firstX = try #require(twoLineXs.first)
+        let lastX = try #require(twoLineXs.last)
+        #expect(firstX > lastX)
     }
 
     @Test("A tagged vertical block is PDF/UA-1 and PDF/A-2a conformant")
