@@ -19,7 +19,7 @@ Source snapshots help answer concrete design questions:
 
 The full set of study-only source snapshots (33 projects) lives in the private
 companion repository
-[mihaelamj/MarkdownPDFResearch](https://codeberg.org/MarkdownPdfHQ/MarkdownPDFResearch),
+[ResearchHQ/MarkdownPDFResearch](https://codeberg.org/ResearchHQ/MarkdownPDFResearch),
 which keeps this public repository small and correctly classified as Swift. Only
 a small, high-signal subset is retained locally under `researchcode/` (currently
 `pydyf`, `unicode-linebreak`, `unicode-bidi`, `libdeflate`, and `zlib`).
