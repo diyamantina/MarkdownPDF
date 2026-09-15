@@ -1,18 +1,17 @@
-# Managed by rules-swift (scripts/sync-rules.sh). Verifies this repo tracks the
-# CURRENT shared-rules baseline. The repo's own .swiftformat/.swiftlint.yml are
-# repo-specific (baseline + project rules) and are intentionally NOT byte-checked.
-name: rules-conformance
+# Managed by rules-swift (scripts/sync-rules.sh). Verifies only that this repo's
+# freshness marker matches the current shared-rules version. It does not claim
+# semantic rule conformance; each consumer owns and runs its project-specific gates.
+name: rules-freshness
 on:
   push:
   pull_request:
   workflow_dispatch:
 jobs:
   rules:
-    # Self-hosted runner (Claw): Codeberg provides no hosted Actions runners.
-    runs-on: quick
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rules baseline freshness (VERSION)
+      - name: Shared-rules freshness marker
         run: |
           BASE=https://codeberg.org/Mihaela/rules-swift/raw/branch/main
           canon=$(curl -fsSL "$BASE/VERSION" | tr -d '[:space:]')
