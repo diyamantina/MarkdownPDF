@@ -31,6 +31,16 @@ jobs:
       - name: Format, lint, build, test
         env:
           MARKDOWNPDF_ARTIFACT_DIR: ${{ github.workspace }}/rendered-test-artifacts/macos
+          # The runner is a long-lived Mac, so `brew install` only has to ensure
+          # the tools are present. Without these, Homebrew auto-updates itself,
+          # upgrades every outdated formula and dependent, and since Homebrew 7
+          # asks "Do you want to proceed?" and waits on stdin, which stalls the
+          # job until the runner's time limit kills it.
+          HOMEBREW_NO_ASK: "1"
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_UPGRADE: "1"
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+          HOMEBREW_NO_ENV_HINTS: "1"
         run: |
           brew install mupdf poppler qpdf swiftformat swiftlint verapdf
           brew install --cask font-urw-base35
