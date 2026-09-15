@@ -83,9 +83,15 @@ struct ArabicShaper {
     ) -> ArabicPositionalForm {
         switch type {
         case .dualJoining, .joinCausing:
-            if joinsPrevious, joinsNext { return .medial }
-            if joinsPrevious { return .final }
-            if joinsNext { return .initial }
+            if joinsPrevious, joinsNext {
+                return .medial
+            }
+            if joinsPrevious {
+                return .final
+            }
+            if joinsNext {
+                return .initial
+            }
             return .isolated
         case .rightJoining:
             return joinsPrevious ? .final : .isolated

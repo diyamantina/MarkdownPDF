@@ -357,10 +357,14 @@ struct MarkdownPDFRendererTests {
             for page in inspector.streams where page.body.contains(" Tj") || page.body.contains(" S") {
                 let hasRule = page.body.contains("2 w \(Int(gutter - 11)) ")
                 let hasQuoteContent = page.body.split(separator: "\n").contains { line in
-                    if line.contains(" Do") { return true }
+                    if line.contains(" Do") {
+                        return true
+                    }
                     let parts = line.split(separator: " ")
                     // A quoted path: `0.750 w 68 75.900 m ...`
-                    if parts.count > 3, parts.contains("m"), let x = Double(parts[2]), x >= gutter { return true }
+                    if parts.count > 3, parts.contains("m"), let x = Double(parts[2]), x >= gutter {
+                        return true
+                    }
                     guard parts.count > 6, parts[6] == "Td", let x = Double(parts[4]) else { return false }
                     return x >= gutter
                 }

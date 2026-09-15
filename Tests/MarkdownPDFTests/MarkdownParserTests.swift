@@ -28,7 +28,11 @@ struct MarkdownParserTests {
             return
         }
         let text = content.map { inline in
-            if case let .text(value) = inline { value } else { "" }
+            if case let .text(value) = inline {
+                value
+            } else {
+                ""
+            }
         }.joined()
         #expect(text == "    code")
 
@@ -81,17 +85,29 @@ struct MarkdownParserTests {
             let inlines: [MarkdownInline]? = switch block {
             case let .unorderedList(items):
                 items.first.flatMap { item -> [MarkdownInline]? in
-                    if case let .paragraph(content)? = item.blocks.first { content } else { nil }
+                    if case let .paragraph(content)? = item.blocks.first {
+                        content
+                    } else {
+                        nil
+                    }
                 }
             case let .orderedList(_, items):
                 items.first.flatMap { item -> [MarkdownInline]? in
-                    if case let .paragraph(content)? = item.blocks.first { content } else { nil }
+                    if case let .paragraph(content)? = item.blocks.first {
+                        content
+                    } else {
+                        nil
+                    }
                 }
             default:
                 nil
             }
             return (inlines ?? []).map { inline in
-                if case let .text(text) = inline { text } else { "" }
+                if case let .text(text) = inline {
+                    text
+                } else {
+                    ""
+                }
             }.joined()
         }
 
@@ -355,7 +371,9 @@ struct MarkdownParserTests {
             guard case let .paragraph(inlines)? = MarkdownParser().parse(markdown).blocks.first
             else { return nil }
             for inline in inlines {
-                if case let .link(_, destination, title) = inline { return (destination, title) }
+                if case let .link(_, destination, title) = inline {
+                    return (destination, title)
+                }
             }
             return nil
         }
