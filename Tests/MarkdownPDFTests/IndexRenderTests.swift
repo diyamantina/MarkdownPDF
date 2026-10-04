@@ -182,6 +182,29 @@ struct IndexRenderTests {
         #expect(text.contains("Text and end."))
     }
 
+    @Test("A long run of references wraps with a hanging indent and never starts a line with a comma")
+    func longEntryWraps() throws {
+        let pages = (1 ... 150).map { $0.isMultiple(of: 2) ? "Even page \($0)." : "Odd page \($0). {{index: wide entry}}" }
+            .joined(separator: "\n\n<!-- pagebreak -->\n\n")
+        let options = PDFOptions(index: PDFOptions.Index(isEnabled: true))
+        let geometry = try ContentStreamGeometry(pdf: render(pages, options))
+        let rows = rows(of: geometry.pages[geometry.pages.count - 1])
+        let entry = try #require(rows.firstIndex { $0.text.hasPrefix("wide entry,") })
+        let wrapped = Array(rows[entry...])
+        try #require(wrapped.count >= 3, "the 75 references should need several lines")
+
+        var listed: [Int] = []
+        for (position, row) in wrapped.enumerated() {
+            #expect(!row.text.hasPrefix(","), "line \(position) starts with a comma: \(row.text)")
+            if position > 0 {
+                #expect(row.x - wrapped[0].x >= 13, "continuation line is not indented")
+            }
+            let numbers = row.text.replacingOccurrences(of: "wide entry,", with: "")
+            listed.append(contentsOf: numbers.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) })
+        }
+        #expect(listed == Array(stride(from: 1, through: 149, by: 2)))
+    }
+
     @Test("A markers-only paragraph before a page break attaches to the next line drawn")
     func markersOnlyParagraphAttachesForward() throws {
         let filler = (1 ... 70).map { "Filler line \($0)." }.joined(separator: "\n\n")

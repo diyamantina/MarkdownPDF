@@ -1049,27 +1049,51 @@ private struct Layout {
             PDFTextRun(text: text, font: font, size: size, color: bodyStyle.color)
         }
 
-        var runs = [plain(record.display)]
+        let indent = Double(level) * 16
+        let hangingIndent = 14.0
+        let x = options.margins.left + indent
+        let width = max(36, contentWidth - indent - hangingIndent)
+
+        // Fill lines by hand so a reference and the comma after it never part: the
+        // general wrapper breaks between any two runs, which would strand a comma at
+        // the start of a line.
         let references = PDFPageLabel.references(forPages: record.pages) { pageLabel(forPageIndex: $0) }
+        var lines = try wrappedLines([plain(record.display)], maxWidth: width)
+        var current = lines.removeLast()
+        var currentWidth = try textWidth(current)
+        if !references.isEmpty {
+            current.append(plain(","))
+            currentWidth += try textWidth(plain(","))
+        }
+        let spaceWidth = try textWidth(plain(" "))
         for (position, reference) in references.enumerated() {
-            runs.append(plain(position == 0 ? ", " : ", "))
             registerPageDestination(forPageIndex: reference.targetPage)
-            runs.append(PDFTextRun(
+            var unit = [PDFTextRun(
                 text: reference.text,
                 font: font,
                 size: size,
                 color: linkStyle.color,
                 linkDestination: "#\(pageDestinationName(forPageIndex: reference.targetPage))",
-            ))
+            )]
+            if position < references.count - 1 {
+                unit.append(plain(","))
+            }
+            let unitWidth = try textWidth(unit)
+            if currentWidth + spaceWidth + unitWidth > width {
+                lines.append(current)
+                current = unit
+                currentWidth = unitWidth
+            } else {
+                current.append(plain(" "))
+                current.append(contentsOf: unit)
+                currentWidth += spaceWidth + unitWidth
+            }
         }
+        lines.append(current)
 
-        let indent = Double(level) * 16
-        let hangingIndent = 14.0
-        let x = options.margins.left + indent
-        let width = max(36, contentWidth - indent - hangingIndent)
         let element = beginStructureElement(.paragraph)
         defer { endStructureElement(element) }
-        for (lineIndex, line) in try wrappedLines(runs, maxWidth: width).enumerated() {
+        for (lineIndex, line) in lines.enumerated() {
             ensureSpace(lineHeight)
             try drawRuns(line, x: x + (lineIndex == 0 ? 0 : hangingIndent), y: y)
             y -= lineHeight
