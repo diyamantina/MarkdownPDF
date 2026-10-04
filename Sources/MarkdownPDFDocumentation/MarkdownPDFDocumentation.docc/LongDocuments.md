@@ -1,4 +1,4 @@
-# Long documents: merge, cover, page numbers, and index
+# Long documents: merge, cover, page numbers, index, and colophon
 
 Render several Markdown files as one PDF, put a cover in front, number its pages,
 and append a back-of-book index.
@@ -134,10 +134,47 @@ level-one heading named by ``PDFOptions/Index/title``, so it appears in the outl
 and, when enabled, in the table of contents with its page number. When nothing was
 found, no index is written.
 
+## Colophon
+
+``PDFOptions/Colophon`` ends the document with a colophon: the last page or pages,
+after the index. The index is otherwise always last, so a colophon merged in as an
+ordinary source would land before it; the option puts it after.
+
+The default text is a `Colophon` heading, the line `*Title* by Author.` built from
+``PDFOptions/title`` and ``PDFOptions/author`` (with a title only the line is
+`*Title*.`, with an author only `By Author.`, with neither it is left out), a
+sentence saying the edition was typeset with MarkdownPDF, and the open-source link
+`https://codeberg.org/MarkdownPdfHQ/MarkdownPDF`, drawn as visible text with a real
+URI link annotation. The title and author are never read as Markdown.
+
+``PDFOptions/Colophon/markdown`` replaces the default entirely, heading included;
+its relative images resolve against ``PDFOptions/Colophon/assetsBaseURL``. Empty
+custom text throws ``MarkdownPDFError/colophonTextEmpty``.
+
+The colophon heading is an ordinary level-one heading: it reaches the outline and the
+table of contents with its page number, its pages carry page numbers like body pages,
+and the index does not search it. It takes part in the convergence loop below.
+
+## HTML comments
+
+``PDFOptions/IgnoreHTMLComments`` deletes HTML comments before parsing, so markers
+that other tools read, such as `<!--print-only-->`, `<!--/print-only-->`,
+`<!--say: spoken form-->` and `<!--audio: file.mp3-->`, do not print. The content
+between a pair of markers stays. By default comments are drawn as text, as before.
+
+- A comment runs from `<!--` to the first `-->` after it and may span lines.
+- A comment that is never closed is not a comment; its `<!--` stays visible, so it
+  cannot hide the rest of the document.
+- A line left with nothing after a deletion disappears with its newline, so a marker
+  on its own line does not split the paragraph, list, or table around it.
+- Comments in fenced code blocks and inline code spans are literal text.
+- `<!-- pagebreak -->` is kept: it is the page break marker.
+
 ## How the passes converge
 
 The table of contents carries page numbers and occupies pages; the index records
-which pages terms landed on and is appended after the body. The renderer lays the
+which pages terms landed on and is appended after the body; the colophon follows the
+index and so moves with it. The renderer lays the
 document out, derives both again from the result, and repeats until a pass reproduces
 its own input, at most six passes, then throws
 ``MarkdownPDFError/tableOfContentsDidNotConverge(maxPasses:)``. Decoded images are

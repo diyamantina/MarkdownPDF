@@ -37,6 +37,14 @@ public struct PDFOptions: Equatable, Sendable {
     /// A full-page cover as physical page 1. The default is ``Cover/disabled``.
     public var cover: Cover
 
+    /// Drops HTML comments before parsing. The default is
+    /// ``IgnoreHTMLComments/disabled``.
+    public var ignoreHTMLComments: IgnoreHTMLComments
+
+    /// A colophon after the index, as the last pages. The default is
+    /// ``Colophon/disabled``.
+    public var colophon: Colophon
+
     public init(
         pageSize: PageSize = .a4,
         margins: Margins = .standard,
@@ -56,6 +64,8 @@ public struct PDFOptions: Equatable, Sendable {
         index: Index = .disabled,
         author: String? = nil,
         cover: Cover = .disabled,
+        ignoreHTMLComments: IgnoreHTMLComments = .disabled,
+        colophon: Colophon = .disabled,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -75,6 +85,8 @@ public struct PDFOptions: Equatable, Sendable {
         self.index = index
         self.author = author
         self.cover = cover
+        self.ignoreHTMLComments = ignoreHTMLComments
+        self.colophon = colophon
     }
 
     /// The standalone image height cap used when none is given.

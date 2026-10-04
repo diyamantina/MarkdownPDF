@@ -42,6 +42,7 @@ public struct MarkdownPDFRenderer: Sendable {
             options: MarkdownParser.Options(
                 mathTypesetting: options.mathTypesetting.isEnabled,
                 indexMarkers: options.index.isEnabled,
+                ignoreHTMLComments: options.ignoreHTMLComments.isEnabled,
             ),
         )
         var units = sources.map { source in
@@ -50,12 +51,38 @@ public struct MarkdownPDFRenderer: Sendable {
         if units.isEmpty {
             units = [RenderUnit(document: MarkdownDocument(blocks: []), assetsBaseURL: nil)]
         }
-        let combined = MarkdownDocument(blocks: units.flatMap(\.document.blocks))
+        let colophon = try colophonContent()
+        let combined = MarkdownDocument(blocks: units.flatMap(\.document.blocks) + (colophon?.blocks ?? []))
         return try renderUnits(
             units,
+            colophon: colophon,
             options: resolvedOptions(for: combined),
             startsEachUnitOnNewPage: startsEachSourceOnNewPage,
         )
+    }
+
+    /// The blocks of the colophon, or nil when it is disabled. Custom text is parsed
+    /// like a source, without index markers: the index does not search the colophon.
+    private func colophonContent() throws -> ColophonContent? {
+        guard options.colophon.isEnabled else {
+            return nil
+        }
+        guard let custom = options.colophon.markdown else {
+            return ColophonContent(
+                blocks: ColophonDefaultText.blocks(title: options.title, author: options.author),
+                assetsBaseURL: nil,
+            )
+        }
+        guard !custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw MarkdownPDFError.colophonTextEmpty
+        }
+        let parser = MarkdownParser(
+            options: MarkdownParser.Options(
+                mathTypesetting: options.mathTypesetting.isEnabled,
+                ignoreHTMLComments: options.ignoreHTMLComments.isEnabled,
+            ),
+        )
+        return ColophonContent(blocks: parser.parse(custom).blocks, assetsBaseURL: options.colophon.assetsBaseURL)
     }
 
     private func resolvedOptions(for document: MarkdownDocument) -> PDFOptions {
@@ -80,6 +107,7 @@ public struct MarkdownPDFRenderer: Sendable {
     /// exact.
     private func renderUnits(
         _ units: [RenderUnit],
+        colophon: ColophonContent?,
         options: PDFOptions,
         startsEachUnitOnNewPage: Bool,
     ) throws -> Data {
@@ -97,6 +125,7 @@ public struct MarkdownPDFRenderer: Sendable {
                 startsEachUnitOnNewPage: startsEachUnitOnNewPage,
                 tableOfContentsEntries: tableOfContents,
                 indexRecords: index,
+                colophon: colophon,
             )
             return layout
         }
@@ -163,6 +192,12 @@ private extension MarkdownPDFRenderer {
 
 private struct RenderUnit {
     var document: MarkdownDocument
+    var assetsBaseURL: URL?
+}
+
+/// The parsed colophon and the folder its relative images resolve against.
+private struct ColophonContent {
+    var blocks: [MarkdownBlock]
     var assetsBaseURL: URL?
 }
 
@@ -619,6 +654,7 @@ private struct Layout {
         startsEachUnitOnNewPage: Bool,
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
         indexRecords: [IndexRecord] = [],
+        colophon: ColophonContent? = nil,
     ) throws {
         let resolvedFootnotes = FootnoteResolver().resolve(units.map(\.document))
         footnotesByLabelKey = resolvedFootnotes.footnotesByLabelKey
@@ -655,7 +691,25 @@ private struct Layout {
         try renderFootnoteSection(resolvedFootnotes.footnotes)
         flushPendingIndexTerms()
         try renderIndex(indexRecords)
+        try renderColophon(colophon)
         try stampPageNumbers()
+    }
+
+    /// Appends the colophon on a fresh page after the index. Its blocks go through the
+    /// ordinary block renderer, so a heading reaches the outline and the contents,
+    /// and the link is a real annotation. The index does not search it.
+    private mutating func renderColophon(_ colophon: ColophonContent?) throws {
+        guard let colophon else {
+            return
+        }
+        if y != pageTopY {
+            startNewPage()
+        }
+        assetsBaseURL = colophon.assetsBaseURL
+        indexMatcher = nil
+        for block in colophon.blocks {
+            try render(block)
+        }
     }
 
     private func footnoteKey(_ label: String) -> String {

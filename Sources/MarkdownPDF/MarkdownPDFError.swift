@@ -11,6 +11,7 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
     case pageNumbersNeedBottomMargin(minimum: Double, actual: Double)
     case coverImageUnreadable(String)
     case coverImageUnsupported(String)
+    case colophonTextEmpty
 
     public var errorDescription: String? {
         switch self {
@@ -34,6 +35,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Could not read the cover image at \(path)."
         case let .coverImageUnsupported(source):
             "The cover image (\(source)) is not a decodable PNG or JPEG."
+        case .colophonTextEmpty:
+            "The colophon is enabled with custom text that is empty."
         }
     }
 
@@ -57,6 +60,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Confirm the cover image path exists and is relative to the base URL given to PDFOptions.Cover, or pass the image bytes with ImageSource.data."
         case .coverImageUnsupported:
             "Use a valid PNG or JPEG file for the cover image."
+        case .colophonTextEmpty:
+            "Give PDFOptions.Colophon some Markdown text, or leave the text nil for the default colophon."
         case .missingEmbeddedMathFont:
             "Pass PDFOptions(embeddedFonts:) with TrueType math-font data that contains an OpenType MATH table, or use PDFOptions.MathTypesetting.enabled for fallback rendering."
         }

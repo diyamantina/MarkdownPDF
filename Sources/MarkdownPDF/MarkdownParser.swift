@@ -11,10 +11,16 @@ public struct MarkdownParser: Sendable {
         /// ``MarkdownInline/indexMarker(term:)``. Off by default, so existing text
         /// that happens to contain the marker syntax parses as before.
         public var indexMarkers: Bool
+        /// Deletes HTML comments from the text before parsing, except fenced code,
+        /// inline code, and the page break marker. Off by default, so a comment
+        /// parses as before, as visible text. See ``PDFOptions/IgnoreHTMLComments``
+        /// for the rule.
+        public var ignoreHTMLComments: Bool
 
-        public init(mathTypesetting: Bool = false, indexMarkers: Bool = false) {
+        public init(mathTypesetting: Bool = false, indexMarkers: Bool = false, ignoreHTMLComments: Bool = false) {
             self.mathTypesetting = mathTypesetting
             self.indexMarkers = indexMarkers
+            self.ignoreHTMLComments = ignoreHTMLComments
         }
     }
 
@@ -25,7 +31,12 @@ public struct MarkdownParser: Sendable {
     }
 
     public func parse(_ markdown: String) -> MarkdownDocument {
-        var parser = BlockParser(markdown: markdown, options: options, nestingDepth: 0, isRoot: true)
+        var parser = BlockParser(
+            markdown: options.ignoreHTMLComments ? HTMLCommentStripper.strip(markdown) : markdown,
+            options: options,
+            nestingDepth: 0,
+            isRoot: true,
+        )
         return MarkdownDocument(blocks: parser.parseBlocks())
     }
 }
