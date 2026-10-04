@@ -151,6 +151,7 @@ enum PDFDeflate {
             return []
         }
 
+        let maximumCandidates = 128
         var table: [Int: [Int]] = [:]
         var tokens: [Token] = []
         var index = 0
@@ -165,12 +166,13 @@ enum PDFDeflate {
             }
 
             let key = hash(at: position)
-            var positions = table[key, default: []]
-            positions.append(position)
-            if positions.count > 512 {
-                positions.removeFirst(positions.count - 512)
-            }
-            table[key] = positions
+            // Mutate the bucket in place. Copying it out and writing it back made
+            // every insert O(bucket size), which dominated the time on flat
+            // images whose buckets stay full. The search below inspects at most
+            // the newest `maximumCandidates` positions of a bucket, so keeping
+            // between that many and twice that many (trimmed in one move) leaves
+            // the chosen matches, and so the output bytes, unchanged.
+            table[key, default: []].appendKeepingNewest(position, limit: maximumCandidates)
         }
 
         while index < input.count {
@@ -202,7 +204,7 @@ enum PDFDeflate {
                         bestDistance = distance
                     }
 
-                    if checkedCandidates >= 128 || bestLength == 258 {
+                    if checkedCandidates >= maximumCandidates || bestLength == 258 {
                         break
                     }
                 }
@@ -672,5 +674,16 @@ enum PDFDeflate {
             preconditionFailure("the fixed DEFLATE code lengths are a complete prefix code")
         }
         return table
+    }
+}
+
+private extension [Int] {
+    /// Appends `element`, and once the array holds twice `limit` elements drops the
+    /// oldest so that `limit` remain. Amortized O(1) per append.
+    mutating func appendKeepingNewest(_ element: Int, limit: Int) {
+        append(element)
+        if count >= limit * 2 {
+            removeFirst(count - limit)
+        }
     }
 }

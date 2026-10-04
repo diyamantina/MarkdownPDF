@@ -33,6 +33,21 @@ struct PDFDeflateTests {
         #expect(PDFDeflate.zlibCompressed(input) == compressed)
     }
 
+    @Test("Long flat runs and a repeating pattern round trip and shrink")
+    func longFlatRunsRoundTripAndShrink() throws {
+        // Flat colour keeps every hash bucket full, the case that used to cost O(bucket)
+        // per input byte. The output must still inflate to the input and be small.
+        var input: [UInt8] = []
+        for row in 0 ..< 400 {
+            input += [UInt8](repeating: 0xF5, count: 3000)
+            input += (0 ..< 24).map { UInt8(($0 &+ row) & 0xFF) }
+        }
+        let compressed = PDFDeflate.zlibCompressed(Data(input))
+
+        #expect(try [UInt8](PDFDeflate.inflateZlib(compressed)) == input)
+        #expect(compressed.count < input.count / 50)
+    }
+
     @Test("Compression option writes valid FlateDecode content streams")
     func compressionOptionWritesValidFlateDecodeContentStreams() throws {
         let paragraph = "Repeated PDF content makes stream compression measurable and keeps text extractable."
