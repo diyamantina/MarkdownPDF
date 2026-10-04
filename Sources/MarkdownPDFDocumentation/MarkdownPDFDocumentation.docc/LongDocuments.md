@@ -1,12 +1,12 @@
-# Long documents: merge, page numbers, and index
+# Long documents: merge, cover, page numbers, and index
 
-Render several Markdown files as one PDF, number its pages, and append a
-back-of-book index.
+Render several Markdown files as one PDF, put a cover in front, number its pages,
+and append a back-of-book index.
 
 ## Overview
 
-These features cover the shape of a book: many source files, a table of contents,
-page numbers in the footer, and an index at the end. Each is opt-in, and a document
+These features cover the shape of a book: many source files, a cover, a table of
+contents, page numbers in the footer, and an index at the end. Each is opt-in, and a document
 that uses none of them renders byte-for-byte as before.
 
 ## Merging sources
@@ -29,6 +29,44 @@ two different images with no path rewriting.
 - **Title.** The PDF title is ``PDFOptions/title``.
 - **One source.** `render(markdown:assetsBaseURL:)` is the one-source case of the
   same path, and its output is unchanged.
+
+## Cover
+
+``PDFOptions/Cover`` makes a full-page picture physical page 1, ahead of the table
+of contents. The picture is a PNG or JPEG, supplied as
+``PDFOptions/Cover/ImageSource/data(_:)`` (the bytes) or
+``PDFOptions/Cover/ImageSource/file(_:relativeTo:)`` (a path resolved against a base
+URL you pass in, or the working directory). Both are values; the renderer reads
+nothing you did not hand it. It is decoded by the same code as body images, so an RGBA
+PNG is composited over white through its soft mask.
+
+**Fit rule.** The image is scaled by `min(pageWidth / imageWidth, pageHeight /
+imageHeight)`, so the whole picture shows with its aspect ratio kept, and is centred.
+It scales up as well as down, and the margins and ``PDFOptions/imageMaxHeightFraction``
+do not apply. When the aspect ratios differ by at most 0.1%, as for an image cut to the
+page's proportions (1 : 1.4142 on A4), the image is stretched by that imperceptible
+amount to fill the page exactly, so no hairline of paper shows. Otherwise the bars
+show the theme's page background, or white.
+
+**Numbering.** The cover has no page number and no footer:
+
+- The first page after the cover is printed page 1, or
+  ``PDFOptions/PageNumbers/firstPageNumber``.
+- `Page N of M` counts the pages after the cover. ``PDFOptions/PageNumbers/skipsFirstPage``
+  refers to the first page after the cover.
+- The table of contents and index print those printed numbers when page numbers are
+  enabled, and physical numbers (the cover is page 1) when they are not.
+- Links, named destinations and the outline address physical pages. The cover is the
+  first outline item, titled "Cover", and is not a table of contents entry.
+
+**Tagging.** With tagged PDF or a conformance profile, the cover is a Figure whose
+alternate text is "Cover of Title by Author", leaving out whichever of the two is
+missing. A missing or undecodable image throws
+``MarkdownPDFError/coverImageUnreadable(_:)`` or
+``MarkdownPDFError/coverImageUnsupported(_:)``; a cover is never dropped silently.
+
+``PDFOptions/author`` is document metadata written beside the title: `/Author` in the
+Info dictionary and `dc:creator` in the XMP packet.
 
 ## Page numbers
 

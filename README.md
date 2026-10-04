@@ -91,6 +91,11 @@ The generic renderer currently covers:
   placeholder.
 - PDF document title metadata, heading outlines, and internal heading links.
 - Opt-in generated table of contents with final page numbers and internal links.
+- Opt-in full-page cover (`PDFOptions.cover`) as physical page 1 from a PNG or JPEG
+  (RGBA PNG composited over white), fitted and centred on the page and left
+  unnumbered; the page after it is printed page 1. It is the first outline item and a
+  Figure with alt text when tagged. `PDFOptions.author` adds the author to the PDF
+  metadata.
 - Opt-in page number footers (`PDFOptions.pageNumbers`): bottom center, outside, or
   right; plain, `Page 1 of N`, or lowercase Roman; custom first number; skip the
   first page. Drawn in the document's font set and marked as an artifact when
@@ -222,6 +227,22 @@ let options = PDFOptions(
 // `{{index: term}}` and `{{index: main > sub}}` in the Markdown add entries.
 let markdown = "# Book\n\nA layer tree. {{index: tree > layer}}"
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
+Put a full-page cover in front of the document. The cover is physical page 1, has no
+page number, and the first page after it is printed page 1:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(
+    title: "The Book",
+    tableOfContents: .enabled,
+    pageNumbers: PDFOptions.PageNumbers(isEnabled: true, format: .ofTotal),
+    author: "A. Writer",
+    cover: .enabled(image: .file("cover.png", relativeTo: assetsFolder)), // or .data(bytes)
+)
+let data = try MarkdownPDFRenderer(options: options).render(markdown: "# Chapter\n\nText.")
 ```
 
 Render several Markdown files as one PDF, each resolving its own images:
