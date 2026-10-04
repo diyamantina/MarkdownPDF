@@ -12,23 +12,50 @@ public struct MarkdownPDFRenderer: Sendable {
         markdown: String,
         assetsBaseURL: URL? = nil,
     ) throws -> Data {
-        let document = MarkdownParser(
-            options: MarkdownParser.Options(mathTypesetting: options.mathTypesetting.isEnabled),
-        ).parse(markdown)
-        let resolvedOptions = resolvedOptions(for: document)
-        if resolvedOptions.tableOfContents.isEnabled {
-            return try renderWithTableOfContents(
-                document,
-                options: resolvedOptions,
-                assetsBaseURL: assetsBaseURL,
-            )
-        }
+        try render(
+            sources: [MarkdownSource(markdown: markdown, assetsBaseURL: assetsBaseURL)],
+            startsEachSourceOnNewPage: false,
+        )
+    }
 
-        return try renderDocument(
-            document,
-            options: resolvedOptions,
-            assetsBaseURL: assetsBaseURL,
-        ).pdfData()
+    /// Renders several Markdown sources as one PDF.
+    ///
+    /// Each source resolves its own relative image paths against its own
+    /// ``MarkdownSource/assetsBaseURL``. Sources are laid out in order as one
+    /// document: heading destinations that repeat across sources get distinct
+    /// names the same way repeated headings inside one file do, footnote labels are
+    /// scoped to their own source (so `[^1]` in two files are two footnotes, numbered
+    /// consecutively and listed once after the last source), and the PDF title is
+    /// ``PDFOptions/title``. The table of contents, page numbers, and index cover the
+    /// whole document. Passing no sources renders an empty document.
+    ///
+    /// - Parameters:
+    ///   - sources: The Markdown documents in reading order.
+    ///   - startsEachSourceOnNewPage: Begins every source after the first on a fresh
+    ///     page when true, the default. A source that begins on an untouched page
+    ///     does not leave a blank page.
+    public func render(
+        sources: [MarkdownSource],
+        startsEachSourceOnNewPage: Bool = true,
+    ) throws -> Data {
+        let parser = MarkdownParser(
+            options: MarkdownParser.Options(
+                mathTypesetting: options.mathTypesetting.isEnabled,
+                indexMarkers: options.index.isEnabled,
+            ),
+        )
+        var units = sources.map { source in
+            RenderUnit(document: parser.parse(source.markdown), assetsBaseURL: source.assetsBaseURL)
+        }
+        if units.isEmpty {
+            units = [RenderUnit(document: MarkdownDocument(blocks: []), assetsBaseURL: nil)]
+        }
+        let combined = MarkdownDocument(blocks: units.flatMap(\.document.blocks))
+        return try renderUnits(
+            units,
+            options: resolvedOptions(for: combined),
+            startsEachUnitOnNewPage: startsEachSourceOnNewPage,
+        )
     }
 
     private func resolvedOptions(for document: MarkdownDocument) -> PDFOptions {
@@ -41,44 +68,77 @@ public struct MarkdownPDFRenderer: Sendable {
         return resolvedOptions
     }
 
-    private func renderDocument(
-        _ document: MarkdownDocument,
+    /// Lays the units out until everything that feeds back into pagination settles.
+    ///
+    /// Two things depend on the final layout: the table of contents (its entries
+    /// carry page numbers, and the contents occupy pages themselves) and the index
+    /// (which records the pages terms landed on, and is itself appended after the
+    /// body). Each pass renders with the previous pass's table of contents and index,
+    /// then derives both again; the pass whose output equals its input is final.
+    /// Page number footers do not take part: they are drawn in the bottom margin
+    /// after layout, so they cannot move content and the page count they print is
+    /// exact.
+    private func renderUnits(
+        _ units: [RenderUnit],
         options: PDFOptions,
-        assetsBaseURL: URL?,
-        tableOfContentsEntries: [TableOfContentsEntry]? = nil,
-    ) throws -> Layout {
-        var layout = try Layout(options: options, assetsBaseURL: assetsBaseURL)
-        try layout.render(document, tableOfContentsEntries: tableOfContentsEntries)
-        return layout
-    }
-
-    private func renderWithTableOfContents(
-        _ document: MarkdownDocument,
-        options: PDFOptions,
-        assetsBaseURL: URL?,
+        startsEachUnitOnNewPage: Bool,
     ) throws -> Data {
-        let maximumPasses = 6
-        var entries = try renderDocument(document, options: options, assetsBaseURL: assetsBaseURL)
-            .tableOfContentsEntries(maximumDepth: options.tableOfContents.maximumDepth)
-        guard !entries.isEmpty else {
-            return try renderDocument(document, options: options, assetsBaseURL: assetsBaseURL).pdfData()
+        let imageCache = PDFImageCache()
+        func layout(
+            tableOfContents: [TableOfContentsEntry]?,
+            index: [IndexRecord],
+        ) throws -> Layout {
+            var layout = try Layout(options: options, imageCache: imageCache)
+            try layout.render(
+                units,
+                startsEachUnitOnNewPage: startsEachUnitOnNewPage,
+                tableOfContentsEntries: tableOfContents,
+                indexRecords: index,
+            )
+            return layout
         }
 
+        let tocEnabled = options.tableOfContents.isEnabled
+        let indexEnabled = options.index.isEnabled
+        guard tocEnabled || indexEnabled else {
+            return try layout(tableOfContents: nil, index: []).pdfData()
+        }
+
+        let maximumDepth = options.tableOfContents.maximumDepth
+        let first = try layout(tableOfContents: nil, index: [])
+        var entries = tocEnabled ? first.tableOfContentsEntries(maximumDepth: maximumDepth) : []
+        var records = indexEnabled ? first.indexRecords() : []
+        guard !entries.isEmpty || !records.isEmpty else {
+            return try first.pdfData()
+        }
+
+        let maximumPasses = 6
         for _ in 0 ..< maximumPasses {
-            let layout = try renderDocument(
-                document,
-                options: options,
-                assetsBaseURL: assetsBaseURL,
-                tableOfContentsEntries: entries,
-            )
-            let nextEntries = layout.tableOfContentsEntries(maximumDepth: options.tableOfContents.maximumDepth)
-            if nextEntries == entries {
-                return try layout.pdfData()
+            let next = try layout(tableOfContents: entries.isEmpty ? nil : entries, index: records)
+            let nextEntries = tocEnabled ? next.tableOfContentsEntries(maximumDepth: maximumDepth) : []
+            let nextRecords = indexEnabled ? next.indexRecords() : []
+            if nextEntries == entries, nextRecords == records {
+                return try next.pdfData()
             }
             entries = nextEntries
+            records = nextRecords
         }
 
         throw MarkdownPDFError.tableOfContentsDidNotConverge(maxPasses: maximumPasses)
+    }
+}
+
+private struct RenderUnit {
+    var document: MarkdownDocument
+    var assetsBaseURL: URL?
+}
+
+private extension MarkdownInline {
+    var isIndexMarker: Bool {
+        if case .indexMarker = self {
+            return true
+        }
+        return false
     }
 }
 
@@ -125,7 +185,7 @@ private extension MarkdownInline {
             children.contains(where: \.containsNonWinAnsiText)
         case let .image(alt, _, _):
             alt.containsNonWinAnsiScalar
-        case .softBreak, .lineBreak, .footnoteReference:
+        case .softBreak, .lineBreak, .footnoteReference, .indexMarker:
             false
         }
     }
@@ -154,20 +214,46 @@ private struct ResolvedFootnote {
     var blocks: [MarkdownBlock]
 }
 
-private struct ResolvedFootnoteDocument {
-    var bodyBlocks: [MarkdownBlock]
+private struct ResolvedFootnoteDocuments {
+    /// The body blocks of each input document with footnote definitions removed.
+    var bodyBlocks: [[MarkdownBlock]]
     var footnotes: [ResolvedFootnote]
     var footnotesByLabelKey: [String: ResolvedFootnote]
 }
 
+/// Resolves footnotes across one or more documents.
+///
+/// Labels are scoped to their own document: the lookup key is the document's
+/// namespace (`"0:"`, `"1:"`, ...) followed by the normalized label, so `[^1]` in
+/// two merged sources are two footnotes. Numbers run consecutively over the whole
+/// merged document in order of first reference.
 private struct FootnoteResolver {
-    func resolve(_ document: MarkdownDocument) -> ResolvedFootnoteDocument {
-        let definitions = collectDefinitions(in: document.blocks)
-        let bodyBlocks = stripFootnoteDefinitions(from: document.blocks)
+    /// The key prefix for one document. A single document uses the same scheme, so
+    /// the renderer never needs a separate path.
+    static func namespace(forDocument index: Int) -> String {
+        "\(index):"
+    }
+
+    var namespace = ""
+
+    func resolve(_ documents: [MarkdownDocument]) -> ResolvedFootnoteDocuments {
+        var definitions: [String: [MarkdownBlock]] = [:]
+        var bodyBlocks: [[MarkdownBlock]] = []
         var orderedKeys: [String] = []
         var seen = Set<String>()
-        for block in bodyBlocks {
-            collectReferences(in: block, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+
+        for (index, document) in documents.enumerated() {
+            let scoped = FootnoteResolver(namespace: Self.namespace(forDocument: index))
+            for (key, blocks) in scoped.collectDefinitions(in: document.blocks) {
+                definitions[key] = blocks
+            }
+            bodyBlocks.append(scoped.stripFootnoteDefinitions(from: document.blocks))
+        }
+        for (index, blocks) in bodyBlocks.enumerated() {
+            let scoped = FootnoteResolver(namespace: Self.namespace(forDocument: index))
+            for block in blocks {
+                scoped.collectReferences(in: block, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
+            }
         }
 
         let footnotes = orderedKeys.enumerated().compactMap { index, key -> ResolvedFootnote? in
@@ -184,11 +270,15 @@ private struct FootnoteResolver {
             )
         }
         let footnotesByLabelKey = Dictionary(uniqueKeysWithValues: footnotes.map { ($0.labelKey, $0) })
-        return ResolvedFootnoteDocument(
+        return ResolvedFootnoteDocuments(
             bodyBlocks: bodyBlocks,
             footnotes: footnotes,
             footnotesByLabelKey: footnotesByLabelKey,
         )
+    }
+
+    private func scopedKey(_ label: String) -> String {
+        namespace + footnoteLabelKey(label)
     }
 
     private func collectDefinitions(in blocks: [MarkdownBlock]) -> [String: [MarkdownBlock]] {
@@ -205,7 +295,7 @@ private struct FootnoteResolver {
     ) {
         switch block {
         case let .footnoteDefinition(label, blocks):
-            definitions[footnoteLabelKey(label)] = definitions[footnoteLabelKey(label)] ?? blocks
+            definitions[scopedKey(label)] = definitions[scopedKey(label)] ?? blocks
         case let .blockQuote(blocks):
             for block in blocks {
                 collectDefinitions(in: block, into: &definitions)
@@ -287,7 +377,7 @@ private struct FootnoteResolver {
         for inline in inlines {
             switch inline {
             case let .footnoteReference(label):
-                let key = footnoteLabelKey(label)
+                let key = scopedKey(label)
                 if definitions[key] != nil, seen.insert(key).inserted {
                     orderedKeys.append(key)
                 }
@@ -295,7 +385,7 @@ private struct FootnoteResolver {
                 collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
             case let .link(children, _, _):
                 collectReferences(in: children, definitions: definitions, seen: &seen, orderedKeys: &orderedKeys)
-            case .text, .softBreak, .lineBreak, .code, .inlineMath, .image:
+            case .text, .softBreak, .lineBreak, .code, .inlineMath, .image, .indexMarker:
                 break
             }
         }
@@ -333,10 +423,21 @@ private struct BidiPositionedRun {
 
 private struct Layout {
     var options: PDFOptions
+    /// The base for relative image paths of the unit being rendered.
     var assetsBaseURL: URL?
     var pages: [PDFPageCanvas] = [PDFPageCanvas()]
     var images: [PDFImage] = []
     var imageCache: [String: PDFImage] = [:]
+    let sharedImages: PDFImageCache
+
+    /// The scope of footnote labels for the unit being rendered. See
+    /// ``FootnoteResolver``.
+    var footnoteNamespace = FootnoteResolver.namespace(forDocument: 0)
+    var indexRegistry = IndexRegistry()
+    var indexMatcher: IndexTermMatcher?
+    /// Terms from markers-only paragraphs, attached to the next line drawn so they
+    /// land on the page that line lands on.
+    var pendingIndexTerms: [String] = []
     var headingNames = PDFHeadingDestinationName()
     var embeddedFonts: PDFEmbeddedFontCatalog
     var taggedContentBuilder: PDFTaggedContentBuilder?
@@ -365,9 +466,20 @@ private struct Layout {
     var footnotesByLabelKey: [String: ResolvedFootnote] = [:]
     var registeredNamedDestinations = Set<String>()
 
-    init(options: PDFOptions, assetsBaseURL: URL?) throws {
+    init(options: PDFOptions, imageCache: PDFImageCache) throws {
         self.options = options
-        self.assetsBaseURL = assetsBaseURL
+        sharedImages = imageCache
+        if options.index.isEnabled {
+            var terms: [(entry: IndexEntryID, text: String)] = []
+            for term in options.index.terms {
+                guard let entry = IndexRegistry.entry(for: term) else {
+                    continue
+                }
+                indexRegistry.register(entry)
+                terms.append((entry.id, entry.sub ?? entry.main))
+            }
+            indexMatcher = IndexTermMatcher(terms: terms)
+        }
         try Self.validateConformance(options)
         embeddedFonts = try PDFEmbeddedFontCatalog(
             fonts: options.embeddedFonts,
@@ -396,29 +508,55 @@ private struct Layout {
     }
 
     mutating func render(
-        _ document: MarkdownDocument,
+        _ units: [RenderUnit],
+        startsEachUnitOnNewPage: Bool,
         tableOfContentsEntries: [TableOfContentsEntry]? = nil,
+        indexRecords: [IndexRecord] = [],
     ) throws {
-        let resolvedFootnotes = FootnoteResolver().resolve(document)
-        let bodyDocument = MarkdownDocument(blocks: resolvedFootnotes.bodyBlocks)
+        let resolvedFootnotes = FootnoteResolver().resolve(units.map(\.document))
         footnotesByLabelKey = resolvedFootnotes.footnotesByLabelKey
+        let firstBlocks = MarkdownDocument(blocks: resolvedFootnotes.bodyBlocks.first ?? [])
         let tableOfContentsInsertionIndex = tableOfContentsEntries.map {
-            $0.isEmpty ? nil : self.tableOfContentsInsertionIndex(for: bodyDocument)
+            $0.isEmpty ? nil : self.tableOfContentsInsertionIndex(for: firstBlocks)
         } ?? nil
 
         if tableOfContentsInsertionIndex == 0, let tableOfContentsEntries {
             try renderTableOfContents(tableOfContentsEntries)
         }
 
-        for (index, block) in bodyDocument.blocks.enumerated() {
-            keepHeadingWithNextBlock(block, isLast: index == bodyDocument.blocks.count - 1)
-            try render(block)
-            if tableOfContentsInsertionIndex == index + 1, let tableOfContentsEntries {
-                try renderTableOfContents(tableOfContentsEntries)
+        for (unitIndex, unit) in units.enumerated() {
+            assetsBaseURL = unit.assetsBaseURL
+            footnoteNamespace = FootnoteResolver.namespace(forDocument: unitIndex)
+            let blocks = resolvedFootnotes.bodyBlocks[unitIndex]
+            if unitIndex > 0, startsEachUnitOnNewPage, y != pageTopY {
+                startNewPage()
+            }
+
+            for (index, block) in blocks.enumerated() {
+                // A heading that ends a unit is only "last" when nothing can follow it
+                // on the same page: the end of the document, or a forced page break.
+                let endsPage = index == blocks.count - 1
+                    && (unitIndex == units.count - 1 || startsEachUnitOnNewPage)
+                keepHeadingWithNextBlock(block, isLast: endsPage)
+                try render(block)
+                if unitIndex == 0, tableOfContentsInsertionIndex == index + 1, let tableOfContentsEntries {
+                    try renderTableOfContents(tableOfContentsEntries)
+                }
             }
         }
 
         try renderFootnoteSection(resolvedFootnotes.footnotes)
+        flushPendingIndexTerms()
+        try renderIndex(indexRecords)
+        try stampPageNumbers()
+    }
+
+    private func footnoteKey(_ label: String) -> String {
+        footnoteNamespace + footnoteLabelKey(label)
+    }
+
+    func indexRecords() -> [IndexRecord] {
+        indexRegistry.records()
     }
 
     func pdfData() throws -> Data {
@@ -467,10 +605,18 @@ private struct Layout {
                 x: options.margins.left,
                 maxWidth: contentWidth,
                 lineHeight: size * style.lineHeightMultiplier,
+                indexable: true,
             )
             y -= size * style.spacingAfterMultiplier
         case let .paragraph(content):
-            if try renderStandaloneImage(content) {
+            if !content.isEmpty, content.allSatisfy(\.isIndexMarker) {
+                // A paragraph of nothing but index markers draws nothing and takes no
+                // space. Its terms attach to the next line drawn, so they land on the
+                // page that line lands on.
+                for case let .indexMarker(term) in content {
+                    pendingIndexTerms.append(term)
+                }
+            } else if try renderStandaloneImage(content) {
                 y -= figureTrailingSpacing
             } else {
                 let element = beginStructureElement(.paragraph)
@@ -482,6 +628,7 @@ private struct Layout {
                     x: options.margins.left,
                     maxWidth: contentWidth,
                     lineHeight: bodyLineHeight,
+                    indexable: true,
                 )
                 y -= paragraphSpacing
             }
@@ -613,7 +760,7 @@ private struct Layout {
         let lineHeight = entrySize * 1.35
         let titleStyle = style(for: .heading2)
         let widestPageNumber = try entries
-            .map { try textWidth(PDFTextRun(text: "\($0.pageNumber)", font: .helvetica, size: entrySize)) }
+            .map { try textWidth(PDFTextRun(text: pageLabel(forPageIndex: $0.pageNumber - 1), font: .helvetica, size: entrySize)) }
             .max() ?? 0
         let pageColumnWidth = max(28, widestPageNumber + 8)
         let title = options.tableOfContents.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -658,7 +805,7 @@ private struct Layout {
 
         let indent = Double(max(0, entry.level - 1)) * 14
         let x = options.margins.left + indent
-        let pageText = "\(entry.pageNumber)"
+        let pageText = pageLabel(forPageIndex: entry.pageNumber - 1)
         let bodyStyle = style(for: .body)
         let linkStyle = style(for: .link)
         let pageRun = PDFTextRun(text: pageText, font: standardFont(for: bodyStyle.fontRole), size: entrySize, color: bodyStyle.color)
@@ -713,6 +860,220 @@ private struct Layout {
                 ? PDFColor(red: 0.72, green: 0.72, blue: 0.72)
                 : style(for: .thematicBreak).borderColor ?? PDFColor(red: 0.72, green: 0.72, blue: 0.72),
         )
+    }
+
+    // MARK: Page numbers
+
+    /// The printed label of the page at `index`: its number under
+    /// ``PDFOptions/PageNumbers`` when enabled, its physical number otherwise.
+    private func pageLabel(forPageIndex index: Int) -> String {
+        let config = options.pageNumbers
+        guard config.isEnabled else {
+            return String(index + 1)
+        }
+        return PDFPageLabel.text(config.firstPageNumber + index, format: config.format)
+    }
+
+    /// Draws every page's number in the bottom margin once layout is final.
+    ///
+    /// The footer sits in the margin band below the body, vertically centred, so it
+    /// cannot move body content and needs no layout pass of its own: the page count
+    /// it prints is exact. It is drawn directly on each page (like block quote
+    /// rules), as an artifact when the document is tagged.
+    private mutating func stampPageNumbers() throws {
+        let config = options.pageNumbers
+        guard config.isEnabled else {
+            return
+        }
+
+        let size = options.baseFontSize * 0.8
+        guard options.margins.bottom >= size * 2 else {
+            throw MarkdownPDFError.pageNumbersNeedBottomMargin(minimum: size * 2, actual: options.margins.bottom)
+        }
+
+        let bodyStyle = style(for: .body)
+        let font = standardFont(for: bodyStyle.fontRole)
+        let lastNumber = config.firstPageNumber + pages.count - 1
+        // Centre the glyph box (0.75 em above the baseline, 0.25 em below) in the margin.
+        let baseline = options.margins.bottom / 2 - size * 0.25
+        let isTagged = taggedContentBuilder != nil
+        for (index, page) in pages.enumerated() {
+            if index == 0, config.skipsFirstPage {
+                continue
+            }
+
+            let number = config.firstPageNumber + index
+            let run = PDFTextRun(
+                text: PDFPageLabel.footerText(number, last: lastNumber, format: config.format),
+                font: font,
+                size: size,
+                color: bodyStyle.color,
+            )
+            let width = try textWidth(run)
+            let leftEdge = options.margins.left
+            let rightEdge = options.pageSize.width - options.margins.right - width
+            let x: Double = switch config.position {
+            case .bottomCenter:
+                leftEdge + (contentWidth - width) / 2
+            case .bottomOutside:
+                // Right-hand pages carry odd numbers, so odd numbers go to the right.
+                number.isMultiple(of: 2) ? leftEdge : rightEdge
+            case .bottomRight:
+                rightEdge
+            }
+
+            if isTagged {
+                page.beginArtifact()
+            }
+            try page.drawTextRun(run, x: x, y: baseline, fontSet: options.fontSet, embeddedFonts: embeddedFonts)
+            if isTagged {
+                page.endMarkedContent()
+            }
+        }
+    }
+
+    // MARK: Index
+
+    private mutating func recordIndexTerm(_ term: String) {
+        guard options.index.isEnabled, let entry = IndexRegistry.entry(for: term) else {
+            return
+        }
+        indexRegistry.register(entry)
+        indexRegistry.record(entry.id, page: currentPageIndex)
+    }
+
+    private mutating func flushPendingIndexTerms() {
+        guard !pendingIndexTerms.isEmpty else {
+            return
+        }
+        let terms = pendingIndexTerms
+        pendingIndexTerms = []
+        for term in terms {
+            recordIndexTerm(term)
+        }
+    }
+
+    /// Term-list matches in laid-out lines, keyed by the line each match starts on.
+    /// Text from inline code and math, and zero-width marker runs, is not searched.
+    private func indexHits(inLines lines: [[PDFTextRun]]) -> [Int: [IndexEntryID]] {
+        guard let matcher = indexMatcher, !matcher.isEmpty else {
+            return [:]
+        }
+
+        let texts = lines.map { line in
+            line.filter { $0.isIndexable && $0.indexTerm == nil }.map(\.text).joined()
+        }
+        var hits: [Int: [IndexEntryID]] = [:]
+        for match in matcher.matches(inLines: texts) {
+            hits[match.line, default: []].append(match.entry)
+        }
+        return hits
+    }
+
+    /// A named destination at the top of a physical page, the target of index links.
+    private func pageDestinationName(forPageIndex index: Int) -> String {
+        "mdpdf-page-\(index + 1)"
+    }
+
+    private mutating func registerPageDestination(forPageIndex index: Int) {
+        let name = pageDestinationName(forPageIndex: index)
+        guard registeredNamedDestinations.insert(name).inserted else {
+            return
+        }
+        pages[index].addNamedDestination(
+            PDFHeadingDestination(
+                name: name,
+                title: name,
+                level: 6,
+                x: options.margins.left,
+                y: min(options.pageSize.height, pageTopY),
+            ),
+        )
+    }
+
+    /// Appends the index on a fresh page: a level-one heading (so it reaches the
+    /// outline and table of contents), then entries under letter headings.
+    private mutating func renderIndex(_ records: [IndexRecord]) throws {
+        guard options.index.isEnabled, !records.isEmpty else {
+            return
+        }
+
+        if y != pageTopY {
+            startNewPage()
+        }
+        let title = options.index.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        try render(.heading(level: 1, content: [.text(title.isEmpty ? "Index" : title)]))
+
+        let indexElement = beginStructureElement(.index)
+        defer { endStructureElement(indexElement) }
+        let bodyStyle = style(for: .body)
+        let headingStyle = style(for: .heading2)
+        let entrySize = options.baseFontSize * 0.95
+        let lineHeight = entrySize * 1.35
+        let letterSize = entrySize * 1.2
+
+        var currentGroup: String?
+        for record in records {
+            let group = IndexCollation.groupHeading(for: record.display)
+            if group != currentGroup {
+                currentGroup = group
+                y -= entrySize * 0.5
+                ensureSpace(letterSize * 1.6 + lineHeight * 2)
+                let letterElement = beginStructureElement(.paragraph)
+                try drawRuns(
+                    [PDFTextRun(text: group, font: standardFont(for: headingStyle.fontRole), size: letterSize, color: headingStyle.color)],
+                    x: options.margins.left,
+                    y: y,
+                )
+                endStructureElement(letterElement)
+                y -= letterSize * 1.5
+            }
+
+            try renderIndexEntry(record, level: 0, size: entrySize, lineHeight: lineHeight, bodyStyle: bodyStyle)
+            for sub in record.subentries {
+                try renderIndexEntry(sub, level: 1, size: entrySize, lineHeight: lineHeight, bodyStyle: bodyStyle)
+            }
+        }
+    }
+
+    private mutating func renderIndexEntry(
+        _ record: IndexRecord,
+        level: Int,
+        size: Double,
+        lineHeight: Double,
+        bodyStyle: PDFOptions.ElementStyle,
+    ) throws {
+        let linkStyle = style(for: .link)
+        let font = standardFont(for: bodyStyle.fontRole)
+        func plain(_ text: String) -> PDFTextRun {
+            PDFTextRun(text: text, font: font, size: size, color: bodyStyle.color)
+        }
+
+        var runs = [plain(record.display)]
+        let references = PDFPageLabel.references(forPages: record.pages) { pageLabel(forPageIndex: $0) }
+        for (position, reference) in references.enumerated() {
+            runs.append(plain(position == 0 ? ", " : ", "))
+            registerPageDestination(forPageIndex: reference.targetPage)
+            runs.append(PDFTextRun(
+                text: reference.text,
+                font: font,
+                size: size,
+                color: linkStyle.color,
+                linkDestination: "#\(pageDestinationName(forPageIndex: reference.targetPage))",
+            ))
+        }
+
+        let indent = Double(level) * 16
+        let hangingIndent = 14.0
+        let x = options.margins.left + indent
+        let width = max(36, contentWidth - indent - hangingIndent)
+        let element = beginStructureElement(.paragraph)
+        defer { endStructureElement(element) }
+        for (lineIndex, line) in try wrappedLines(runs, maxWidth: width).enumerated() {
+            ensureSpace(lineHeight)
+            try drawRuns(line, x: x + (lineIndex == 0 ? 0 : hangingIndent), y: y)
+            y -= lineHeight
+        }
     }
 
     private mutating func renderFootnoteSection(_ footnotes: [ResolvedFootnote]) throws {
@@ -2836,14 +3197,17 @@ private struct Layout {
     }
 
     private mutating func loadImage(source: String) throws -> PDFImage {
-        if let image = imageCache[source] {
+        // Keyed by base as well as source: two merged sources may spell different
+        // files the same way (`../figures/a.png`).
+        let key = "\(assetsBaseURL?.absoluteString ?? "")\u{0}\(source)"
+        if let image = imageCache[key] {
             return image
         }
 
-        let name = "Im\(images.count + 1)"
-        let image = try PDFImage.load(source: source, baseURL: assetsBaseURL, name: name)
+        var image = try sharedImages.image(source: source, baseURL: assetsBaseURL)
+        image.name = "Im\(images.count + 1)"
         images.append(image)
-        imageCache[source] = image
+        imageCache[key] = image
         return image
     }
 
@@ -2876,6 +3240,7 @@ private struct Layout {
                     underline: underline,
                     strikethrough: strikethrough,
                     linkDestination: linkDestination,
+                    isIndexable: false,
                 ))
             case let .inlineMath(math):
                 try runs.append(contentsOf: inlineMathRuns(
@@ -2885,7 +3250,11 @@ private struct Layout {
                     underline: underline,
                     strikethrough: strikethrough,
                     linkDestination: linkDestination,
-                ))
+                ).map { run in
+                    var run = run
+                    run.isIndexable = false
+                    return run
+                })
             case let .emphasis(children):
                 try runs.append(contentsOf: flatten(
                     children,
@@ -2930,9 +3299,14 @@ private struct Layout {
                     underline: underline,
                     strikethrough: strikethrough,
                     linkDestination: linkDestination,
+                    isIndexable: false,
                 ))
+            case let .indexMarker(term):
+                var marker = PDFTextRun(text: "", font: font, size: size, color: color)
+                marker.indexTerm = term
+                runs.append(marker)
             case let .footnoteReference(label):
-                if let footnote = footnotesByLabelKey[footnoteLabelKey(label)] {
+                if let footnote = footnotesByLabelKey[footnoteKey(label)] {
                     let linkStyle = style(for: .link)
                     runs.append(PDFTextRun(
                         text: "\(footnote.number)",
@@ -2944,6 +3318,7 @@ private struct Layout {
                         linkDestination: "#\(footnote.definitionDestinationName)",
                         baselineOffset: size * 0.38,
                         namedDestination: footnote.referenceDestinationName,
+                        isIndexable: false,
                     ))
                 } else {
                     runs.append(PDFTextRun(
@@ -2954,6 +3329,7 @@ private struct Layout {
                         underline: underline,
                         strikethrough: strikethrough,
                         linkDestination: linkDestination,
+                        isIndexable: false,
                     ))
                 }
             }
@@ -3176,14 +3552,22 @@ private struct Layout {
         )
     }
 
+    /// Draws wrapped lines. With `indexable`, index terms found in the text are
+    /// recorded against the page each match's first line lands on.
     private mutating func drawWrapped(
         _ runs: [PDFTextRun],
         x: Double,
         maxWidth: Double,
         lineHeight: Double,
+        indexable: Bool = false,
     ) throws {
-        for line in try wrappedLines(runs, maxWidth: maxWidth) {
+        let lines = try wrappedLines(runs, maxWidth: maxWidth)
+        let hits = indexable ? indexHits(inLines: lines) : [:]
+        for (lineIndex, line) in lines.enumerated() {
             ensureSpace(lineHeight)
+            for entry in hits[lineIndex] ?? [] {
+                indexRegistry.record(entry, page: currentPageIndex)
+            }
             try drawRuns(line, x: x, y: y, maxWidth: maxWidth)
             y -= lineHeight
         }
@@ -3282,7 +3666,13 @@ private struct Layout {
                 attributes: header ? PDFTaggedContent.Attributes(tableHeaderScope: .column) : PDFTaggedContent.Attributes(),
             )
             var lineY = y - cellPadding - fontSize
-            for line in visibleLines {
+            // Index terms are matched within the lines drawn here, so a term that wraps
+            // across a page break inside one cell is not seen.
+            let hits = indexHits(inLines: Array(visibleLines))
+            for (lineIndex, line) in visibleLines.enumerated() {
+                for entry in hits[lineIndex] ?? [] {
+                    indexRegistry.record(entry, page: currentPageIndex)
+                }
                 let width = try textWidth(Array(line))
                 let alignment = column < alignments.count ? alignments[column] : .leading
                 let textX = switch alignment {
@@ -3384,7 +3774,7 @@ private struct Layout {
         for run in runs {
             // An inline math box is an atomic, indivisible token: it must not be
             // split into word segments, which would drop its laid-out box.
-            if run.inlineMathBox != nil {
+            if run.inlineMathBox != nil || run.indexTerm != nil {
                 tokens.append(run)
                 continue
             }
@@ -3454,6 +3844,20 @@ private struct Layout {
         maxWidth: Double? = nil,
         applyBidi: Bool = true,
     ) throws {
+        guard !runs.isEmpty else {
+            return
+        }
+        // Index markers are zero-width and draw nothing. Record them (and any terms a
+        // markers-only paragraph left pending) against this line's page, then draw
+        // the rest.
+        let hasMarkers = runs.contains { $0.indexTerm != nil }
+        if hasMarkers || !pendingIndexTerms.isEmpty {
+            flushPendingIndexTerms()
+            for case let term? in runs.map(\.indexTerm) {
+                recordIndexTerm(term)
+            }
+        }
+        let runs = hasMarkers ? runs.filter { $0.indexTerm == nil } : runs
         guard !runs.isEmpty else {
             return
         }
@@ -3969,6 +4373,8 @@ private struct Layout {
             alt.isEmpty ? source : alt
         case let .footnoteReference(label):
             "[^\(label)]"
+        case .indexMarker:
+            ""
         }
     }
 
@@ -4314,6 +4720,7 @@ private extension PDFTextRun {
             baselineOffset: baselineOffset,
             namedDestination: namedDestination,
             inlineMathBox: inlineMathBox,
+            isIndexable: isIndexable,
         )
     }
 }

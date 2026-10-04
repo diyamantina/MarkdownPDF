@@ -86,6 +86,7 @@ struct PDFTaggedContent {
         case code = "Code"
         case tableOfContents = "TOC"
         case tableOfContentsItem = "TOCI"
+        case index = "Index"
 
         static func heading(level: Int) -> Role {
             switch level {

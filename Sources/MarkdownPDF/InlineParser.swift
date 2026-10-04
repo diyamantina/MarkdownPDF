@@ -66,6 +66,12 @@ struct InlineParser {
                     result.append(.softBreak)
                 } else if let escaped = parseEscape() {
                     result.append(escaped)
+                } else if let marker = parseIndexMarker() {
+                    // An empty marker is consumed and dropped: it renders nothing and
+                    // records nothing.
+                    if let term = marker {
+                        result.append(.indexMarker(term: term))
+                    }
                 } else if let image = parseImage() {
                     result.append(image)
                 } else if let footnote = parseFootnoteReference() {
@@ -234,6 +240,30 @@ struct InlineParser {
             )
         }
 
+        /// Parses `{{index: term}}` at the cursor. The outer optional is nil when the
+        /// text at the cursor is not a marker (so it parses as ordinary text); the
+        /// inner optional is nil for a marker with an empty term. A marker must close
+        /// with `}}` on the same line.
+        private mutating func parseIndexMarker() -> String?? {
+            guard options.indexMarkers, source[index...].hasPrefix("{{index:") else {
+                return nil
+            }
+
+            let contentStart = source.index(index, offsetBy: "{{index:".count)
+            guard let close = source.range(of: "}}", range: contentStart ..< source.endIndex)?.lowerBound else {
+                return nil
+            }
+
+            let raw = source[contentStart ..< close]
+            guard !raw.contains("\n") else {
+                return nil
+            }
+
+            index = source.index(close, offsetBy: 2)
+            let term = raw.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            return .some(term.isEmpty ? nil : term)
+        }
+
         private mutating func parseFootnoteReference() -> MarkdownInline? {
             guard source[index...].hasPrefix("[^") else {
                 return nil
@@ -317,6 +347,7 @@ struct InlineParser {
                     source[index...].hasPrefix("_") ||
                     source[index...].hasPrefix("`") ||
                     (options.mathTypesetting && source[index...].hasPrefix("$")) ||
+                    (options.indexMarkers && source[index...].hasPrefix("{{")) ||
                     source[index...].hasPrefix("<") ||
                     source[index...].hasPrefix("\\") ||
                     source[index...].hasPrefix("\n")

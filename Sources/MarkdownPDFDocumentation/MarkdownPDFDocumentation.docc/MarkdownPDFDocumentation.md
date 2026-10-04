@@ -49,6 +49,7 @@ The rules articles define the conventions for source layout, witness gates, cros
 
 - <doc:Conventions>
 - <doc:Design>
+- <doc:LongDocuments>
 - <doc:ResumeTemplate>
 
 ### Research

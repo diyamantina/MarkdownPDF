@@ -77,7 +77,7 @@ struct PDFHeadingDestinationName {
     /// Lowercase Latin letters that have no canonical decomposition (so the
     /// decompose step leaves them intact) mapped to an ASCII base. Titles are
     /// lowercased before lookup, so only the lowercase forms are needed.
-    private static let asciiFolds: [UnicodeScalar: String] = [
+    static let asciiFolds: [UnicodeScalar: String] = [
         "\u{00E6}": "ae", // æ
         "\u{0153}": "oe", // œ
         "\u{00DF}": "ss", // ß

@@ -23,6 +23,12 @@ public struct PDFOptions: Equatable, Sendable {
     /// scaled above its native size or taller than the content area.
     public var imageMaxHeightFraction: Double
 
+    /// Page number footers. The default is ``PageNumbers/disabled``.
+    public var pageNumbers: PageNumbers
+
+    /// The back-of-book index. The default is ``Index/disabled``.
+    public var index: Index
+
     public init(
         pageSize: PageSize = .a4,
         margins: Margins = .standard,
@@ -38,6 +44,8 @@ public struct PDFOptions: Equatable, Sendable {
         taggedPDF: TaggedPDF = .disabled,
         conformance: Conformance = .none,
         imageMaxHeightFraction: Double = Self.defaultImageMaxHeightFraction,
+        pageNumbers: PageNumbers = .disabled,
+        index: Index = .disabled,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -53,6 +61,8 @@ public struct PDFOptions: Equatable, Sendable {
         self.taggedPDF = taggedPDF
         self.conformance = conformance
         self.imageMaxHeightFraction = imageMaxHeightFraction
+        self.pageNumbers = pageNumbers
+        self.index = index
     }
 
     /// The standalone image height cap used when none is given.

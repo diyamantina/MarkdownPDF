@@ -26,7 +26,7 @@ struct PDFImage {
         baseURL: URL?,
         name: String,
     ) throws -> PDFImage {
-        let url = imageURL(source: source, baseURL: baseURL)
+        let url = resolvedURL(source: source, baseURL: baseURL)
         let data: Data
 
         do {
@@ -48,7 +48,9 @@ struct PDFImage {
         throw MarkdownPDFError.unsupportedImage(source)
     }
 
-    private static func imageURL(source: String, baseURL: URL?) -> URL {
+    /// The file a Markdown image source refers to: a `file:` URL as given, an absolute
+    /// path as is, anything else relative to `baseURL` (or the working directory).
+    static func resolvedURL(source: String, baseURL: URL?) -> URL {
         if let url = URL(string: source), let scheme = url.scheme, scheme == "file" {
             return url
         }

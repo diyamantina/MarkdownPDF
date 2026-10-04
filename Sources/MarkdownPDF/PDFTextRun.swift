@@ -12,6 +12,14 @@ struct PDFTextRun {
     var baselineOffset: Double
     var namedDestination: String?
 
+    /// Set on the zero-width run an `{{index: term}}` marker becomes. The run draws
+    /// nothing; the renderer records the page it lands on for the index.
+    var indexTerm: String?
+
+    /// Whether this run's text is searched for index terms. Inline code and math
+    /// are not.
+    var isIndexable = true
+
     /// When set, this run is drawn as a laid-out inline math box (a fraction,
     /// radical, or similar 2D construct) rather than as text. The run's `text`
     /// holds the readable linearization used as the box's ActualText for
@@ -29,6 +37,7 @@ struct PDFTextRun {
         baselineOffset: Double = 0,
         namedDestination: String? = nil,
         inlineMathBox: MathBox? = nil,
+        isIndexable: Bool = true,
     ) {
         // Strip the invisible default-ignorable format controls up front (the BOM,
         // the zero-width joiners, the word joiner, the soft hyphen, the bidi
@@ -50,6 +59,7 @@ struct PDFTextRun {
         self.baselineOffset = baselineOffset
         self.namedDestination = namedDestination
         self.inlineMathBox = inlineMathBox
+        self.isIndexable = isIndexable
     }
 
     func width(fontSet: PDFOptions.FontSet) -> Double {

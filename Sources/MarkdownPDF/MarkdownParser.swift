@@ -7,9 +7,14 @@ public struct MarkdownParser: Sendable {
 
     public struct Options: Equatable, Sendable {
         public var mathTypesetting: Bool
+        /// Recognizes the invisible `{{index: term}}` marker as
+        /// ``MarkdownInline/indexMarker(term:)``. Off by default, so existing text
+        /// that happens to contain the marker syntax parses as before.
+        public var indexMarkers: Bool
 
-        public init(mathTypesetting: Bool = false) {
+        public init(mathTypesetting: Bool = false, indexMarkers: Bool = false) {
             self.mathTypesetting = mathTypesetting
+            self.indexMarkers = indexMarkers
         }
     }
 
