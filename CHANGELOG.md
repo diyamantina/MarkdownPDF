@@ -17,6 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   portable inflater now decodes dynamic Huffman blocks, and a new `PNGDecoder`
   unfilters all five scanline filters and verifies chunk CRCs.
 
+- `PDFOptions.pageNumbers` (`PDFOptions.PageNumbers`) draws page number footers:
+  bottom center, outside (alternating by printed parity) or right; plain,
+  `Page 1 of N`, or lowercase Roman; a custom first page number; optionally no
+  footer on the first page. Text uses the document's regular font role, is an
+  artifact when tagged, and stays inside the bottom margin. The table of contents and
+  index print the same labels. A bottom margin under twice the footer size throws
+  `MarkdownPDFError.pageNumbersNeedBottomMargin`.
+- `PDFOptions.index` (`PDFOptions.Index`) appends a back-of-book index from
+  `{{index: term}}` / `{{index: main > sub}}` markers and a term list matched as
+  whole words. Sorted with a platform-independent case and diacritic fold, grouped
+  under letter headings, with linked page references and ranges such as `12-14`. The
+  heading reaches the outline and table of contents. New public API:
+  `MarkdownInline.indexMarker(term:)` (a new case on a public enum, produced only
+  with `MarkdownParser.Options.indexMarkers`).
+- `MarkdownPDFRenderer.render(sources:startsEachSourceOnNewPage:)` and
+  `MarkdownSource` render several Markdown sources as one PDF: per-source image
+  folders, per-source footnote labels, collision-free heading destinations, and a
+  page break between sources. `render(markdown:assetsBaseURL:)` is unchanged.
+- The table of contents and index share one convergence loop. Decoded images are
+  cached across its passes.
+
 ### Fixed
 - Space after a fenced code block now matches the space before it. The cursor sits
   on the next line's baseline, so the old 8 pt drop left the next block's first

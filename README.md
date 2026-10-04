@@ -91,6 +91,18 @@ The generic renderer currently covers:
   placeholder.
 - PDF document title metadata, heading outlines, and internal heading links.
 - Opt-in generated table of contents with final page numbers and internal links.
+- Opt-in page number footers (`PDFOptions.pageNumbers`): bottom center, outside, or
+  right; plain, `Page 1 of N`, or lowercase Roman; custom first number; skip the
+  first page. Drawn in the document's font set and marked as an artifact when
+  tagged.
+- Opt-in back-of-book index (`PDFOptions.index`) built from `{{index: term}}` and
+  `{{index: main > sub}}` markers and an optional term list matched as whole words,
+  sorted by a platform-independent fold, grouped by letter, with linked page
+  references and ranges such as `12-14`. It lands in the outline and the table of
+  contents.
+- Merging several Markdown sources into one PDF with
+  `MarkdownPDFRenderer.render(sources:)`: per-source image folders, footnotes scoped
+  per source, collision-free heading destinations, and a page break between sources.
 - Standard PDF base fonts for WinAnsi-only documents, without embedding a font
   program.
 - Automatic bundled DejaVu for parsed content outside WinAnsi, plus explicit
@@ -194,6 +206,34 @@ import MarkdownPDF
 let options = PDFOptions(tableOfContents: .enabled)
 let markdown = "# Report\n\n## Methods\n\nBody."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
+Number the pages (`1`, `Page 1 of N`, or Roman), and append an index built from
+inline markers and a term list:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(
+    tableOfContents: .enabled,
+    pageNumbers: PDFOptions.PageNumbers(isEnabled: true, format: .ofTotal),
+    index: PDFOptions.Index(isEnabled: true, terms: ["layer", "animation"]),
+)
+// `{{index: term}}` and `{{index: main > sub}}` in the Markdown add entries.
+let markdown = "# Book\n\nA layer tree. {{index: tree > layer}}"
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
+Render several Markdown files as one PDF, each resolving its own images:
+
+```swift
+import MarkdownPDF
+
+let chapters = [
+    MarkdownSource(markdown: first, assetsBaseURL: firstFolder, name: "01.md"),
+    MarkdownSource(markdown: second, assetsBaseURL: secondFolder, name: "02.md"),
+]
+let data = try MarkdownPDFRenderer(options: options).render(sources: chapters)
 ```
 
 Enable portable syntax coloring for supported fenced code blocks:
