@@ -4046,8 +4046,20 @@ private struct Layout {
         6
     }
 
+    /// How far the cursor drops below a code block's bottom edge.
+    ///
+    /// The cursor is the next line's baseline, so the glyphs rise an ascender
+    /// (`0.75 * size`, the same top-of-line-box convention block quotes use) above
+    /// it. The drop therefore carries two parts: the ascender, so the next line's
+    /// top does not touch the box, plus the visible gap that sits above the box,
+    /// which is the previous paragraph's trailing spacing plus its line height less
+    /// the descender (`0.25 * size`). Space after the box then equals the space
+    /// before it.
     private var codeBlockFollowingGap: Double {
-        max(8, options.baseFontSize * style(for: .codeBlock).spacingAfterMultiplier)
+        let role: PDFOptions.ElementRole = listDepth > 0 ? .list : .paragraph
+        let size = fontSize(for: role)
+        let visibleGapAbove = paragraphSpacing + bodyLineHeight - size * 0.25
+        return visibleGapAbove + size * 0.75
     }
 
     private var codeBlockTabWidth: Int {

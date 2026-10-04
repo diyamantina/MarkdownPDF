@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Space after a fenced code block now matches the space before it. The cursor sits
+  on the next line's baseline, so the old 8 pt drop left the next block's first
+  line touching the box's bottom edge. The drop now adds the ascender plus the
+  visible gap above the box. Output changes only for documents with fenced code
+  blocks; documents without them are byte-identical.
+
 ## [0.9.0] - 2026-10-04
 
 ### Added
