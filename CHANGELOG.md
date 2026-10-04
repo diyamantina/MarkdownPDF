@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `PDFOptions.colophon` (`PDFOptions.Colophon`, `.disabled` / `.enabled` /
+  `.enabled(markdown:assetsBaseURL:)`) adds a colophon as the final page or pages,
+  after the index (which is otherwise always last). The default text is a
+  `Colophon` heading, a `*Title* by Author.` line (a missing part is dropped), a
+  sentence about MarkdownPDF, and the open-source link with visible text and a real
+  URI annotation to `https://codeberg.org/MarkdownPdfHQ/MarkdownPDF`. Custom
+  Markdown replaces the default entirely; empty custom text throws the new
+  `MarkdownPDFError.colophonTextEmpty`. The colophon shares the table of contents
+  and index convergence loop, reaches the outline and the contents with its page
+  number, carries page numbers, and is not searched by the index. Documents
+  without it render byte-for-byte as before.
+- `PDFOptions.ignoreHTMLComments` (`PDFOptions.IgnoreHTMLComments`, `.disabled` /
+  `.enabled`) and `MarkdownParser.Options.ignoreHTMLComments` delete HTML comments
+  before parsing, block and inline, including multi-line ones, so markers such as
+  `<!--print-only-->` and `<!--say: ...-->` do not print. Comments in fenced code
+  and inline code stay literal, `<!-- pagebreak -->` is kept, an unterminated
+  `<!--` stays visible text, and a line left empty by a deletion disappears. Off
+  by default, which is byte-identical.
 - `PDFOptions.cover` (`PDFOptions.Cover`) makes a full-page cover physical page 1,
   before the table of contents. The picture is a PNG or JPEG given as
   `.data(Data)` or `.file(path, relativeTo: URL?)` (`PDFOptions.Cover.ImageSource`),

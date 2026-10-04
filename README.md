@@ -96,6 +96,9 @@ The generic renderer currently covers:
   unnumbered; the page after it is printed page 1. It is the first outline item and a
   Figure with alt text when tagged. `PDFOptions.author` adds the author to the PDF
   metadata.
+- Opt-in colophon (`PDFOptions.colophon`) as the last page after the index, with a
+  default text or custom Markdown, and opt-in removal of HTML comments
+  (`PDFOptions.ignoreHTMLComments`) so authoring markers do not print.
 - Opt-in page number footers (`PDFOptions.pageNumbers`): bottom center, outside, or
   right; plain, `Page 1 of N`, or lowercase Roman; custom first number; skip the
   first page. Drawn in the document's font set and marked as an artifact when
@@ -243,6 +246,21 @@ let options = PDFOptions(
     cover: .enabled(image: .file("cover.png", relativeTo: assetsFolder)), // or .data(bytes)
 )
 let data = try MarkdownPDFRenderer(options: options).render(markdown: "# Chapter\n\nText.")
+```
+
+End the book with a colophon after the index, and keep authoring comments such as
+`<!--print-only-->` out of the page:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(
+    title: "The Book",
+    index: PDFOptions.Index(isEnabled: true, terms: ["layer"]),
+    author: "A. Writer",
+    ignoreHTMLComments: .enabled, // drops `<!--...-->`, keeps code and `<!-- pagebreak -->`
+    colophon: .enabled, // or .enabled(markdown: "# Credits\n\nSet in Fira Sans.")
+)
 ```
 
 Render several Markdown files as one PDF, each resolving its own images:
