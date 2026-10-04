@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The table of contents and index share one convergence loop. Decoded images are
   cached across its passes.
 
+### Changed
+- The fixed Huffman encoder updates its match buckets in place, six times faster on
+  flat images. Compressed output is byte identical.
+
 ### Fixed
 - Space after a fenced code block now matches the space before it. The cursor sits
   on the next line's baseline, so the old 8 pt drop left the next block's first
