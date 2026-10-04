@@ -982,7 +982,7 @@ private struct Layout {
         }
 
         let maxWidth = max(1, contentWidth - 24)
-        let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
+        let maxHeight = imageMaxHeight
         let scale = min(1, maxWidth / Double(image.width), maxHeight / Double(image.height))
         return Double(image.height) * scale
     }
@@ -2787,7 +2787,7 @@ private struct Layout {
         }
 
         let maxWidth = contentWidth
-        let maxHeight = max(1, min(contentHeight, options.pageSize.height * 0.45))
+        let maxHeight = imageMaxHeight
         let widthScale = maxWidth / Double(image.width)
         let heightScale = maxHeight / Double(image.height)
         let scale = min(1, widthScale, heightScale)
@@ -4099,6 +4099,16 @@ private struct Layout {
 
     private var availablePageHeight: Double {
         y - options.margins.bottom
+    }
+
+    /// The tallest a standalone image may be drawn: the configured fraction of the
+    /// page height, clamped to a sane range and to the content area.
+    private var imageMaxHeight: Double {
+        let requested = options.imageMaxHeightFraction.isFinite
+            ? options.imageMaxHeightFraction
+            : PDFOptions.defaultImageMaxHeightFraction
+        let fraction = min(max(requested, 0.05), 1)
+        return max(1, min(contentHeight, options.pageSize.height * fraction))
     }
 
     private var pageTopY: Double {

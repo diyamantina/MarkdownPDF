@@ -15,6 +15,14 @@ public struct PDFOptions: Equatable, Sendable {
     public var taggedPDF: TaggedPDF
     public var conformance: Conformance
 
+    /// The tallest a standalone image may be drawn, as a fraction of the page height.
+    ///
+    /// The default of `0.45` keeps a figure from filling a document page and
+    /// preserves existing output. Slide-sized pages can raise it so a picture fills
+    /// the slide. The renderer clamps the value to `0.05...1`, and an image is never
+    /// scaled above its native size or taller than the content area.
+    public var imageMaxHeightFraction: Double
+
     public init(
         pageSize: PageSize = .a4,
         margins: Margins = .standard,
@@ -29,6 +37,7 @@ public struct PDFOptions: Equatable, Sendable {
         streamCompression: StreamCompression = .disabled,
         taggedPDF: TaggedPDF = .disabled,
         conformance: Conformance = .none,
+        imageMaxHeightFraction: Double = Self.defaultImageMaxHeightFraction,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -43,7 +52,11 @@ public struct PDFOptions: Equatable, Sendable {
         self.streamCompression = streamCompression
         self.taggedPDF = taggedPDF
         self.conformance = conformance
+        self.imageMaxHeightFraction = imageMaxHeightFraction
     }
+
+    /// The standalone image height cap used when none is given.
+    public static let defaultImageMaxHeightFraction = 0.45
 
     public struct PageSize: Equatable, Sendable {
         public var width: Double

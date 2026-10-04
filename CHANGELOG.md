@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `PDFOptions.imageMaxHeightFraction` sets how tall a standalone image may be drawn,
+  as a fraction of the page height. The default stays `0.45`, so existing output is
+  unchanged. Slide-sized pages can raise it so a picture fills the slide.
+
 ## [0.8.0] - 2026-07-10
 
 ### Added
