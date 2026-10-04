@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- PNG images with transparency and the remaining PNG formats now embed instead of
+  falling back to the `[Image: alt]` placeholder: RGBA and gray plus alpha (8 and
+  16 bit), palette images including `tRNS`, gray and RGB colour keys, 1 to 16 bit
+  depths, and Adam7 interlace. Colour and alpha are written as an image XObject and
+  a `/SMask` soft mask; a fully opaque alpha channel emits no mask. 8 bit gray and
+  RGB PNGs without `tRNS` keep their byte-identical pass-through encoding. The
+  portable inflater now decodes dynamic Huffman blocks, and a new `PNGDecoder`
+  unfilters all five scanline filters and verifies chunk CRCs.
+
 ### Fixed
 - Space after a fenced code block now matches the space before it. The cursor sits
   on the next line's baseline, so the old 8 pt drop left the next block's first

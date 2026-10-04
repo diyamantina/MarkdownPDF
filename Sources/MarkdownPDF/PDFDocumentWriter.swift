@@ -432,7 +432,8 @@ struct PDFDocumentWriter {
         }
 
         mutating func addImage(_ image: PDFImageXObject) -> PDFSyntax.Reference {
-            addData(image.pdfStream.serialized)
+            let softMaskRef = image.softMaskStream.map { addData($0.serialized) }
+            return addData(image.pdfStream(softMaskRef: softMaskRef).serialized)
         }
 
         mutating func addMetadata(_ metadata: PDFDocumentMetadata) -> (info: PDFSyntax.Reference, xmp: PDFSyntax.Reference) {

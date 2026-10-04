@@ -9,6 +9,7 @@ struct PDFImageXObject {
     var filter: PDFSyntax.Name
     var decodeParms: PDFSyntax.Dictionary?
     var data: Data
+    var softMask: PDFImage.SoftMask?
 
     init(image: PDFImage) {
         self.init(
@@ -20,6 +21,7 @@ struct PDFImageXObject {
             filter: image.filter,
             decodeParms: image.decodeParms,
             data: image.data,
+            softMask: image.softMask,
         )
     }
 
@@ -32,6 +34,7 @@ struct PDFImageXObject {
         filter: PDFSyntax.Name,
         decodeParms: PDFSyntax.Dictionary? = nil,
         data: Data,
+        softMask: PDFImage.SoftMask? = nil,
     ) {
         precondition(!resourceName.isEmpty, "PDF image XObject resource name cannot be empty")
         precondition(width > 0, "PDF image XObject width must be positive")
@@ -47,9 +50,31 @@ struct PDFImageXObject {
         self.filter = filter
         self.decodeParms = decodeParms
         self.data = data
+        self.softMask = softMask
     }
 
-    var pdfDictionary: PDFSyntax.Dictionary {
+    /// The soft-mask image stream, drawn as DeviceGray through `/SMask`.
+    var softMaskStream: PDFSyntax.Stream? {
+        guard let softMask else {
+            return nil
+        }
+        return PDFSyntax.Stream(
+            dictionary: PDFSyntax.Dictionary([
+                .init("Type", .pdfName("XObject")),
+                .init("Subtype", .pdfName("Image")),
+                .init("Width", .int(softMask.width)),
+                .init("Height", .int(softMask.height)),
+                .init("ColorSpace", .pdfName("DeviceGray")),
+                .init("BitsPerComponent", .int(softMask.bitsPerComponent)),
+                .init("Filter", .pdfName("FlateDecode")),
+            ]),
+            data: softMask.data,
+        )
+    }
+
+    /// The image dictionary. `softMaskRef` is the already-registered `/SMask`
+    /// stream when the image has one.
+    func pdfDictionary(softMaskRef: PDFSyntax.Reference?) -> PDFSyntax.Dictionary {
         var entries: [PDFSyntax.Dictionary.Entry] = [
             .init("Type", .pdfName("XObject")),
             .init("Subtype", .pdfName("Image")),
@@ -62,12 +87,23 @@ struct PDFImageXObject {
         if let decodeParms {
             entries.append(.init("DecodeParms", .dictionary(decodeParms)))
         }
+        if let softMaskRef {
+            entries.append(.init("SMask", .reference(softMaskRef)))
+        }
 
         return PDFSyntax.Dictionary(entries)
     }
 
+    var pdfDictionary: PDFSyntax.Dictionary {
+        pdfDictionary(softMaskRef: nil)
+    }
+
     var pdfStream: PDFSyntax.Stream {
-        PDFSyntax.Stream(dictionary: pdfDictionary, data: data)
+        pdfStream(softMaskRef: nil)
+    }
+
+    func pdfStream(softMaskRef: PDFSyntax.Reference?) -> PDFSyntax.Stream {
+        PDFSyntax.Stream(dictionary: pdfDictionary(softMaskRef: softMaskRef), data: data)
     }
 
     func resource(objectRef: PDFSyntax.Reference) -> PDFXObjectResource {

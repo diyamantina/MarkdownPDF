@@ -84,7 +84,11 @@ The generic renderer currently covers:
 - Emphasis, strong text, strike-through, inline code, links, and backslash
   escapes.
 - Ordered lists, unordered lists, fenced code blocks, and GFM tables.
-- Local JPEG and PNG images resolved relative to the input document.
+- Local JPEG and PNG images resolved relative to the input document. PNG support
+  covers every colour type and bit depth, Adam7 interlace, and transparency
+  (alpha channels, palette `tRNS`, colour keys), written as an image XObject with a
+  soft mask. A PNG that cannot be decoded falls back to the `[Image: alt]`
+  placeholder.
 - PDF document title metadata, heading outlines, and internal heading links.
 - Opt-in generated table of contents with final page numbers and internal links.
 - Standard PDF base fonts for WinAnsi-only documents, without embedding a font

@@ -17,6 +17,9 @@ enum PDFDeflate {
         case invalidStoredLength
         case invalidHuffmanCode
         case invalidLengthDistancePair
+        case invalidDynamicHeader
+        case overSubscribedCode
+        case incompleteCodeLengths
     }
 
     static func zlibCompressed(_ data: Data, strategy: Strategy = .fixedHuffman) -> Data {
@@ -62,7 +65,20 @@ enum PDFDeflate {
             case 0:
                 try inflateStoredBlock(reader: &reader, output: &output)
             case 1:
-                try inflateFixedHuffmanBlock(reader: &reader, output: &output)
+                try inflateHuffmanBlock(
+                    literalLengthTable: fixedLiteralLengthTable,
+                    distanceTable: fixedDistanceTable,
+                    reader: &reader,
+                    output: &output,
+                )
+            case 2:
+                let tables = try readDynamicTables(reader: &reader)
+                try inflateHuffmanBlock(
+                    literalLengthTable: tables.literalLength,
+                    distanceTable: tables.distance,
+                    reader: &reader,
+                    output: &output,
+                )
             default:
                 throw InflateError.invalidBlockType
             }
@@ -245,9 +261,14 @@ enum PDFDeflate {
         }
     }
 
-    private static func inflateFixedHuffmanBlock(reader: inout BitReader, output: inout [UInt8]) throws {
+    private static func inflateHuffmanBlock(
+        literalLengthTable: HuffmanTable,
+        distanceTable: HuffmanTable,
+        reader: inout BitReader,
+        output: inout [UInt8],
+    ) throws {
         while true {
-            let symbol = try fixedLiteralLengthTable.decode(from: &reader)
+            let symbol = try literalLengthTable.decode(from: &reader)
             switch symbol {
             case 0 ... 255:
                 output.append(UInt8(symbol))
@@ -257,7 +278,7 @@ enum PDFDeflate {
                 let lengthIndex = symbol - 257
                 let lengthExtra = try reader.readBits(lengthExtraBits[lengthIndex])
                 let length = lengthBases[lengthIndex] + lengthExtra
-                let distanceSymbol = try fixedDistanceTable.decode(from: &reader)
+                let distanceSymbol = try distanceTable.decode(from: &reader)
                 guard distanceSymbol < distanceBases.count else {
                     throw InflateError.invalidLengthDistancePair
                 }
@@ -267,13 +288,63 @@ enum PDFDeflate {
                     throw InflateError.invalidLengthDistancePair
                 }
 
+                var source = output.count - distance
                 for _ in 0 ..< length {
-                    output.append(output[output.count - distance])
+                    output.append(output[source])
+                    source += 1
                 }
             default:
                 throw InflateError.invalidHuffmanCode
             }
         }
+    }
+
+    /// Reads a dynamic block header (RFC 1951 section 3.2.7): the code-length code,
+    /// then the run-length coded literal/length and distance code lengths.
+    private static func readDynamicTables(
+        reader: inout BitReader,
+    ) throws -> (literalLength: HuffmanTable, distance: HuffmanTable) {
+        let literalLengthCount = try reader.readBits(5) + 257
+        let distanceCount = try reader.readBits(5) + 1
+        let codeLengthCount = try reader.readBits(4) + 4
+        guard literalLengthCount <= 286, distanceCount <= 30 else {
+            throw InflateError.invalidDynamicHeader
+        }
+
+        var codeLengthLengths = [Int](repeating: 0, count: 19)
+        for index in 0 ..< codeLengthCount {
+            codeLengthLengths[codeLengthOrder[index]] = try reader.readBits(3)
+        }
+        let codeLengthTable = try HuffmanTable(codeLengths: codeLengthLengths)
+
+        var lengths: [Int] = []
+        lengths.reserveCapacity(literalLengthCount + distanceCount)
+        while lengths.count < literalLengthCount + distanceCount {
+            let symbol = try codeLengthTable.decode(from: &reader)
+            switch symbol {
+            case 0 ... 15:
+                lengths.append(symbol)
+            case 16:
+                guard let previous = lengths.last else {
+                    throw InflateError.invalidDynamicHeader
+                }
+                try lengths.append(contentsOf: repeatElement(previous, count: reader.readBits(2) + 3))
+            case 17:
+                try lengths.append(contentsOf: repeatElement(0, count: reader.readBits(3) + 3))
+            case 18:
+                try lengths.append(contentsOf: repeatElement(0, count: reader.readBits(7) + 11))
+            default:
+                throw InflateError.invalidHuffmanCode
+            }
+        }
+        guard lengths.count == literalLengthCount + distanceCount, lengths[256] != 0 else {
+            throw InflateError.invalidDynamicHeader
+        }
+
+        return try (
+            literalLength: HuffmanTable(codeLengths: Array(lengths[0 ..< literalLengthCount])),
+            distance: HuffmanTable(codeLengths: Array(lengths[literalLengthCount...])),
+        )
     }
 
     private static func lengthSymbol(for length: Int) -> SymbolCode {
@@ -410,28 +481,37 @@ enum PDFDeflate {
         }
     }
 
+    /// Reads DEFLATE bits least-significant first. Bytes load on demand, so fewer
+    /// than eight bits ever stay buffered and a byte-aligned read can resume at
+    /// `byteIndex` after dropping them.
     private struct BitReader {
         var bytes: [UInt8]
         var byteIndex = 0
-        var bitIndex = 0
+        private var buffer = 0
+        private var bufferedBitCount = 0
+
+        init(bytes: [UInt8]) {
+            self.bytes = bytes
+        }
 
         mutating func readBits(_ count: Int) throws -> Int {
-            guard count > 0 else {
-                return 0
+            while bufferedBitCount < count {
+                guard byteIndex < bytes.count else {
+                    throw InflateError.unexpectedEndOfInput
+                }
+                buffer |= Int(bytes[byteIndex]) << bufferedBitCount
+                byteIndex += 1
+                bufferedBitCount += 8
             }
-
-            var value = 0
-            for index in 0 ..< count {
-                value |= try readBit() << index
-            }
+            let value = buffer & ((1 << count) - 1)
+            buffer >>= count
+            bufferedBitCount -= count
             return value
         }
 
         mutating func alignToByte() {
-            if bitIndex > 0 {
-                bitIndex = 0
-                byteIndex += 1
-            }
+            buffer = 0
+            bufferedBitCount = 0
         }
 
         mutating func readByteAligned() throws -> UInt8 {
@@ -451,70 +531,68 @@ enum PDFDeflate {
             let high = try Int(readByteAligned())
             return low | (high << 8)
         }
-
-        private mutating func readBit() throws -> Int {
-            guard byteIndex < bytes.count else {
-                throw InflateError.unexpectedEndOfInput
-            }
-
-            let bit = (bytes[byteIndex] >> UInt8(bitIndex)) & 1
-            bitIndex += 1
-            if bitIndex == 8 {
-                bitIndex = 0
-                byteIndex += 1
-            }
-            return Int(bit)
-        }
     }
 
+    /// A canonical Huffman decoder in the shape of RFC 1951 section 3.2.2: code
+    /// counts per length plus symbols sorted by (length, value). Decoding walks one
+    /// bit at a time and needs no per-code allocation.
     private struct HuffmanTable {
-        private struct Key: Hashable {
-            var bitCount: Int
-            var code: Int
-        }
+        private static let maximumCodeLength = 15
 
-        private var symbolsByKey: [Key: Int]
-        private var maximumBitCount: Int
+        private var countsByLength: [Int]
+        private var symbols: [Int]
 
-        init(codeLengths: [Int]) {
-            maximumBitCount = codeLengths.max() ?? 0
-            var countsByLength: [Int: Int] = [:]
-            for length in codeLengths where length > 0 {
-                countsByLength[length, default: 0] += 1
+        init(codeLengths: [Int]) throws {
+            var counts = [Int](repeating: 0, count: Self.maximumCodeLength + 1)
+            for length in codeLengths {
+                guard length <= Self.maximumCodeLength else {
+                    throw InflateError.invalidHuffmanCode
+                }
+                counts[length] += 1
             }
 
-            var nextCodeByLength: [Int: Int] = [:]
-            var code = 0
-            for bitCount in 1 ... maximumBitCount {
-                code = (code + (countsByLength[bitCount - 1] ?? 0)) << 1
-                nextCodeByLength[bitCount] = code
+            var left = 1
+            for length in 1 ... Self.maximumCodeLength {
+                left = (left << 1) - counts[length]
+                guard left >= 0 else {
+                    throw InflateError.overSubscribedCode
+                }
             }
 
-            symbolsByKey = [:]
-            for (symbol, bitCount) in codeLengths.enumerated() where bitCount > 0 {
-                let canonicalCode = nextCodeByLength[bitCount] ?? 0
-                nextCodeByLength[bitCount] = canonicalCode + 1
-                symbolsByKey[
-                    Key(
-                        bitCount: bitCount,
-                        code: reverseBits(canonicalCode, bitCount: bitCount),
-                    ),
-                ] = symbol
+            var offsets = [Int](repeating: 0, count: Self.maximumCodeLength + 2)
+            for length in 1 ... Self.maximumCodeLength {
+                offsets[length + 1] = offsets[length] + counts[length]
             }
+            var sorted = [Int](repeating: 0, count: codeLengths.count)
+            for (symbol, length) in codeLengths.enumerated() where length > 0 {
+                sorted[offsets[length]] = symbol
+                offsets[length] += 1
+            }
+
+            countsByLength = counts
+            symbols = sorted
         }
 
         func decode(from reader: inout BitReader) throws -> Int {
             var code = 0
-            for bitCount in 1 ... maximumBitCount {
-                code |= try reader.readBits(1) << (bitCount - 1)
-                if let symbol = symbolsByKey[Key(bitCount: bitCount, code: code)] {
-                    return symbol
+            var first = 0
+            var index = 0
+            for length in 1 ... Self.maximumCodeLength {
+                code |= try reader.readBits(1)
+                let count = countsByLength[length]
+                if code - count < first {
+                    return symbols[index + (code - first)]
                 }
+                index += count
+                first = (first + count) << 1
+                code <<= 1
             }
 
             throw InflateError.invalidHuffmanCode
         }
     }
+
+    private static let codeLengthOrder = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
 
     private static let lengthBases = [
         3, 4, 5, 6, 7, 8, 9, 10,
@@ -570,7 +648,7 @@ enum PDFDeflate {
         13, 13,
     ]
 
-    private static let fixedLiteralLengthTable = HuffmanTable(
+    private static let fixedLiteralLengthTable = makeFixedTable(
         codeLengths: (0 ... 287).map { symbol in
             switch symbol {
             case 0 ... 143:
@@ -585,5 +663,14 @@ enum PDFDeflate {
         },
     )
 
-    private static let fixedDistanceTable = HuffmanTable(codeLengths: Array(repeating: 5, count: 32))
+    private static let fixedDistanceTable = makeFixedTable(codeLengths: Array(repeating: 5, count: 32))
+
+    /// The fixed codes of RFC 1951 section 3.2.6 are valid by construction, so a
+    /// failure here is a programming error, not bad input.
+    private static func makeFixedTable(codeLengths: [Int]) -> HuffmanTable {
+        guard let table = try? HuffmanTable(codeLengths: codeLengths) else {
+            preconditionFailure("the fixed DEFLATE code lengths are a complete prefix code")
+        }
+        return table
+    }
 }

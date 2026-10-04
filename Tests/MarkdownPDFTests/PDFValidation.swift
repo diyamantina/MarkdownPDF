@@ -228,18 +228,19 @@ enum PDFValidation {
         return try mutoolPNM(url: url, page: page, resolution: resolution)
     }
 
+    /// `mutool draw` writes greyscale PNM unless asked for RGB, so colour witnesses
+    /// pass `rgb: true`.
     static func mutoolPNM(
         url: URL,
         page: Int = 1,
         resolution: Int = 96,
+        rgb: Bool = false,
     ) throws -> (result: Result, pnmURL: URL) {
         let directory = try temporaryDirectory()
         let outputURL = directory.appendingPathComponent("page-\(page).pnm")
         let result = try Tool.run(
             "mutool",
-            arguments: [
-                "draw",
-                "-q",
+            arguments: ["draw", "-q"] + (rgb ? ["-c", "rgb"] : []) + [
                 "-F",
                 "pnm",
                 "-r",

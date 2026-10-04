@@ -9,6 +9,17 @@ struct PDFImage {
     var filter: PDFSyntax.Name
     var decodeParms: PDFSyntax.Dictionary?
     var data: Data
+    /// The alpha plane as a DeviceGray image drawn through `/SMask`, or nil when the
+    /// image is opaque.
+    var softMask: SoftMask?
+
+    /// An 8 or 16 bit greyscale alpha plane, Flate encoded.
+    struct SoftMask: Equatable {
+        var width: Int
+        var height: Int
+        var bitsPerComponent: Int
+        var data: Data
+    }
 
     static func load(
         source: String,
@@ -28,6 +39,9 @@ struct PDFImage {
             return image
         }
         if let image = parsePNG(data: data, name: name) {
+            return image
+        }
+        if let image = decodePNG(data: data, name: name) {
             return image
         }
 
@@ -150,6 +164,9 @@ struct PDFImage {
                 default:
                     return nil
                 }
+            } else if type == "tRNS" {
+                // Transparency needs the decoded path and a soft mask.
+                return nil
             } else if type == "IDAT" {
                 idat.append(contentsOf: bytes[chunkStart ..< chunkEnd])
             } else if type == "IEND" {
@@ -178,6 +195,44 @@ struct PDFImage {
             ]),
             data: idat,
         )
+    }
+
+    /// Decodes every PNG the pass-through path does not take (alpha, palette,
+    /// 16 bit, sub-byte, interlaced, `tRNS`) and re-encodes colour and alpha as
+    /// separate Flate streams. Returns nil, so the caller degrades to the image
+    /// placeholder, for data that is not a valid PNG.
+    private static func decodePNG(data: Data, name: String) -> PDFImage? {
+        guard let raster = try? PNGDecoder.decode([UInt8](data)) else {
+            return nil
+        }
+
+        var softMask: SoftMask?
+        if let alpha = raster.alpha, !isOpaque(alpha) {
+            softMask = SoftMask(
+                width: raster.width,
+                height: raster.height,
+                bitsPerComponent: raster.sampleDepth,
+                data: PDFDeflate.zlibCompressed(Data(alpha)),
+            )
+        }
+
+        return PDFImage(
+            name: name,
+            width: raster.width,
+            height: raster.height,
+            colorSpace: PDFSyntax.Name(raster.colorComponents == 1 ? "DeviceGray" : "DeviceRGB"),
+            bitsPerComponent: raster.sampleDepth,
+            filter: PDFSyntax.Name("FlateDecode"),
+            decodeParms: nil,
+            data: PDFDeflate.zlibCompressed(Data(raster.color)),
+            softMask: softMask,
+        )
+    }
+
+    /// True when every alpha byte is 0xFF (every 8 or 16 bit sample fully opaque),
+    /// so no soft mask is needed.
+    private static func isOpaque(_ alpha: [UInt8]) -> Bool {
+        !alpha.contains { $0 != 0xFF }
     }
 
     private static func readUInt32(_ bytes: [UInt8], _ index: Int) -> UInt32 {

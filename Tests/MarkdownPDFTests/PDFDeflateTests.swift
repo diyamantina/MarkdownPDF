@@ -144,3 +144,66 @@ struct PDFDeflateTests {
         return nil
     }
 }
+
+@Suite("PDF DEFLATE dynamic Huffman inflate")
+struct PDFDeflateDynamicTests {
+    private func pattern(count: Int) -> [UInt8] {
+        var state: UInt32 = 12345
+        var bytes: [UInt8] = []
+        while bytes.count < count {
+            state = state &* 1_664_525 &+ 1_013_904_223
+            let value = UInt8(truncatingIfNeeded: state >> 24)
+            switch (state >> 8) % 5 {
+            case 0:
+                bytes += [UInt8](repeating: value, count: Int(state >> 20) % 300 + 1)
+            case 1:
+                bytes += [value, value &+ 1, value, value &+ 1, value]
+            default:
+                bytes.append(value)
+            }
+        }
+        return Array(bytes.prefix(count))
+    }
+
+    @Test("Inflates an independently encoded dynamic block", arguments: [0, 1, 2, 3, 255, 1000, 70000])
+    func inflatesIndependentlyEncodedDynamicBlock(count: Int) throws {
+        let input = pattern(count: count)
+        let compressed = TestDynamicDeflate.zlib(input)
+
+        #expect(try [UInt8](PDFDeflate.inflateZlib(Data(compressed))) == input)
+    }
+
+    @Test("Rejects truncated and corrupted dynamic streams")
+    func rejectsTruncatedAndCorruptedDynamicStreams() {
+        let compressed = TestDynamicDeflate.zlib(pattern(count: 5000))
+
+        #expect(throws: PDFDeflate.InflateError.self) {
+            try PDFDeflate.inflateZlib(Data(compressed.prefix(compressed.count / 2)))
+        }
+        var flipped = compressed
+        flipped[flipped.count / 2] ^= 0x55
+        #expect(throws: PDFDeflate.InflateError.self) {
+            try PDFDeflate.inflateZlib(Data(flipped))
+        }
+    }
+
+    @Test("Rejects a dynamic header with an over-subscribed code")
+    func rejectsOverSubscribedCode() {
+        // BFINAL=1, BTYPE=2, HLIT=0, HDIST=0, HCLEN=0 then four 3-bit code-length
+        // lengths of 1, which over-subscribes the one-bit code space.
+        var bits: [Int] = [1, 0, 1]
+        bits += [0, 0, 0, 0, 0] + [0, 0, 0, 0, 0] + [0, 0, 0, 0]
+        for _ in 0 ..< 4 {
+            bits += [1, 0, 0]
+        }
+        var bytes = [UInt8](repeating: 0, count: (bits.count + 7) / 8 + 6)
+        for (index, bit) in bits.enumerated() {
+            bytes[index / 8] |= UInt8(bit << (index % 8))
+        }
+        let stream = Data([0x78, 0x01] + bytes)
+
+        #expect(throws: PDFDeflate.InflateError.self) {
+            try PDFDeflate.inflateZlib(stream)
+        }
+    }
+}
