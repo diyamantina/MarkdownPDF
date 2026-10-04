@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `PDFOptions.cover` (`PDFOptions.Cover`) makes a full-page cover physical page 1,
+  before the table of contents. The picture is a PNG or JPEG given as
+  `.data(Data)` or `.file(path, relativeTo: URL?)` (`PDFOptions.Cover.ImageSource`),
+  decoded exactly like a body image, so an RGBA PNG composites over white through
+  its soft mask. It is scaled by `min(W / w, H / h)` and centred, up as well as down;
+  aspect ratios within 0.1% of the page's fill it exactly, otherwise the bars show
+  the page background (white by default). The cover carries no page number: the page
+  after it is printed page 1 (or `firstPageNumber`), `Page N of M` and
+  `skipsFirstPage` start there, the table of contents and index print those printed
+  numbers, and links, destinations and the outline address physical pages. It is the
+  first outline item ("Cover"), is not a table of contents entry, and is a Figure
+  with alt text built from the title and author when the document is tagged. A
+  missing or undecodable image throws the new
+  `MarkdownPDFError.coverImageUnreadable` or `.coverImageUnsupported`. Documents
+  without a cover render byte-for-byte as before.
+- `PDFOptions.author` writes `/Author` to the Info dictionary and `dc:creator` to the
+  XMP packet, next to the title. Blank values write nothing.
 - PNG images with transparency and the remaining PNG formats now embed instead of
   falling back to the `[Image: alt]` placeholder: RGBA and gray plus alpha (8 and
   16 bit), palette images including `tRNS`, gray and RGB colour keys, 1 to 16 bit

@@ -20,7 +20,9 @@ struct PDFDocumentOutline {
                 nodes[index].parent = parent
                 nodes[parent].children.append(index)
             }
-            stack.append(index)
+            if !nodes[index].resolved.destination.isOutlineLeaf {
+                stack.append(index)
+            }
         }
 
         let rootChildren = nodes.filter { $0.parent == nil }.map(\.index)

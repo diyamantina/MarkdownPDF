@@ -6,6 +6,9 @@ struct PDFHeadingDestination: Equatable {
     var level: Int
     var x: Double
     var y: Double
+    /// True for an outline entry that never becomes a parent: a later, deeper heading
+    /// belongs to the previous real heading, not to this one. The cover uses it.
+    var isOutlineLeaf = false
 
     func destinationArray(page: PDFSyntax.Reference) -> PDFSyntax.Array {
         PDFSyntax.Array([

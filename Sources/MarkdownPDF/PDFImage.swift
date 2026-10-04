@@ -35,17 +35,23 @@ struct PDFImage {
             throw MarkdownPDFError.unreadableImage(source)
         }
 
+        if let image = decode(data: data, name: name) {
+            return image
+        }
+
+        throw MarkdownPDFError.unsupportedImage(source)
+    }
+
+    /// The image a JPEG or PNG file's bytes describe, or nil when they are neither or
+    /// are damaged. Body images and the cover share this one decoder.
+    static func decode(data: Data, name: String) -> PDFImage? {
         if let image = parseJPEG(data: data, name: name) {
             return image
         }
         if let image = parsePNG(data: data, name: name) {
             return image
         }
-        if let image = decodePNG(data: data, name: name) {
-            return image
-        }
-
-        throw MarkdownPDFError.unsupportedImage(source)
+        return decodePNG(data: data, name: name)
     }
 
     /// The file a Markdown image source refers to: a `file:` URL as given, an absolute

@@ -14,15 +14,19 @@ public extension PDFOptions {
     ///
     /// The same printed numbers appear in the generated table of contents and the
     /// index, so a custom ``firstPageNumber`` or roman ``format`` keeps all three in
-    /// agreement. Internal links always target the physical page.
+    /// agreement. Internal links always target the physical page. A
+    /// ``PDFOptions/cover`` is physical page 1 and is not numbered: the page after it
+    /// prints ``firstPageNumber``.
     struct PageNumbers: Equatable, Sendable {
         public var isEnabled: Bool
         public var position: Position
         public var format: Format
         /// The printed number of the first page. Defaults to 1.
         public var firstPageNumber: Int
-        /// Leaves the first page without a footer, for example a cover. The first
-        /// page still counts: the second page prints `firstPageNumber + 1`.
+        /// Leaves the first page without a footer, for example a title page. The first
+        /// page still counts: the second page prints `firstPageNumber + 1`. With a
+        /// ``PDFOptions/cover`` the first page is the one after the cover, because the
+        /// cover is never numbered.
         public var skipsFirstPage: Bool
 
         public init(

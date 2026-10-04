@@ -84,11 +84,14 @@ public struct MarkdownPDFRenderer: Sendable {
         startsEachUnitOnNewPage: Bool,
     ) throws -> Data {
         let imageCache = PDFImageCache()
+        // Decoded once, before the first pass: the cover does not depend on layout, and
+        // a missing or undecodable image must fail before any pass runs.
+        let cover = try Self.coverImage(for: options.cover)
         func layout(
             tableOfContents: [TableOfContentsEntry]?,
             index: [IndexRecord],
         ) throws -> Layout {
-            var layout = try Layout(options: options, imageCache: imageCache)
+            var layout = try Layout(options: options, imageCache: imageCache, cover: cover)
             try layout.render(
                 units,
                 startsEachUnitOnNewPage: startsEachUnitOnNewPage,
@@ -125,6 +128,36 @@ public struct MarkdownPDFRenderer: Sendable {
         }
 
         throw MarkdownPDFError.tableOfContentsDidNotConverge(maxPasses: maximumPasses)
+    }
+}
+
+private extension MarkdownPDFRenderer {
+    /// The decoded cover image, named `Im1`, or nil when there is no cover. Throws a
+    /// typed error for a file that cannot be read and for bytes that are not a PNG or
+    /// JPEG: a cover is never dropped silently.
+    static func coverImage(for cover: PDFOptions.Cover) throws -> PDFImage? {
+        guard let source = cover.image else {
+            return nil
+        }
+
+        switch source {
+        case let .data(data):
+            guard let image = PDFImage.decode(data: data, name: "Im1") else {
+                throw MarkdownPDFError.coverImageUnsupported("cover image data")
+            }
+            return image
+        case let .file(path, baseURL):
+            let data: Data
+            do {
+                data = try Data(contentsOf: PDFImage.resolvedURL(source: path, baseURL: baseURL))
+            } catch {
+                throw MarkdownPDFError.coverImageUnreadable(path)
+            }
+            guard let image = PDFImage.decode(data: data, name: "Im1") else {
+                throw MarkdownPDFError.coverImageUnsupported(path)
+            }
+            return image
+        }
     }
 }
 
@@ -429,6 +462,9 @@ private struct Layout {
     var images: [PDFImage] = []
     var imageCache: [String: PDFImage] = [:]
     let sharedImages: PDFImageCache
+    /// 1 when physical page 1 is the cover, otherwise 0. The cover is never numbered:
+    /// printed page `n` is physical page `n + coverPageCount`.
+    let coverPageCount: Int
 
     /// The scope of footnote labels for the unit being rendered. See
     /// ``FootnoteResolver``.
@@ -466,9 +502,10 @@ private struct Layout {
     var footnotesByLabelKey: [String: ResolvedFootnote] = [:]
     var registeredNamedDestinations = Set<String>()
 
-    init(options: PDFOptions, imageCache: PDFImageCache) throws {
+    init(options: PDFOptions, imageCache: PDFImageCache, cover: PDFImage? = nil) throws {
         self.options = options
         sharedImages = imageCache
+        coverPageCount = cover == nil ? 0 : 1
         if options.index.isEnabled {
             var terms: [(entry: IndexEntryID, text: String)] = []
             for term in options.index.terms {
@@ -494,6 +531,76 @@ private struct Layout {
             : nil
         y = options.pageSize.height - options.margins.top
         drawPageBackgroundIfNeeded()
+        if let cover {
+            drawCover(cover)
+            startNewPage()
+        }
+    }
+
+    /// Draws the cover on the current (first) page: the image alone, fitted by
+    /// ``PDFCoverFit``, over the page background or white. Its outline entry is
+    /// "Cover"; it is not a table of contents entry.
+    private mutating func drawCover(_ image: PDFImage) {
+        if options.theme.pageBackground == nil {
+            // Transparent pixels composite over white, whatever the viewer paints.
+            let artifact = beginArtifactIfTagged()
+            currentPage.drawRectangle(
+                x: 0,
+                y: 0,
+                width: options.pageSize.width,
+                height: options.pageSize.height,
+                stroke: nil,
+                fill: .white,
+            )
+            endMarkedContentIfNeeded(artifact)
+        }
+
+        images.append(image)
+        let rectangle = PDFCoverFit.rectangle(
+            imageWidth: image.width,
+            imageHeight: image.height,
+            page: options.pageSize,
+        )
+        let figure = beginStructureElement(
+            .figure,
+            attributes: PDFTaggedContent.Attributes(alternateDescription: coverAlternateDescription),
+        )
+        let marked = beginMarkedContentForCurrentElement()
+        currentPage.drawImage(
+            name: image.name,
+            x: rectangle.x,
+            y: rectangle.y,
+            width: rectangle.width,
+            height: rectangle.height,
+        )
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figure)
+        currentPage.addHeadingDestination(
+            PDFHeadingDestination(
+                name: Self.coverDestinationName,
+                title: "Cover",
+                level: 1,
+                x: 0,
+                y: options.pageSize.height,
+                isOutlineLeaf: true,
+            ),
+        )
+    }
+
+    private static let coverDestinationName = "mdpdf-cover"
+
+    /// "Cover of Title by Author", with the missing parts left out.
+    private var coverAlternateDescription: String {
+        let title = options.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let author = options.author?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var text = "Cover"
+        if !title.isEmpty {
+            text += " of \(title)"
+        }
+        if !author.isEmpty {
+            text += " by \(author)"
+        }
+        return text
     }
 
     private static func validateConformance(_ options: PDFOptions) throws {
@@ -566,6 +673,7 @@ private struct Layout {
             pages: pages,
             images: images,
             title: options.title,
+            author: options.author,
             streamCompression: options.streamCompression,
             taggedContent: taggedContentBuilder?.build(language: options.taggedPDF.language),
             conformance: options.conformance,
@@ -575,7 +683,7 @@ private struct Layout {
     func tableOfContentsEntries(maximumDepth: Int) -> [TableOfContentsEntry] {
         pages.enumerated().flatMap { pageIndex, page in
             page.headingDestinations.compactMap { destination in
-                guard destination.level <= maximumDepth else {
+                guard pageIndex >= coverPageCount, destination.level <= maximumDepth else {
                     return nil
                 }
 
@@ -871,7 +979,7 @@ private struct Layout {
         guard config.isEnabled else {
             return String(index + 1)
         }
-        return PDFPageLabel.text(config.firstPageNumber + index, format: config.format)
+        return PDFPageLabel.text(config.firstPageNumber + index - coverPageCount, format: config.format)
     }
 
     /// Draws every page's number in the bottom margin once layout is final.
@@ -893,16 +1001,19 @@ private struct Layout {
 
         let bodyStyle = style(for: .body)
         let font = standardFont(for: bodyStyle.fontRole)
-        let lastNumber = config.firstPageNumber + pages.count - 1
+        let lastNumber = config.firstPageNumber + pages.count - coverPageCount - 1
         // Centre the glyph box (0.75 em above the baseline, 0.25 em below) in the margin.
         let baseline = options.margins.bottom / 2 - size * 0.25
         let isTagged = taggedContentBuilder != nil
         for (index, page) in pages.enumerated() {
-            if index == 0, config.skipsFirstPage {
+            // The cover is never numbered, and the first numbered page is the one
+            // after it.
+            let printedIndex = index - coverPageCount
+            if printedIndex < 0 || (printedIndex == 0 && config.skipsFirstPage) {
                 continue
             }
 
-            let number = config.firstPageNumber + index
+            let number = config.firstPageNumber + printedIndex
             let run = PDFTextRun(
                 text: PDFPageLabel.footerText(number, last: lastNumber, format: config.format),
                 font: font,

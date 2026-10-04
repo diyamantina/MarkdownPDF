@@ -29,6 +29,14 @@ public struct PDFOptions: Equatable, Sendable {
     /// The back-of-book index. The default is ``Index/disabled``.
     public var index: Index
 
+    /// The document author, written to the Info dictionary `/Author` and to the XMP
+    /// packet as `dc:creator`. Leading and trailing whitespace is trimmed and an
+    /// empty value writes nothing. The default is nil.
+    public var author: String?
+
+    /// A full-page cover as physical page 1. The default is ``Cover/disabled``.
+    public var cover: Cover
+
     public init(
         pageSize: PageSize = .a4,
         margins: Margins = .standard,
@@ -46,6 +54,8 @@ public struct PDFOptions: Equatable, Sendable {
         imageMaxHeightFraction: Double = Self.defaultImageMaxHeightFraction,
         pageNumbers: PageNumbers = .disabled,
         index: Index = .disabled,
+        author: String? = nil,
+        cover: Cover = .disabled,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -63,6 +73,8 @@ public struct PDFOptions: Equatable, Sendable {
         self.imageMaxHeightFraction = imageMaxHeightFraction
         self.pageNumbers = pageNumbers
         self.index = index
+        self.author = author
+        self.cover = cover
     }
 
     /// The standalone image height cap used when none is given.

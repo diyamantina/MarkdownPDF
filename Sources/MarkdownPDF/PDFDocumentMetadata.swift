@@ -2,10 +2,11 @@ import Foundation
 
 struct PDFDocumentMetadata {
     var title: String?
+    var author: String?
     var conformance: PDFOptions.Conformance = .none
 
     var isEmpty: Bool {
-        cleanTitle == nil && !conformance.isEnabled
+        cleanTitle == nil && cleanAuthor == nil && !conformance.isEnabled
     }
 
     var infoDictionary: PDFSyntax.Dictionary {
@@ -30,6 +31,9 @@ struct PDFDocumentMetadata {
         if let cleanTitle {
             entries.insert(.init("Title", .pdfString(cleanTitle)), at: 0)
         }
+        if let cleanAuthor {
+            entries.insert(.init("Author", .pdfString(cleanAuthor)), at: cleanTitle == nil ? 0 : 1)
+        }
         return entries
     }
 
@@ -38,6 +42,9 @@ struct PDFDocumentMetadata {
             """
             <dc:title><rdf:Alt><rdf:li xml:lang="x-default">\(title.xmlEscaped)</rdf:li></rdf:Alt></dc:title>
             """
+        } ?? ""
+        let authorXML = cleanAuthor.map { author in
+            "<dc:creator><rdf:Seq><rdf:li>\(author.xmlEscaped)</rdf:li></rdf:Seq></dc:creator>"
         } ?? ""
         let pdfUAAttributes = conformance.isPDFUA1Enabled
             ? " xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\""
@@ -63,7 +70,7 @@ struct PDFDocumentMetadata {
         <x:xmpmeta xmlns:x="adobe:ns:meta/">
         <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
         <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/"\(pdfUAAttributes)\(pdfAAttributes)>
-        \(titleXML)
+        \(titleXML)\(authorXML)
         <pdf:Producer>\(Self.producer.xmlEscaped)</pdf:Producer>
         \(pdfUAIdentifier)
         \(pdfAIdentifier)
@@ -77,6 +84,10 @@ struct PDFDocumentMetadata {
 
     private var cleanTitle: String? {
         title?.trimmingCharacters(in: .whitespacesAndNewlines).emptyAsNil
+    }
+
+    private var cleanAuthor: String? {
+        author?.trimmingCharacters(in: .whitespacesAndNewlines).emptyAsNil
     }
 
     private static let producer = "MarkdownPDF"

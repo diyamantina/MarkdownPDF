@@ -6,6 +6,7 @@ struct PDFDocumentWriter {
     var pages: [PDFPageCanvas]
     var images: [PDFImage]
     var title: String?
+    var author: String?
     var streamCompression: PDFOptions.StreamCompression = .disabled
     var taggedContent: PDFTaggedContent?
     var conformance: PDFOptions.Conformance = .none
@@ -102,7 +103,7 @@ struct PDFDocumentWriter {
         let names = resolvedDestinations.isEmpty
             ? nil
             : PDFNamedDestinations(destinations: resolvedDestinations).pdfDictionary
-        let metadata = PDFDocumentMetadata(title: title, conformance: conformance)
+        let metadata = PDFDocumentMetadata(title: title, author: author, conformance: conformance)
         let metadataRefs = metadata.isEmpty ? nil : builder.addMetadata(metadata)
         let outputIntent = conformance.requiresOutputIntent
             ? PDFOutputIntent(

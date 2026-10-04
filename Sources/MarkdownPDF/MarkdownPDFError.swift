@@ -9,6 +9,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
     case unembeddedBaseFontsForConformance(profile: String, fonts: [String])
     case missingEmbeddedMathFont(font: String)
     case pageNumbersNeedBottomMargin(minimum: Double, actual: Double)
+    case coverImageUnreadable(String)
+    case coverImageUnsupported(String)
 
     public var errorDescription: String? {
         switch self {
@@ -28,6 +30,10 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Math typesetting requires an embedded OpenType MATH font for \(font)."
         case let .pageNumbersNeedBottomMargin(minimum, actual):
             "Page numbers need a bottom margin of at least \(minimum) points, but the margin is \(actual)."
+        case let .coverImageUnreadable(path):
+            "Could not read the cover image at \(path)."
+        case let .coverImageUnsupported(source):
+            "The cover image (\(source)) is not a decodable PNG or JPEG."
         }
     }
 
@@ -47,6 +53,10 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Pass PDFOptions(embeddedFonts:) with font data for every Markdown role used by the document."
         case .pageNumbersNeedBottomMargin:
             "Increase PDFOptions.margins.bottom or disable page numbers."
+        case .coverImageUnreadable:
+            "Confirm the cover image path exists and is relative to the base URL given to PDFOptions.Cover, or pass the image bytes with ImageSource.data."
+        case .coverImageUnsupported:
+            "Use a valid PNG or JPEG file for the cover image."
         case .missingEmbeddedMathFont:
             "Pass PDFOptions(embeddedFonts:) with TrueType math-font data that contains an OpenType MATH table, or use PDFOptions.MathTypesetting.enabled for fallback rendering."
         }
