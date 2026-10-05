@@ -543,12 +543,20 @@ private struct Layout {
         coverPageCount = cover == nil ? 0 : 1
         if options.index.isEnabled {
             var terms: [(entry: IndexEntryID, text: String)] = []
-            for term in options.index.terms {
-                guard let entry = IndexRegistry.entry(for: term) else {
+            for text in options.index.terms {
+                // A blank term has always been ignored; only a pipe makes an empty form an error.
+                guard !text.allSatisfy(\.isWhitespace) else {
+                    continue
+                }
+                let term = try PDFOptions.Index.Term(parsing: text)
+                guard let entry = IndexRegistry.entry(for: term.heading) else {
                     continue
                 }
                 indexRegistry.register(entry)
                 terms.append((entry.id, entry.sub ?? entry.main))
+                for variant in term.variants {
+                    terms.append((entry.id, variant))
+                }
             }
             indexMatcher = IndexTermMatcher(terms: terms)
         }

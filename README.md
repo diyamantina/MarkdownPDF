@@ -104,7 +104,8 @@ The generic renderer currently covers:
   first page. Drawn in the document's font set and marked as an artifact when
   tagged.
 - Opt-in back-of-book index (`PDFOptions.index`) built from `{{index: term}}` and
-  `{{index: main > sub}}` markers and an optional term list matched as whole words,
+  `{{index: main > sub}}` markers and an optional term list matched as whole words
+  (a term may list variant forms under one heading, `flattening|flatten|flattened`),
   sorted by a platform-independent fold, grouped by letter, with linked page
   references and ranges such as `12-14`. It lands in the outline and the table of
   contents.
@@ -225,8 +226,10 @@ import MarkdownPDF
 let options = PDFOptions(
     tableOfContents: .enabled,
     pageNumbers: PDFOptions.PageNumbers(isEnabled: true, format: .ofTotal),
-    index: PDFOptions.Index(isEnabled: true, terms: ["layer", "animation"]),
+    index: PDFOptions.Index(isEnabled: true, terms: ["layer", "animation|animations|animated"]),
 )
+// `animation|animations|animated` is one heading, "animation", listing the pages of
+// any of its forms once; write `\|` for a literal pipe.
 // `{{index: term}}` and `{{index: main > sub}}` in the Markdown add entries.
 let markdown = "# Book\n\nA layer tree. {{index: tree > layer}}"
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)

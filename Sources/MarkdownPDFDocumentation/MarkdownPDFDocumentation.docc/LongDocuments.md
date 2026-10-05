@@ -115,6 +115,25 @@ code, math, link destinations, footnote reference numbers, the table of contents
 the index itself are not searched. A term that wraps across a page break inside a
 single table cell is not seen.
 
+**Variant forms.** A term lists variants separated by pipes:
+`flattening|flatten|flattens|flattened`. The first form is the heading printed in
+the index. Every form, the heading included, is matched as a whole word or phrase
+with the rules above, so `flatten` never matches inside `flattening`. A page holding
+several forms is listed once, and runs collapse to ranges as usual. White space
+around a form is trimmed, a form that repeats an earlier one (ignoring case,
+diacritics and white space) is dropped, and the same form under two headings records
+under both. An empty form (`a||b`, a leading or trailing pipe, a lone `|`) makes the
+render throw ``MarkdownPDFError/indexTermEmptyForm(term:)``; a term that is blank
+altogether is still ignored. A literal pipe inside a form is written `\|`; a
+backslash is an escape only before a pipe. Only the heading may be a `main > sub`
+sub-entry, and later forms are the texts searched for under that sub-entry.
+``PDFOptions/Index/Term`` parses and prints this text form. A term with no pipe is
+one literal form, and a document that uses no pipes renders byte for byte as before.
+The entry is sorted by its heading alone, never by its variants. As for a term
+without variants, a heading none of whose forms occurs is not listed. Markers are
+unchanged: `{{index: flatten}}` is its own entry, or merges with a heading spelled
+the same.
+
 **Order.** The index never uses platform locale collation, which differs between
 Apple platforms and Linux. A term is folded by canonical decomposition, default
 Unicode lowercasing, dropping combining marks, folding the undecomposable Latin

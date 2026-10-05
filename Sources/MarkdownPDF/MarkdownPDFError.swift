@@ -12,6 +12,7 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
     case coverImageUnreadable(String)
     case coverImageUnsupported(String)
     case colophonTextEmpty
+    case indexTermEmptyForm(term: String)
 
     public var errorDescription: String? {
         switch self {
@@ -37,6 +38,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "The cover image (\(source)) is not a decodable PNG or JPEG."
         case .colophonTextEmpty:
             "The colophon is enabled with custom text that is empty."
+        case let .indexTermEmptyForm(term):
+            "The index term \"\(term)\" has an empty form between its pipes."
         }
     }
 
@@ -62,6 +65,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Use a valid PNG or JPEG file for the cover image."
         case .colophonTextEmpty:
             "Give PDFOptions.Colophon some Markdown text, or leave the text nil for the default colophon."
+        case .indexTermEmptyForm:
+            "Remove the stray pipe, or write a literal pipe as \\| inside a form."
         case .missingEmbeddedMathFont:
             "Pass PDFOptions(embeddedFonts:) with TrueType math-font data that contains an OpenType MATH table, or use PDFOptions.MathTypesetting.enabled for fallback rendering."
         }

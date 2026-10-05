@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Index term variants. A string in `PDFOptions.Index.terms` may list forms
+  separated by pipes, `flattening|flatten|flattens|flattened`: the first form is the
+  heading, every form is matched as a whole word or phrase (case and diacritic
+  insensitive, never inside code), and a page holding several forms is listed once
+  under the heading. Forms are trimmed, repeated forms collapse, `\|` is a literal
+  pipe, and the same form under two headings records under both. An empty form
+  (`a||b`, a leading or trailing pipe) throws the new
+  `MarkdownPDFError.indexTermEmptyForm(term:)`; a blank term is still ignored.
+  `PDFOptions.Index.Term` (`heading`, `variants`, `init(parsing:)`, `forms`, `text`)
+  parses and prints the text form. Terms without a pipe, and inline markers, behave
+  exactly as before, so existing documents render byte for byte the same.
+
 ## [0.10.0] - 2026-10-05
 
 ### Added
