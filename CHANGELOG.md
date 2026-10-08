@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `PDFOptions.outlineMaxHeadingLevel` sets the deepest heading level that gets an entry
+  in the PDF outline. The default is `6`, so existing output is unchanged. A smaller
+  value keeps deeper headings out of the outline while they stay valid destinations
+  for internal links. A deck that draws its own text as headings can end its outline at
+  the slide.
+- `PDFOptions.headingDestinationsAtPageTop` makes a heading's destination the top of
+  its page instead of the heading itself. The default is `false`, so existing output is
+  unchanged. A deck, where each page is one slide, sets it so that following an outline
+  entry, or the entry a viewer highlights for the page on screen, matches the page.
+
 ## [0.11.0] - 2026-10-05
 
 ### Added

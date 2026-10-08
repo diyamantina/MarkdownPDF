@@ -4528,8 +4528,9 @@ private struct Layout {
                 name: headingNames.uniqueName(for: displayTitle),
                 title: displayTitle,
                 level: level,
-                x: options.margins.left,
-                y: min(options.pageSize.height, y),
+                x: options.headingDestinationsAtPageTop ? 0 : options.margins.left,
+                y: options.headingDestinationsAtPageTop ? options.pageSize.height : min(options.pageSize.height, y),
+                inOutline: level <= min(max(options.outlineMaxHeadingLevel, 1), 6),
             ),
         )
     }

@@ -23,6 +23,24 @@ public struct PDFOptions: Equatable, Sendable {
     /// scaled above its native size or taller than the content area.
     public var imageMaxHeightFraction: Double
 
+    /// The deepest heading level that gets an entry in the PDF outline.
+    ///
+    /// The default of `6` puts every heading in the outline, which preserves existing
+    /// output. A smaller value keeps deeper headings out of the outline: with `2`,
+    /// level-three headings and below are drawn on the page but have no outline
+    /// entry, and they stay valid targets for internal links. The renderer clamps the
+    /// value to `1...6`.
+    public var outlineMaxHeadingLevel: Int
+
+    /// Whether a heading's destination is the top of its page instead of the heading itself.
+    ///
+    /// The default of `false` keeps the destination at the heading, which is right for a
+    /// document where a heading sits in the middle of a page. A deck, where each page is
+    /// one slide, sets it to `true`: a viewer that follows an outline entry or highlights
+    /// the entry for the page on screen then lands on the page, not just below its top.
+    /// The setting moves the destination of every heading, in the outline and for links.
+    public var headingDestinationsAtPageTop: Bool
+
     /// Page number footers. The default is ``PageNumbers/disabled``.
     public var pageNumbers: PageNumbers
 
@@ -60,6 +78,8 @@ public struct PDFOptions: Equatable, Sendable {
         taggedPDF: TaggedPDF = .disabled,
         conformance: Conformance = .none,
         imageMaxHeightFraction: Double = Self.defaultImageMaxHeightFraction,
+        outlineMaxHeadingLevel: Int = Self.defaultOutlineMaxHeadingLevel,
+        headingDestinationsAtPageTop: Bool = false,
         pageNumbers: PageNumbers = .disabled,
         index: Index = .disabled,
         author: String? = nil,
@@ -81,6 +101,8 @@ public struct PDFOptions: Equatable, Sendable {
         self.taggedPDF = taggedPDF
         self.conformance = conformance
         self.imageMaxHeightFraction = imageMaxHeightFraction
+        self.outlineMaxHeadingLevel = outlineMaxHeadingLevel
+        self.headingDestinationsAtPageTop = headingDestinationsAtPageTop
         self.pageNumbers = pageNumbers
         self.index = index
         self.author = author
@@ -91,6 +113,9 @@ public struct PDFOptions: Equatable, Sendable {
 
     /// The standalone image height cap used when none is given.
     public static let defaultImageMaxHeightFraction = 0.45
+
+    /// The outline depth used when none is given: every heading level.
+    public static let defaultOutlineMaxHeadingLevel = 6
 
     public struct PageSize: Equatable, Sendable {
         public var width: Double

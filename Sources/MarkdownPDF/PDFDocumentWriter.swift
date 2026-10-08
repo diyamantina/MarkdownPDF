@@ -99,7 +99,7 @@ struct PDFDocumentWriter {
             }
         }
         let resolvedDestinations = resolvedHeadingDestinations + resolvedNamedDestinations
-        let outlineRef = builder.addOutline(destinations: resolvedHeadingDestinations)
+        let outlineRef = builder.addOutline(destinations: resolvedHeadingDestinations.filter(\.destination.inOutline))
         let names = resolvedDestinations.isEmpty
             ? nil
             : PDFNamedDestinations(destinations: resolvedDestinations).pdfDictionary
