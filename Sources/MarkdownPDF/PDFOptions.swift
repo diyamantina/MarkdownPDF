@@ -32,6 +32,17 @@ public struct PDFOptions: Equatable, Sendable {
     /// value to `1...6`.
     public var outlineMaxHeadingLevel: Int
 
+    /// A multiplier applied to the line height of every text element.
+    ///
+    /// Paragraphs, lists, headings, block quotes, table cells, code blocks, footnotes,
+    /// and display math each have a line height set by the theme, and the value scales
+    /// all of them together. The default of `1` keeps the theme's own spacing and
+    /// preserves existing output byte for byte. A value above `1` loosens the lines, as
+    /// in a contract that is meant to be read and marked up; a value below `1` tightens
+    /// them. The renderer clamps the value to `0.5 ... 3` and uses the default for a
+    /// value that is not finite.
+    public var lineHeightScale: Double
+
     /// Whether a heading's destination is the top of its page instead of the heading itself.
     ///
     /// The default of `false` keeps the destination at the heading, which is right for a
@@ -86,6 +97,7 @@ public struct PDFOptions: Equatable, Sendable {
         cover: Cover = .disabled,
         ignoreHTMLComments: IgnoreHTMLComments = .disabled,
         colophon: Colophon = .disabled,
+        lineHeightScale: Double = Self.defaultLineHeightScale,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -109,6 +121,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.cover = cover
         self.ignoreHTMLComments = ignoreHTMLComments
         self.colophon = colophon
+        self.lineHeightScale = lineHeightScale
     }
 
     /// The standalone image height cap used when none is given.
@@ -116,6 +129,12 @@ public struct PDFOptions: Equatable, Sendable {
 
     /// The outline depth used when none is given: every heading level.
     public static let defaultOutlineMaxHeadingLevel = 6
+
+    /// The line height scale used when none is given: the theme's own spacing.
+    public static let defaultLineHeightScale = 1.0
+
+    /// The range the renderer clamps ``lineHeightScale`` to.
+    public static let lineHeightScaleRange = 0.5 ... 3.0
 
     public struct PageSize: Equatable, Sendable {
         public var width: Double
