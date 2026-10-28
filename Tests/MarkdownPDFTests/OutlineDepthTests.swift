@@ -129,7 +129,7 @@ struct OutlineOptionsTogetherTests {
     """
 
     private func text(_ markdown: String, _ options: PDFOptions) throws -> String {
-        String(decoding: try MarkdownPDFRenderer(options: options).render(markdown: markdown), as: UTF8.self)
+        try String(decoding: MarkdownPDFRenderer(options: options).render(markdown: markdown), as: UTF8.self)
     }
 
     private func titles(in text: String) -> [String] {
@@ -169,10 +169,10 @@ struct OutlineOptionsTogetherTests {
 
     @Test("with destinations at the page top every destination of a two page deck is the top of its page, and without it they are not")
     func destinationsOnEveryPage() throws {
-        let top = destinationHeights(in: try text(Self.deck, Self.options(atPageTop: true)))
+        let top = try destinationHeights(in: text(Self.deck, Self.options(atPageTop: true)))
         #expect(top.count >= 5)
         #expect(top.allSatisfy { $0 == Self.pageHeight })
-        let heading = destinationHeights(in: try text(Self.deck, Self.options(atPageTop: false)))
+        let heading = try destinationHeights(in: text(Self.deck, Self.options(atPageTop: false)))
         #expect(heading.contains { $0 < Self.pageHeight }, "negative control: a heading below the top of the page is a lower destination")
     }
 
