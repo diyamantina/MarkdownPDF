@@ -99,6 +99,32 @@ Apple system font names remain available through
 `PDFOptions.FontSet.pdfBaseMonospaced` switches all text roles to Courier when
 strict monospaced output is preferred.
 
+## Line Spacing
+
+A theme sets a line height for each element role through
+`PDFOptions/ElementStyle/lineHeightMultiplier`, a multiple of the element's own font
+size. The default theme uses `1.24` for body text.
+
+`PDFOptions/lineHeightScale` is a single multiplier applied on top of every one of
+those values, so the whole document loosens or tightens together without editing the
+theme. The renderer resolves it where an element's style is looked up, so paragraphs,
+lists, headings, block quotes, table cells, code blocks, footnotes, and display math
+all follow it. The effective line height of an element is
+`fontSize * lineHeightMultiplier * lineHeightScale`.
+
+- **Default.** `1`, which keeps the theme's own spacing. Output with the default is
+  byte for byte the same as before the option existed.
+- **Range.** The renderer clamps the value to `0.5 ... 3` and uses the default for a
+  value that is not finite, the same containment as `PDFOptions/imageMaxHeightFraction`.
+- **Scope.** Font sizes, paragraph spacing, margins, and the generated table of contents
+  and index layout do not change. Only the distance between the baselines of
+  consecutive lines inside an element does.
+
+A larger value suits a document that is read closely or marked up, such as a contract.
+The witness is geometric: the baseline distance between consecutive lines of a
+paragraph, list item, block quote, code block, and wrapped table cell is measured from
+the generated content stream and must scale by exactly the factor.
+
 ## Compatibility Target
 
 The target is CommonMark plus GFM tables and images. The

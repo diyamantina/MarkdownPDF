@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `PDFOptions.lineHeightScale` multiplies the line height of every text element:
+  paragraphs, lists, headings, block quotes, table cells, code blocks, footnotes and
+  display math. The default is `1`, so existing output is unchanged byte for byte. A
+  larger value loosens the lines, for a document meant to be read and marked up, and a
+  smaller one tightens them. The renderer clamps the value to `0.5...3` and uses the
+  default for a value that is not finite.
+
 ## [0.12.0] - 2026-10-08
 
 ### Added

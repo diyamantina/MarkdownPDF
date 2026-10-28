@@ -4416,6 +4416,7 @@ private struct Layout {
 
     private func style(for role: PDFOptions.ElementRole) -> PDFOptions.ElementStyle {
         var resolved = options.theme.style(for: role)
+        resolved.lineHeightMultiplier *= lineHeightScale
         // Inside a block quote, the quote's own role supplies the body face and
         // color. Nested blocks otherwise render with `.paragraph` / `.list`, which
         // is why `.blockQuote`'s `fontRole` and `color` had no effect at all.
@@ -4725,6 +4726,16 @@ private struct Layout {
             : PDFOptions.defaultImageMaxHeightFraction
         let fraction = min(max(requested, 0.05), 1)
         return max(1, min(contentHeight, options.pageSize.height * fraction))
+    }
+
+    /// The configured line height scale, clamped to the supported range. A value that
+    /// is not finite falls back to the default.
+    private var lineHeightScale: Double {
+        guard options.lineHeightScale.isFinite else {
+            return PDFOptions.defaultLineHeightScale
+        }
+        let range = PDFOptions.lineHeightScaleRange
+        return min(max(options.lineHeightScale, range.lowerBound), range.upperBound)
     }
 
     private var pageTopY: Double {

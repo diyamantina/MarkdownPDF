@@ -174,6 +174,17 @@ The colophon heading is an ordinary level-one heading: it reaches the outline an
 table of contents with its page number, its pages carry page numbers like body pages,
 and the index does not search it. It takes part in the convergence loop below.
 
+## Line spacing
+
+A document meant to be read and marked up, such as a contract or a manuscript, is easier
+on the page with looser lines. `PDFOptions/lineHeightScale` multiplies the line
+height of every text element, including body text, lists, tables, block quotes and code,
+on top of the theme's own `PDFOptions/ElementStyle/lineHeightMultiplier`. The default
+of `1` leaves the layout, and so the page count, unchanged; a larger value spreads the
+text over more pages, and the table of contents, index and page numbers follow because
+they are derived from the final layout. The value is clamped to
+`PDFOptions/lineHeightScaleRange`.
+
 ## HTML comments
 
 ``PDFOptions/IgnoreHTMLComments`` deletes HTML comments before parsing, so markers
