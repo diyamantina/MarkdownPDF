@@ -207,6 +207,17 @@ let markdown = "# Letter Page\n\nCustom page settings."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
 
+Loosen the line spacing. The scale multiplies the line height of every text element,
+and the default of `1` keeps the theme's own spacing:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(lineHeightScale: 1.5)
+let markdown = "# Agreement\n\nTerms that are easy to read and mark up."
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
 Generate a visible table of contents:
 
 ```swift
