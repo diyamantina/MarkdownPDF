@@ -35,8 +35,9 @@ public struct PDFOptions: Equatable, Sendable {
     /// A multiplier applied to the line height of every text element.
     ///
     /// Paragraphs, lists, headings, block quotes, table cells, code blocks, footnotes,
-    /// and display math each have a line height set by the theme, and the value scales
-    /// all of them together. The default of `1` keeps the theme's own spacing and
+    /// and display math each have a line height set by the theme, through
+    /// ``ElementStyle/lineHeightMultiplier``, and this value scales all of them together:
+    /// an element's line height is its font size times its multiplier times this scale. The default of `1` keeps the theme's own spacing and
     /// preserves existing output byte for byte. A value above `1` loosens the lines, as
     /// in a contract that is meant to be read and marked up; a value below `1` tightens
     /// them. The renderer clamps the value to `0.5 ... 3` and uses the default for a

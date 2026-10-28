@@ -190,6 +190,16 @@ func contrastRatio(_ a: PDFColor, _ b: PDFColor) -> Double {
 }
 ```
 
+### Line spacing
+
+Each `PDFOptions/ElementStyle` carries its own `PDFOptions/ElementStyle/lineHeightMultiplier`,
+a multiple of that element's font size. A theme therefore fixes the rhythm of every role.
+`PDFOptions/lineHeightScale` is deliberately not part of the theme: it is a layout
+preference that applies to whichever theme is chosen, so a document can loosen or
+tighten its lines without a custom theme. The renderer applies it where an element's
+style is looked up, so the effective height is the font size times the theme's multiplier
+times the scale.
+
 ## Reference implementations
 
 - Typst (Apache-2.0): set/show two-layer styling, build-time resolution.
