@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-14
+
+This release changes the output of existing documents in two places, both listed under
+Fixed: lines now fill the measure, so text can reflow and page counts can drop, and the
+resume template shows the email address. Everything under Added is off by default.
+
 ### Added
 - `PDFOptions.documentStrings` chooses how the strings a reader shows outside the page
   are written: the Info `/Title` and `/Author`, the outline titles and the alternate
