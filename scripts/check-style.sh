@@ -60,15 +60,9 @@ while IFS= read -r f; do
   fi
 done < <(git ls-files)
 
-# Roadmap diagram gate (git-discipline Rule 1.8): valid, vertical,
-# legend-keyed mermaid diagrams, and every epic visible in a diagram.
-if command -v python3 >/dev/null 2>&1; then
-  if ! python3 "$(dirname "$0")/check-roadmap.py"; then
-    FAIL=1
-  fi
-else
-  echo "style: python3 not found, skipping roadmap gate" >&2
-fi
+# The roadmap diagram gate (git-discipline Rule 1.8: valid, vertical,
+# legend-keyed mermaid diagrams, and every epic visible in a diagram) is a Swift
+# test, RoadmapDiagramTests, and runs with `swift test`.
 
 if [ "$FAIL" -ne 0 ]; then
   echo "style: gate failed. Rules: docs/rules/git-discipline.md" >&2
