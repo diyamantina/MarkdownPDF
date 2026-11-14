@@ -2,6 +2,13 @@
 
 Date: 2026-06-01
 
+Status, 2026-11-14: superseded. MarkdownPDF no longer runs any outside program to
+check a PDF. The word-box checks this note arrives at are now made on the boxes
+the package's own reader, `PDFDocumentReader`, builds from the file; the raster
+comparison is not verified until the package has a rasterizer. See
+<doc:PDFWitnessGate> and `Docs/NOT-VERIFIED.md` in the repository. The note is
+kept as a record of the prior art that was studied.
+
 This note covers portable, open-source ways to test whether generated PDFs are
 visually readable: no obvious text overlap, no broken spacing, and no renderer
 regressions. The current product boundary still applies: MarkdownPDF source and

@@ -36,7 +36,7 @@ JavaScript, Python, shell renderers, or C Markdown/PDF libraries.
 Real PDF pages produced by MarkdownPDF, rendered here as images. Output is
 deterministic: the same Markdown produces the same geometry on macOS, Linux, and
 iOS, and embedded fonts travel inside the file so every viewer draws the same
-glyphs. Each page is validated by a Poppler + MuPDF witness battery.
+glyphs. Each document is read back and checked by the package's own reader.
 
 <table>
   <tr>
@@ -137,8 +137,10 @@ The generic renderer currently covers:
 - Opt-in tagged PDF structure output with `/MarkInfo`, `/StructTreeRoot`,
   `/ParentTree`, page `/StructParents`, and marked-content IDs.
 - Opt-in PDF/UA-1 and PDF/A-2a conformance profiles through
-  `PDFOptions.Conformance.pdfUA1`, `.pdfA2A`, and `.pdfUA1AndPDFA2A`,
-  verified with veraPDF on profile fixtures.
+  `PDFOptions.Conformance.pdfUA1`, `.pdfA2A`, and `.pdfUA1AndPDFA2A`. The
+  tests check what the profiles require of the file (identifiers, output
+  intent, embedded fonts, structure tree, title, language); a full conformance
+  run is not verified, see [Docs/NOT-VERIFIED.md](Docs/NOT-VERIFIED.md).
 
 The compatibility target is CommonMark plus GFM tables and
 images. The generated PDF profile is intentionally small, typed, and documented
@@ -355,7 +357,7 @@ let markdown = "# Tagged\n\nA PDF with a logical structure spine."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
 
-Enable the veraPDF-checked PDF/UA-1 profile:
+Enable the PDF/UA-1 profile:
 
 ```swift
 import Foundation
@@ -449,39 +451,44 @@ shape and journal inputs behind it.
 
 ## Validation
 
-The test suite validates generated PDFs in five layers:
+The test suite validates generated PDFs with code that lives in this package and
+nothing else. No outside program is run to produce, read, measure, render or
+convert a PDF or an image. There are three layers:
 
-- Swift structural inspection checks object references, xref offsets, stream
-  lengths, page resources, annotations, fonts, images, and canonical page
-  structure.
-- `qpdf --check` validates syntax, xref, trailer, and stream-level structure.
-- Poppler tools inspect reader behavior through `pdfinfo`, `pdftotext`,
-  `pdftotext -tsv`, and `pdftoppm`.
-- MuPDF `mutool` independently extracts character quads and renders page
-  rasters.
-- Poppler and MuPDF raster output is compared across every generated page in the
-  visual stress fixture.
+- `PDFDocumentReader`, the package's own reader, reads every rendered file back:
+  pages and their sizes, the text of each page, title and author, outline,
+  links, fonts, and the structure tree of a tagged document.
+  `PDFDocumentReader.structureIssues(in:)` checks that the file is sound: every
+  object the cross-reference table lists is where the table says and parses,
+  every stream ends where its `/Length` says and decodes, every reference names
+  an object the file holds, and the page tree counts its pages.
+- The byte inspectors of the test target check object references, xref offsets,
+  stream lengths, page resources, annotations, fonts, images, and canonical page
+  structure on the raw bytes, with code that shares nothing with the reader.
+- The reader is itself held to files typed out by hand in the tests, each with a
+  known content or one deliberate fault, so it is not only checked against the
+  writer that shares its author.
 
 Layout-affecting renderer changes must keep the visual geometry tests passing.
 Those tests render representative multi-page Markdown with dense prose, inline
 styles, lists, tables, links, fenced code fallback, Mermaid diagrams, and page
-breaks. They extract Poppler word and line boxes with `pdftotext -tsv`, extract
-MuPDF character quads with `mutool draw -F stext`, and compare Poppler and MuPDF
-raster ink bounds for every page. They fail on non-positive boxes, text outside
-page bounds, same-line word overlap, same-word glyph overlap, vertical line
-collisions, blank renders, or divergent ink bounds.
+breaks. They take the word boxes the reader builds from the position of each
+text operator and the widths the fonts declare in the file, which is what a
+viewer advances by. They fail on a word without a size, text outside page
+bounds, same-line word overlap, and words of different lines that collide.
 
-Witness differences are handled in the test layer unless the generated PDF bytes
-truly need to differ by platform. Linux Poppler page-origin normalization and
-macOS CI Base35 font installation are examples of witness environment fixes, not
-production renderer forks.
+What the package cannot check yet is listed in
+[Docs/NOT-VERIFIED.md](Docs/NOT-VERIFIED.md): anything that needs pixels (the
+package has no rasterizer) and full PDF/A and PDF/UA conformance runs (the
+package has no validator for those profiles). The tests for those properties are
+kept, disabled with a reason that names that file, and fail if enabled.
 
 Set `MARKDOWNPDF_ARTIFACT_DIR` while running tests to preserve witness outputs.
-The visual layout tests write the representative PDF, extracted text, `pdfinfo`
-output, Poppler TSV, MuPDF structured text, and Poppler/MuPDF page rasters under
-that directory, with a `README.txt` manifest naming each witness. CI
-uploads those files as `markdownpdf-witness-linux` and
-`markdownpdf-witness-macos` artifacts for pull request review.
+The visual layout tests write the representative PDF, the extracted text, and
+the word boxes as tab separated lines under that directory, with a `README.txt`
+manifest naming each witness. CI uploads those files as
+`markdownpdf-witness-linux` and `markdownpdf-witness-macos` artifacts for pull
+request review.
 
 Embedded-font tests use generated Swift TrueType fixtures for deterministic
 coverage, the bundled DejaVu faces for default-selection tests, and installed
@@ -490,7 +497,9 @@ through `MARKDOWNPDF_OPEN_FONT_PATH`.
 
 See [Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFValidationTooling.md](Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFValidationTooling.md)
 and [Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFVisualLayoutValidation.md](Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Research/PDFVisualLayoutValidation.md)
-for the validation rationale. See
+for the earlier research into outside validation programs. Both notes are
+superseded: the project no longer runs those programs, and the notes are kept as
+prior art. See
 [Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/PDFWitnessGate.md](Sources/MarkdownPDFDocumentation/MarkdownPDFDocumentation.docc/Rules/PDFWitnessGate.md) for the policy
 future PDF features must satisfy.
 
@@ -544,9 +553,9 @@ The catalog landing page groups every article under Topics.
 ## Platform Boundaries
 
 - Portable behavior means macOS and Linux for the full package, plus Windows and
-  WebAssembly (WASI) for the core engine. The witness-based test tooling
-  (poppler, mupdf, qpdf, verapdf) and font discovery are POSIX-only, so Windows
-  and WASI are core build gates rather than full test runs.
+  WebAssembly (WASI) for the core engine. The tests read their fixtures and
+  discover fonts through POSIX paths, so Windows and WASI are core build gates
+  rather than full test runs.
 - `MarkdownPDFMac` is a macOS target hook, not a separate backend yet. It is
   compiled into the package only on a macOS host.
 - iOS support is not implemented or tested.
@@ -566,8 +575,9 @@ The catalog landing page groups every article under Topics.
   drawing, unsupported Mermaid fallback, a complete patent fixture, Formidabble
   source-style manuscript coverage, an App Intents framework manuscript, an
   optimized WWDC transcript witness path, a full WWDC source bundle for explicit
-  large-fixture stress runs, and all-page Poppler/MuPDF raster comparison for
-  the A4 manuscript.
+  large-fixture stress runs, and an all-page raster comparison for the A4
+  manuscript. That raster comparison ran on outside rasterizers and is no longer
+  verified, see [Docs/NOT-VERIFIED.md](Docs/NOT-VERIFIED.md).
 - The full WWDC fixture is committed for special stress coverage. Run it with
   `MARKDOWNPDF_LARGE_FIXTURE_TESTS=1 swift test --filter FixtureTests/wwdcLargeFixtureRendersSelectedOversizedAssetsWhenEnabled`
   from the repo root.
@@ -708,7 +718,7 @@ standalone pure-Swift TeX-math subset. LaTeX is banned by the project boundary,
 so inline `$...$` and display `$$...$$` are parsed, laid out by a box-and-glue
 engine, and emitted as ordinary PDF text and rule drawing; unsupported
 constructs render as visible source. The entry point, OpenType MATH table
-reader, delimiter parsing, and pdftotext linearization have landed and are
+reader, delimiter parsing, and the text linearization for extraction have landed and are
 retired from this diagram; only the remaining work is shown. Update it after
 every child PR merge.
 
@@ -716,7 +726,7 @@ every child PR merge.
 flowchart TD
     M3["Scope 3+4<br/>Box-and-glue layout on font-backed metrics<br/>Active"]
     M4["Scope 2<br/>Symbol coverage: scripts, fractions, radicals, big ops, delimiters, Greek, relations, arrows, functions<br/>Active"]
-    M6["Acceptance<br/>qpdf, pdftotext, MuPDF quads, raster witnesses<br/>Active"]
+    M6["Acceptance<br/>structure, text and word-box witnesses of the own reader<br/>Active"]
 
     M3 --> M4 --> M6
 

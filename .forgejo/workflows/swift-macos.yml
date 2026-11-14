@@ -42,10 +42,10 @@ jobs:
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
           HOMEBREW_NO_ENV_HINTS: "1"
         run: |
-          brew install mupdf poppler qpdf swiftformat swiftlint verapdf
-          brew install --cask font-urw-base35
+          brew install swiftformat swiftlint
+          # An open font for the external font smoke tests. No PDF or image
+          # program is installed: the tests check PDFs with the package's own reader.
           brew install --cask font-liberation
-          fc-cache -f "$HOME/Library/Fonts" || true
           export MARKDOWNPDF_OPEN_FONT_PATH="$HOME/Library/Fonts/LiberationSans-Regular.ttf"
           swiftformat . --config .swiftformat --lint
           swiftlint --config .swiftlint.yml --strict

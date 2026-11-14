@@ -28,8 +28,9 @@ project's when you adopt these.
 - [testing.md](doc:Testing) - Swift Testing, `@Test` / `#expect`, test isolation.
 - [testing-discipline.md](doc:TestingDiscipline) - run the suite on every code
   change; write tests where none exist.
-- [pdf-witness-gate.md](doc:PDFWitnessGate) - PDF structural, text, geometry,
-  and raster witnesses required for generated PDF changes.
+- [pdf-witness-gate.md](doc:PDFWitnessGate) - the structural, text and geometry
+  witnesses required for generated PDF changes, all of them code in this
+  package, and how a property that cannot be checked yet is marked not verified.
 - [verification.md](doc:Verification) - no completion claim without fresh command
   output.
 - [systematic-debugging.md](doc:SystematicDebugging) - reproduce, isolate,

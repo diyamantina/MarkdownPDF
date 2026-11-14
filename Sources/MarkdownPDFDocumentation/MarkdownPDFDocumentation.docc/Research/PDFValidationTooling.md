@@ -2,6 +2,12 @@
 
 Date: 2026-05-31
 
+Status, 2026-11-14: superseded. MarkdownPDF no longer runs any of the programs
+this note recommends, in its tests, its scripts or its CI. Rendered PDFs are
+checked with the package's own reader, `PDFDocumentReader`; see <doc:PDFWitnessGate>
+and `Docs/NOT-VERIFIED.md` in the repository for what that leaves unverified. The
+note is kept as a record of the prior art that was studied.
+
 This note records the recommended open source validation stack for generated
 MarkdownPDF files. It covers external validation tools only. The renderer remains
 pure Swift and portable across Linux and macOS.

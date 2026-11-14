@@ -250,7 +250,10 @@ cached for the duration of one render, so extra passes do not re-read figures.
 
 ## Conformance
 
-PDF/UA-1 and PDF/A-2a output with page numbers validates in veraPDF. The generated
+PDF/UA-1 and PDF/A-2a output with page numbers keeps what those profiles require of
+the file: the footers are artifacts outside the structure tree and are drawn in the
+embedded font. The tests check those facts with the package's own reader; a full
+conformance run is not verified, see `Docs/NOT-VERIFIED.md` in the repository. The generated
 table of contents and index contain link annotations, which those profiles reject for
 lack of `/Contents` and tagging; this is a property of the existing link output, not of
 page numbers.

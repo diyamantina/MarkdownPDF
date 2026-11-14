@@ -74,7 +74,7 @@ struct PageNumberTests {
             let stamp = try #require(footer(of: page))
             #expect(stamp.string == "Page \(first + index) of \(last)")
         }
-        // Poppler reads the same words.
+        // The reader reads the same words.
         let pages = try pageTexts(pdf, name: "of-total-\(first)")
         #expect(pages.count == 5)
         #expect(pages[4].contains("Page \(last) of \(last)"))

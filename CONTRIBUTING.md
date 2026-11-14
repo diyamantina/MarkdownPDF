@@ -12,8 +12,12 @@ tooling, and test code must be Swift.
 
 Do not add JavaScript, Python, shell renderers, browser drivers, PDFKit,
 CoreGraphics, WebKit, LaTeX, C Markdown libraries, C PDF libraries, or any
-external renderer. Validation tools such as `qpdf` and Poppler are test
-dependencies only; they are not part of rendering.
+external renderer. The tests follow the same rule: a rendered PDF is checked with
+the package's own reader, `PDFDocumentReader`, and the byte inspectors of the
+test target. No outside program is run to produce, read, measure, render or
+convert a PDF or an image. A property the package cannot check yet is tracked in
+[`Docs/NOT-VERIFIED.md`](Docs/NOT-VERIFIED.md) and its test is disabled with that
+reason; it is never checked with an outside tool instead.
 
 ## Project status
 
