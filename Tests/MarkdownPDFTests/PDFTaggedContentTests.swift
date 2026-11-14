@@ -94,12 +94,16 @@ struct PDFTaggedContentTests {
         #expect(streamBodies.contains("/H1 << /MCID 0 >> BDC"))
         #expect(streamBodies.contains("/P << /MCID 1 >> BDC"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "tagged-spine-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let extractedText = try PDFValidation.pdftotext(data: data, name: "tagged-spine-text")
-        try #require(extractedText.exitCode == 0, "pdftotext failed:\n\(extractedText.output)")
-        #expect(extractedText.output.contains("Tagged title"))
-        #expect(extractedText.output.contains("A paragraph with strong text."))
+        try PDFValidation.requireSoundStructure(data, name: "tagged-spine")
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.text.contains("Tagged title"))
+        #expect(document.text.contains("A paragraph with strong text."))
+        // The structure tree the reader walks is the spine the bytes above spell out.
+        #expect(document.isTagged)
+        #expect(document.language == "en-US")
+        #expect(document.structure.map(\.type) == ["Document"])
+        #expect(document.structure.first?.children.map(\.type) == ["H1", "P"])
+        #expect(document.structure.first?.children.map(\.markedContentCount) == [1, 1])
     }
 
     @Test("Renderer writes a PDF/UA-1 profile when requested")
@@ -131,11 +135,32 @@ struct PDFTaggedContentTests {
         #expect(xmp.contains("xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\""))
         #expect(xmp.contains("<pdfuaid:part>1</pdfuaid:part>"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "pdfua-profile-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let veraPDF = try PDFValidation.veraPDF(data: data, name: "pdfua-profile-verapdf", flavour: "ua1")
-        try #require(veraPDF.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDF.output)")
-        #expect(veraPDF.output.contains("\"compliant\" : true"))
+        try PDFValidation.requireSoundStructure(data, name: "pdfua-profile")
+        try PDFValidation.expectConformancePrerequisites(data, profiles: [.pdfUA1])
+        // A PDF/UA-1 render alone does not claim PDF/A.
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.pdfUAPart == 1)
+        #expect(document.pdfAConformance == nil)
+        #expect(document.outputIntents.isEmpty)
+    }
+
+    /// The conformance runs four tests of this suite ended with: an outside
+    /// validator checked the whole file against the profile and had to report it
+    /// compliant. One case for each file and profile.
+    @Test(
+        "A conformance profile render passes a full validation of the profile",
+        .disabled("not verified: needs a PDF/A and PDF/UA validator inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+        arguments: [
+            "pdfua-profile: PDF/UA-1",
+            "pdfa-profile: PDF/A-2a",
+            "pdfa-profile: PDF/UA-1",
+            "tagged-rtl-logical-order: PDF/UA-1",
+            "tagged-cjk-logical-order: PDF/A-2a",
+            "tagged-cjk-logical-order: PDF/UA-1",
+        ],
+    )
+    func fullConformanceRun(_ fileAndProfile: String) {
+        PDFValidation.notVerified("a full conformance run of \(fileAndProfile)")
     }
 
     @Test("Renderer writes a PDF/A-2a profile when requested")
@@ -168,14 +193,40 @@ struct PDFTaggedContentTests {
         #expect(xmp.contains("<pdfaid:part>2</pdfaid:part>"))
         #expect(xmp.contains("<pdfaid:conformance>A</pdfaid:conformance>"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "pdfa-profile-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let veraPDFA = try PDFValidation.veraPDF(data: data, name: "pdfa-profile-verapdf", flavour: "2a")
-        try #require(veraPDFA.exitCode == 0, "veraPDF PDF/A-2a failed:\n\(veraPDFA.output)")
-        #expect(veraPDFA.output.contains("\"compliant\" : true"))
-        let veraPDFUA = try PDFValidation.veraPDF(data: data, name: "pdfa-profile-ua-verapdf", flavour: "ua1")
-        try #require(veraPDFUA.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDFUA.output)")
-        #expect(veraPDFUA.output.contains("\"compliant\" : true"))
+        try PDFValidation.requireSoundStructure(data, name: "pdfa-profile")
+        try PDFValidation.expectConformancePrerequisites(data, profiles: [.pdfA2A, .pdfUA1])
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.outputIntents == [
+            PDFDocumentReader.OutputIntent(subtype: "GTS_PDFA1", outputConditionIdentifier: "sRGB IEC61966-2.1", profileComponents: 3),
+        ])
+    }
+
+    @Test("The conformance prerequisite check names what a plain render lacks")
+    func conformancePrerequisiteCheckRejectsPlainRender() throws {
+        // The check the conformance tests rely on must fail on a file that makes no claim.
+        let plain = try MarkdownPDFRenderer(options: PDFOptions(title: "Plain")).render(markdown: "# Plain\n\nText.")
+        #expect(try PDFValidation.conformancePrerequisiteIssues(plain, profile: .pdfA2A) == [
+            "PDF/A-2a: fonts not embedded: Helvetica, Helvetica-Bold",
+            "PDF/A-2a: the catalog does not mark the document as tagged",
+            "PDF/A-2a: the structure tree is not one Document element",
+            "PDF/A-2a: no structure element holds page content",
+            "PDF/A-2a: the XMP metadata declares no PDF/A part, not 2A",
+            "PDF/A-2a: no GTS_PDFA1 output intent with an embedded RGB profile",
+        ])
+        #expect(try PDFValidation.conformancePrerequisiteIssues(plain, profile: .pdfUA1) == [
+            "PDF/UA-1: fonts not embedded: Helvetica, Helvetica-Bold",
+            "PDF/UA-1: the catalog does not mark the document as tagged",
+            "PDF/UA-1: the structure tree is not one Document element",
+            "PDF/UA-1: no structure element holds page content",
+            "PDF/UA-1: the XMP metadata declares no PDF/UA part, not 1",
+            "PDF/UA-1: the document has no language",
+        ])
+        // A document with a title asks the viewer to show it whatever its profile;
+        // one without a title lacks both.
+        let untitled = try MarkdownPDFRenderer().render(markdown: "Text.")
+        let untitledIssues = try PDFValidation.conformancePrerequisiteIssues(untitled, profile: .pdfUA1)
+        #expect(untitledIssues.contains("PDF/UA-1: the document has no title"))
+        #expect(untitledIssues.contains("PDF/UA-1: the viewer is not asked to show the document title"))
     }
 
     @Test("Tagged RTL profile preserves logical reading order")
@@ -212,18 +263,11 @@ struct PDFTaggedContentTests {
         #expect(streamBodies.contains("/P << /MCID 1 >> BDC"))
         #expect(streamBodies.contains("/P << /MCID 2 >> BDC"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "tagged-rtl-logical-order-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let veraPDF = try PDFValidation.veraPDF(data: data, name: "tagged-rtl-logical-order-verapdf", flavour: "ua1")
-        try #require(veraPDF.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDF.output)")
-        #expect(veraPDF.output.contains("\"compliant\" : true"))
-        let extractedText = try PDFValidation.pdftotextRaw(url: PDFValidation.temporaryPDF(
-            name: "tagged-rtl-logical-order-text",
-            data: data,
-        ))
-        try #require(extractedText.exitCode == 0, "pdftotext -raw failed:\n\(extractedText.output)")
-        try PDFValidation.writeTextArtifact(extractedText.output, name: "tagged-rtl-logical-order/raw-text.txt")
-        let compactText = compactLogicalExtractedText(extractedText.output)
+        try PDFValidation.requireSoundStructure(data, name: "tagged-rtl-logical-order")
+        try PDFValidation.expectConformancePrerequisites(data, profiles: [.pdfUA1])
+        // The reader gives text in the order of the content stream: the logical order.
+        let extractedText = try PDFValidation.text(data, artifact: "tagged-rtl-logical-order/text")
+        let compactText = compactLogicalExtractedText(extractedText)
 
         #expect(compactText.contains("\(hebrewWord)(123)CODE\(arabicWord)\(arabicIndic12)RTLPARATOKENA."))
         #expect(compactText.contains("\(arabicWord)(123)\(hebrewWord)QUOTETOKENA."))
@@ -265,18 +309,10 @@ struct PDFTaggedContentTests {
         #expect(streamBodies.contains("/P << /MCID 1 >> BDC"))
         #expect(streamBodies.contains("/P << /MCID 2 >> BDC"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "tagged-cjk-logical-order-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let veraPDFA = try PDFValidation.veraPDF(data: data, name: "tagged-cjk-logical-order-pdfa", flavour: "2a")
-        try #require(veraPDFA.exitCode == 0, "veraPDF PDF/A-2a failed:\n\(veraPDFA.output)")
-        #expect(veraPDFA.output.contains("\"compliant\" : true"))
-        let veraPDFUA = try PDFValidation.veraPDF(data: data, name: "tagged-cjk-logical-order-pdfua", flavour: "ua1")
-        try #require(veraPDFUA.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(veraPDFUA.output)")
-        #expect(veraPDFUA.output.contains("\"compliant\" : true"))
-        let extractedText = try PDFValidation.pdftotext(data: data, name: "tagged-cjk-logical-order-text")
-        try #require(extractedText.exitCode == 0, "pdftotext failed:\n\(extractedText.output)")
-        try PDFValidation.writeTextArtifact(extractedText.output, name: "tagged-cjk-logical-order/text.txt")
-        let compactText = extractedText.output.filter { !$0.isWhitespace }
+        try PDFValidation.requireSoundStructure(data, name: "tagged-cjk-logical-order")
+        try PDFValidation.expectConformancePrerequisites(data, profiles: [.pdfA2A, .pdfUA1])
+        let extractedText = try PDFValidation.text(data, artifact: "tagged-cjk-logical-order/text")
+        let compactText = extractedText.filter { !$0.isWhitespace }
 
         #expect(compactText.contains("漢字語仮名。Latinx12."))
         #expect(compactText.contains("漢\u{0301}字語仮名漢字語。"))
@@ -364,8 +400,11 @@ struct PDFTaggedContentTests {
         #expect(inspector.text.contains("/Alt (Chart pixels)"))
         #expect(streamBodies.contains("/Artifact BMC"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "tagged-roles-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        try PDFValidation.requireSoundStructure(data, name: "tagged-roles")
+        // The reader finds the same roles in the tree, and the figure with its description.
+        let elements = try PDFDocumentReader(data: data).structure.flatMap(\.flattened)
+        #expect(Set(elements.map(\.type)).isSuperset(of: ["Document", "H1", "L", "LI", "Lbl", "LBody", "Table", "TR", "TH", "TD", "Figure"]))
+        #expect(elements.first { $0.type == "Figure" }?.alternateText == "Chart pixels")
     }
 
     @Test("Renderer keeps tagged output disabled by default")

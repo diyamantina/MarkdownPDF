@@ -4,7 +4,7 @@ import Testing
 
 /// Witnesses that PNGs the renderer used to replace with `[Image: alt]` now embed
 /// as images: the PDF's image XObject and soft mask are decoded and compared with
-/// the source grid, and Poppler and MuPDF composite the page.
+/// the source grid, and the box the image is drawn into is read from the page.
 @Suite("PNG image rendering")
 struct PNGImageRenderTests {
     /// Quadrant colours of the 2 x 2 test image, with alpha.
@@ -69,13 +69,11 @@ struct PNGImageRenderTests {
             }
         }
 
-        let text = try PDFValidation.pdftotext(data: pdf, name: "rgba-png")
-        try #require(text.exitCode == 0, "pdftotext failed:\n\(text.output)")
-        #expect(!text.output.contains("[Image:"))
+        let text = try PDFValidation.text(pdf)
+        #expect(!text.contains("[Image:"))
         let inspector = PDFInspector(pdf)
         #expect(inspector.canonicalStructureIssues().isEmpty, "\(inspector.canonicalStructureReport())")
-        let qpdf = try PDFValidation.qpdfCheck(data: pdf, name: "rgba-png")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        try PDFValidation.requireSoundStructure(pdf, name: "rgba-png")
     }
 
     @Test("A fully opaque RGBA PNG drops the soft mask")
@@ -172,8 +170,8 @@ struct PNGImageRenderTests {
         var png = [UInt8](quadrantPNG(size: 8))
         png.removeLast(30)
         let pdf = try render(Data(png), alt: "broken figure")
-        let text = try PDFValidation.pdftotext(data: pdf, name: "broken-png")
-        #expect(text.output.contains("[Image: broken figure]"))
+        let text = try PDFValidation.text(pdf)
+        #expect(text.contains("[Image: broken figure]"))
         #expect(PDFImageObjects(pdf: pdf).images.isEmpty)
     }
 
@@ -190,40 +188,39 @@ struct PNGImageRenderTests {
         #expect(image.softMaskObjectNumber == nil)
     }
 
-    @Test("Poppler and MuPDF composite the soft mask over white")
-    func rastersCompositeOverWhite() throws {
+    @Test("An RGBA image is drawn as a square at the top left corner, capped at the image height fraction, over a bare page")
+    func rgbaImageIsPlacedAtTheTopLeft() throws {
         let size = 200
         var options = PDFOptions()
         options.margins = PDFOptions.Margins(top: 0, right: 0, bottom: 0, left: 0)
         options.pageSize = PDFOptions.PageSize(width: 200, height: 200)
         let pdf = try render(quadrantPNG(size: size), options: options)
-        let resolution = 72
-        let pdfURL = try PDFValidation.temporaryPDF(name: "rgba-raster", data: pdf)
-        let rasters = try [
-            PDFValidation.pdftoppmPNM(url: pdfURL, resolution: resolution),
-            PDFValidation.mutoolPNM(url: pdfURL, resolution: resolution, rgb: true),
-        ]
 
-        for (index, raster) in rasters.enumerated() {
-            let tool = index == 0 ? "pdftoppm" : "mutool"
-            try #require(raster.result.exitCode == 0, "\(tool) failed:\n\(raster.result.output)")
-            let image = try PNMImage(data: Data(contentsOf: raster.pnmURL))
-            #expect(image.width == size)
-            // The renderer caps a standalone image at 45% of the page height, so find
-            // the drawn square from its top-left ink and sample each quadrant centre.
-            let drawn = max(1, Int(Double(size) * PDFOptions.defaultImageMaxHeightFraction))
-            for (quadrantIndex, quadrant) in Self.quadrants.enumerated() {
-                let x = (quadrantIndex % 2) * drawn / 2 + drawn / 4
-                let y = (quadrantIndex / 2) * drawn / 2 + drawn / 4
-                let alpha = Double(quadrant[3]) / 255
-                for channel in 0 ..< 3 {
-                    let expected = Double(quadrant[channel]) * alpha + 255 * (1 - alpha)
-                    let actual = Double(image.samples[(y * image.width + x) * 3 + channel])
-                    // Tolerance 3: 8 bit rounding in two compositing steps plus the
-                    // rasterizers' resampling of a flat region.
-                    #expect(abs(actual - expected) <= 3, "\(tool) quadrant \(quadrantIndex) channel \(channel): \(actual) vs \(expected)")
-                }
-            }
-        }
+        // The renderer caps a standalone image at 45% of the page height: a square
+        // of that side, with its top left corner at the top left corner of the page.
+        let drawn = Double(size) * PDFOptions.defaultImageMaxHeightFraction
+        let number = #"(-?[0-9]+(?:\.[0-9]+)?)"#
+        let pattern = try Regex("\(number) 0 0 \(number) \(number) \(number) cm\\s+/Im[0-9]+ Do")
+        let streams = PDFInspector(pdf).streams.map(\.body)
+        let matches = streams.flatMap { $0.matches(of: pattern) }
+        try #require(matches.count == 1, "the image is not drawn exactly once")
+        let box = (1 ... 4).compactMap { matches[0][$0].substring.flatMap { Double($0) } }
+        try #require(box.count == 4)
+        #expect(abs(box[0] - drawn) < 0.001 && abs(box[1] - drawn) < 0.001, "the image box is \(box[0]) x \(box[1]), not \(drawn) square")
+        #expect(abs(box[2]) < 0.001 && abs(box[3] + box[1] - Double(size)) < 0.001, "the image box does not start at the top left corner: \(box)")
+        // Nothing is painted under the image, so what shows through its alpha is the bare page.
+        let stream = try #require(streams.first { $0.contains(" Do") })
+        let paints = stream.split(whereSeparator: \.isWhitespace).filter { ["f", "f*", "B", "S", "sh", "Tj"].contains(String($0)) }
+        #expect(paints.isEmpty, "other marks on the page: \(paints)")
+    }
+
+    /// What the placement and the decoded samples cannot say: that a rasterizer
+    /// blends each quadrant with white by its alpha.
+    @Test(
+        "A rasterizer composites the soft mask over white",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func rastersCompositeOverWhite() {
+        PDFValidation.notVerified("the composited pixels of an RGBA image")
     }
 }

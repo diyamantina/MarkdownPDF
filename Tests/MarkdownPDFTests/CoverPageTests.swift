@@ -9,10 +9,12 @@ import Testing
 ///   an image whose aspect ratio is within 0.1% of the page's fills it exactly.
 /// - Numbering: the page after the cover is printed page `firstPageNumber`, so the
 ///   footer of physical page `p` reads `firstPageNumber + p - 2`. The physical page
-///   of every heading is read back independently from Poppler's per-page text.
+///   of every heading is read back independently from the per-page text of
+///   `PDFDocumentReader`.
 /// - Links: destinations and the outline name physical pages, never printed ones.
-/// - Pixels: Poppler and MuPDF rasters of page 1 are compared with the image colours
-///   and with white bars, computed from the same closed form.
+/// - Paint: the box the cover image is drawn into, the samples of the image, and
+///   the absence of any other mark on page 1 are read from the bytes of the file
+///   and compared with the image colours and the bars the same closed form gives.
 @Suite("Cover page")
 struct CoverPageTests {
     /// A solid RGB PNG, stored uncompressed so it builds quickly.
@@ -33,14 +35,8 @@ struct CoverPageTests {
         .enabled(image: .data(png))
     }
 
-    private func pageTexts(_ pdf: Data, name: String) throws -> [String] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: name)
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        var pages = result.output.components(separatedBy: "\u{0C}")
-        if pages.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            pages.removeLast()
-        }
-        return pages
+    private func pageTexts(_ pdf: Data, name _: String) throws -> [String] {
+        try PDFValidation.pageTexts(pdf)
     }
 
     struct Placement: Equatable {
@@ -247,7 +243,6 @@ struct CoverPageTests {
         }
     }
 
-    /// The physical page (1 based) each "Section k" heading is on, read from Poppler.
     /// A contents row: the title the fragments to the left spell, and the number at the
     /// right edge.
     private func contentsRow(
@@ -263,6 +258,7 @@ struct CoverPageTests {
         return nil
     }
 
+    /// The physical page (1 based) each "Section k" body is on, read back with the reader.
     private func physicalPages(_ pdf: Data, name: String) throws -> [Int: Int] {
         var result: [Int: Int] = [:]
         for (index, text) in try pageTexts(pdf, name: name).enumerated() {
@@ -486,18 +482,18 @@ struct CoverPageTests {
         #expect(text.contains("/Author (Mihaela <M> & \\(Co\\))"))
         #expect(text.contains("<dc:creator><rdf:Seq><rdf:li>Mihaela &lt;M&gt; &amp; (Co)</rdf:li></rdf:Seq></dc:creator>"))
 
-        let info = try PDFValidation.parsedInfo(from: PDFValidation.pdfinfo(data: pdf, name: "cover-author"))
-        #expect(info["Author"] == "Mihaela <M> & (Co)")
-        #expect(info["Title"] == "T (1)")
-        #expect(info["Pages"] == "2")
+        let document = try PDFDocumentReader(data: pdf)
+        #expect(document.author == "Mihaela <M> & (Co)")
+        #expect(document.title == "T (1)")
+        #expect(document.pageCount == 2)
     }
 
     @Test("The author is metadata on its own, with or without a cover or a title")
     func authorWithoutCover() throws {
         let pdf = try MarkdownPDFRenderer(options: PDFOptions(author: "A. Writer")).render(markdown: "Body.")
-        let info = try PDFValidation.parsedInfo(from: PDFValidation.pdfinfo(data: pdf, name: "author-only"))
-        #expect(info["Author"] == "A. Writer")
-        #expect(info["Title"] == nil)
+        let document = try PDFDocumentReader(data: pdf)
+        #expect(document.author == "A. Writer")
+        #expect(document.title == nil)
 
         for blank in ["", "   ", "\n"] {
             let none = try MarkdownPDFRenderer(options: PDFOptions(author: blank)).render(markdown: "Body.")
@@ -538,8 +534,7 @@ struct CoverPageTests {
         #expect(try alt(title: nil, author: nil) == "Cover")
     }
 
-    @Test("PDF/UA-1 and PDF/A-2a validate with a cover, page numbers and an author")
-    func conformance() throws {
+    private func conformanceCoverPDF() throws -> Data {
         // No table of contents: its links already fail PDF/UA-1 without a cover, which
         // is separate from this feature.
         let options = PDFOptions(
@@ -550,12 +545,26 @@ struct CoverPageTests {
             author: "A. Writer",
             cover: cover(solidPNG(width: 500, height: 707)),
         )
-        let pdf = try MarkdownPDFRenderer(options: options).render(markdown: Self.sections)
-        for flavour in ["ua1", "2a"] {
-            let result = try PDFValidation.veraPDF(data: pdf, name: "cover-\(flavour)", flavour: flavour)
-            #expect(result.exitCode == 0, "veraPDF \(flavour):\n\(result.output)")
-            #expect(result.output.contains("\"compliant\" : true"), "veraPDF \(flavour) did not report compliance")
-        }
+        return try MarkdownPDFRenderer(options: options).render(markdown: Self.sections)
+    }
+
+    @Test("PDF/UA-1 and PDF/A-2a output with a cover, page numbers and an author keeps what the profiles require of the file")
+    func conformancePrerequisites() throws {
+        let pdf = try conformanceCoverPDF()
+        PDFValidation.expectSoundStructure(pdf, name: "cover-conformance")
+        try PDFValidation.expectConformancePrerequisites(pdf, profiles: [.pdfUA1, .pdfA2A])
+        // The cover is a figure with a description, as PDF/UA asks of every figure.
+        let elements = try PDFDocumentReader(data: pdf).structure.flatMap(\.flattened)
+        #expect(elements.first { $0.type == "Figure" }?.alternateText == "Cover of The Book by A. Writer")
+    }
+
+    @Test(
+        "PDF/UA-1 and PDF/A-2a validate with a cover, page numbers and an author",
+        .disabled("not verified: needs a PDF/A and PDF/UA validator inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func conformance() throws {
+        _ = try conformanceCoverPDF()
+        PDFValidation.notVerified("a full PDF/UA-1 and PDF/A-2a conformance run")
     }
 
     // MARK: Compatibility
@@ -580,97 +589,120 @@ struct CoverPageTests {
             cover: cover(solidPNG(width: 500, height: 707)),
         )
         let pdf = try MarkdownPDFRenderer(options: options).render(markdown: Self.sections)
-        let qpdf = try PDFValidation.qpdfCheck(data: pdf, name: "cover-composed")
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let stext = try PDFValidation.mutoolStructuredText(data: pdf, name: "cover-composed")
-        #expect(stext.exitCode == 0, "mutool stext failed:\n\(stext.output)")
-        let info = try PDFValidation.parsedInfo(from: PDFValidation.pdfinfo(data: pdf, name: "cover-composed"))
+        PDFValidation.expectSoundStructure(pdf, name: "cover-composed")
+        let document = try PDFDocumentReader(data: pdf)
         // The contents follow the first heading, so: cover plus four sections.
-        #expect(info["Pages"] == "5")
+        #expect(document.pageCount == 5)
+        #expect(document.isTagged)
     }
 
-    // MARK: Raster witnesses
+    // MARK: Paint witnesses, from the bytes of the file
 
-    private func rasters(_ pdf: Data, name: String, resolution: Int) throws -> [(tool: String, image: PNMImage)] {
-        let url = try PDFValidation.temporaryPDF(name: name, data: pdf)
-        let poppler = try PDFValidation.pdftoppmPNM(url: url, page: 1, resolution: resolution)
-        let mupdf = try PDFValidation.mutoolPNM(url: url, page: 1, resolution: resolution, rgb: true)
-        try #require(poppler.result.exitCode == 0, "pdftoppm failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool failed:\n\(mupdf.result.output)")
-        return try [
-            ("pdftoppm", PNMImage(data: Data(contentsOf: poppler.pnmURL))),
-            ("mutool", PNMImage(data: Data(contentsOf: mupdf.pnmURL))),
-        ]
-    }
-
-    private func pixel(_ image: PNMImage, _ x: Int, _ y: Int) -> [Int] {
-        let offset = (y * image.width + x) * image.samplesPerPixel
-        if image.samplesPerPixel == 1 {
-            return [Int(image.samples[offset])]
-        }
-        return (0 ..< 3).map { Int(image.samples[offset + $0]) }
-    }
-
-    @Test("Rasters of an exact-aspect cover are ink to every edge, from both rasterizers")
-    func exactRasterFillsEveryPixel() throws {
-        let color = [20, 40, 160]
-        let options = PDFOptions(pageSize: .init(width: 100, height: 200), cover: cover(solidPNG(width: 50, height: 100, color: color)))
-        let pdf = try MarkdownPDFRenderer(options: options).render(markdown: "Body.")
-        for (tool, image) in try rasters(pdf, name: "cover-raster-exact", resolution: 72) {
-            #expect(image.width == 100 && image.height == 200, "\(tool) raster \(image.width) x \(image.height)")
-            for (x, y) in [(0, 0), (99, 0), (0, 199), (99, 199), (50, 100), (0, 100), (99, 100), (50, 0), (50, 199)] {
-                let actual = pixel(image, x, y)
-                for channel in 0 ..< 3 {
-                    #expect(abs(actual[channel] - color[channel]) <= 3, "\(tool) (\(x), \(y)) channel \(channel): \(actual)")
-                }
+    /// The samples of the cover image, row by row. A PNG passed through keeps one
+    /// filter byte before each row; a row whose filter is not "none" is refused,
+    /// because its bytes are then not its samples.
+    private func coverSampleRows(_ pdf: Data, channels: Int) throws -> [[UInt8]] {
+        let image = try #require(PDFImageObjects(pdf: pdf).images.first { $0.softMaskObjectNumber != nil } ?? PDFImageObjects(pdf: pdf).images.first)
+        let bytes = try image.decodedSamples()
+        let hasFilterBytes = image.dictionary.contains("/Predictor")
+        let rowLength = image.width * channels + (hasFilterBytes ? 1 : 0)
+        try #require(bytes.count == rowLength * image.height, "\(bytes.count) bytes for \(image.width) x \(image.height)")
+        return try (0 ..< image.height).map { row in
+            let start = row * rowLength
+            if hasFilterBytes {
+                try #require(bytes[start] == 0, "row \(row) is filtered")
             }
+            return Array(bytes[(start + (hasFilterBytes ? 1 : 0)) ..< (start + rowLength)])
         }
     }
 
-    @Test("Rasters of a letterboxed cover have white bars of the documented height")
-    func letterboxRaster() throws {
-        let color = [20, 40, 160]
+    /// What is wrong with the paint of the cover page, which must be exactly this:
+    /// white filled over the whole page, then the image, and no other mark. What
+    /// the image does not cover is then white, and so is what shows through it.
+    private func coverPaintIssues(_ pdf: Data, pageWidth: Int, pageHeight: Int) throws -> [String] {
+        let stream = try #require(PDFInspector(pdf).streams.first { $0.body.contains("/Im1 Do") })
+        let lines = stream.body.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard lines.count == 3 else {
+            return ["the cover page has \(lines.count) lines of operators, not 3: \(lines)"]
+        }
+        var issues: [String] = []
+        if lines[0] != "1 1 1 rg" {
+            issues.append("the fill colour is '\(lines[0])', not white")
+        }
+        if lines[1] != "0 0 \(pageWidth) \(pageHeight) re f" {
+            issues.append("the fill is '\(lines[1])', not the whole page")
+        }
+        if !lines[2].hasPrefix("q ") || !lines[2].hasSuffix(" cm /Im1 Do Q") {
+            issues.append("the third line does not draw the image: '\(lines[2])'")
+        }
+        return issues
+    }
+
+    @Test("An exact-aspect cover paints every point of the page with the image colour")
+    func exactCoverPaintsWholePage() throws {
+        let color: [UInt8] = [20, 40, 160]
+        let options = PDFOptions(pageSize: .init(width: 100, height: 200), cover: cover(solidPNG(width: 50, height: 100, color: color.map(Int.init))))
+        let pdf = try MarkdownPDFRenderer(options: options).render(markdown: "Body.")
+
+        // The image box is the page, edge to edge, and every sample of the image is the colour.
+        try expectPlacement(coverPlacement(pdf), Placement(x: 0, y: 0, width: 100, height: 200))
+        let rows = try coverSampleRows(pdf, channels: 3)
+        #expect(rows.count == 100)
+        #expect(rows.filter { $0 != Array(repeating: color, count: 50).flatMap(\.self) } == [])
+        #expect(try coverPaintIssues(pdf, pageWidth: 100, pageHeight: 200) == [])
+    }
+
+    @Test("A letterboxed cover leaves white bars of the documented height above and below the image")
+    func letterboxLeavesWhiteBars() throws {
+        let color: [UInt8] = [20, 40, 160]
         // 200 x 200 page, 2 : 1 image: 200 x 100 drawn, 50 point bars above and below.
-        let options = PDFOptions(pageSize: .init(width: 200, height: 200), cover: cover(solidPNG(width: 40, height: 20, color: color)))
+        let options = PDFOptions(pageSize: .init(width: 200, height: 200), cover: cover(solidPNG(width: 40, height: 20, color: color.map(Int.init))))
         let pdf = try MarkdownPDFRenderer(options: options).render(markdown: "Body.")
-        for (tool, image) in try rasters(pdf, name: "cover-raster-letterbox", resolution: 72) {
-            #expect(image.width == 200 && image.height == 200)
-            for (x, y) in [(0, 5), (199, 5), (100, 45), (0, 154), (100, 195)] {
-                #expect(pixel(image, x, y).allSatisfy { $0 >= 252 }, "\(tool) bar pixel (\(x), \(y)): \(pixel(image, x, y))")
-            }
-            for (x, y) in [(0, 55), (199, 55), (100, 100), (0, 144), (199, 144)] {
-                let actual = pixel(image, x, y)
-                for channel in 0 ..< 3 {
-                    #expect(abs(actual[channel] - color[channel]) <= 3, "\(tool) image pixel (\(x), \(y)): \(actual)")
-                }
-            }
-        }
+
+        try expectPlacement(coverPlacement(pdf), Placement(x: 0, y: 50, width: 200, height: 100))
+        let rows = try coverSampleRows(pdf, channels: 3)
+        #expect(rows.filter { $0 != Array(repeating: color, count: 40).flatMap(\.self) } == [])
+        // The page is filled white before the image and nothing else is painted, so
+        // the 50 points above and the 50 points below the image are white.
+        #expect(try coverPaintIssues(pdf, pageWidth: 200, pageHeight: 200) == [])
     }
 
-    @Test("Rasters composite an RGBA cover over white")
-    func alphaRaster() throws {
-        let alpha = 128
+    @Test("An RGBA cover holds its colour and its alpha, over a page filled white")
+    func alphaCoverKeepsColourAndAlpha() throws {
+        let alpha: UInt8 = 128
         let rgba = TestPNGEncoder(
             width: 8,
             height: 8,
             colorType: 6,
             bitDepth: 8,
-            sample: { _, _, channel in [200, 30, 40, alpha][channel] },
+            sample: { _, _, channel in [200, 30, 40, Int(alpha)][channel] },
         ).encode()
         let options = PDFOptions(pageSize: .init(width: 80, height: 80), cover: cover(rgba))
         let pdf = try MarkdownPDFRenderer(options: options).render(markdown: "Body.")
-        let source = [200.0, 30, 40]
-        for (tool, image) in try rasters(pdf, name: "cover-raster-alpha", resolution: 72) {
-            let actual = pixel(image, 40, 40)
-            for channel in 0 ..< 3 {
-                let expected = source[channel] * Double(alpha) / 255 + 255 * (1 - Double(alpha) / 255)
-                #expect(abs(Double(actual[channel]) - expected) <= 3, "\(tool) channel \(channel): \(actual[channel]) vs \(expected)")
-            }
-        }
+
+        // What a viewer composites: the colour samples, the alpha samples, the image
+        // over the whole page, and white under it.
+        let objects = PDFImageObjects(pdf: pdf)
+        let image = try #require(objects.images.first { $0.softMaskObjectNumber != nil })
+        let mask = try #require(image.softMaskObjectNumber.flatMap { objects.image(number: $0) })
+        #expect(try image.decodedSamples() == Array(repeating: [200, 30, 40] as [UInt8], count: 64).flatMap(\.self))
+        #expect(try mask.decodedSamples() == Array(repeating: alpha, count: 64))
+        try expectPlacement(coverPlacement(pdf), Placement(x: 0, y: 0, width: 80, height: 80))
+        #expect(try coverPaintIssues(pdf, pageWidth: 80, pageHeight: 80) == [])
     }
 
-    @Test("Poppler and MuPDF agree on every page of a cover document")
-    func allPageParity() throws {
+    /// What `alphaCoverKeepsColourAndAlpha` cannot say: that a rasterizer blends
+    /// the colour with white by the alpha, to 200 * a + 255 * (1 - a) and so on.
+    @Test(
+        "Rasters composite an RGBA cover over white",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func alphaRaster() {
+        PDFValidation.notVerified("the composited pixels of an RGBA cover")
+    }
+
+    @Test("Every page of a cover document shows something: the cover from its top left corner, then text")
+    func everyPageShowsContent() throws {
         let options = PDFOptions(
             tableOfContents: .enabled,
             pageNumbers: PDFOptions.PageNumbers(isEnabled: true, format: .ofTotal),
@@ -679,22 +711,29 @@ struct CoverPageTests {
         )
         let markdown = "Intro.\n\n" + Self.sections.replacingOccurrences(of: "Body of section 2.", with: "Body of section 2. {{index: term}}")
         let pdf = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
-        let url = try PDFValidation.temporaryPDF(name: "cover-parity", data: pdf)
-        let pageCount = PDFInspector(pdf).pageCount
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount, resolution: 36)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount, resolution: 36)
-        try #require(poppler.result.exitCode == 0 && mupdf.result.exitCode == 0)
-        for page in 0 ..< pageCount {
-            let first = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page])).inkMetrics()
-            let second = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page])).inkMetrics()
-            #expect(first.nonWhitePixelCount > 0 && second.nonWhitePixelCount > 0, "page \(page + 1) is blank")
-            if page == 0 {
-                // The cover is ink everywhere.
-                let box = try #require(first.box)
-                #expect(box.left == 0 && box.top == 0)
-            }
+        let document = try PDFDocumentReader(data: pdf)
+        #expect(document.pageCount == PDFInspector(pdf).pageCount)
+
+        // The cover reaches the top left corner of page 1 and holds no text.
+        let cover = try #require(document.pages.first)
+        let placement = try coverPlacement(pdf)
+        #expect(placement.x == 0)
+        #expect(abs(placement.y + placement.height - cover.size.height) < 0.001)
+        #expect(placement.width > 0 && placement.height > 0)
+        #expect(cover.words.isEmpty)
+        // Every page after it shows text inside its bounds.
+        for (index, page) in document.pages.enumerated().dropFirst() {
+            let inside = page.words.filter { $0.width > 0 && $0.x >= 0 && $0.x + $0.width <= page.size.width && $0.y >= 0 && $0.y <= page.size.height }
+            #expect(!inside.isEmpty, "page \(index + 1) is blank")
         }
-        let texts = try pageTexts(pdf, name: "cover-parity-text")
-        #expect(texts.count == pageCount)
+    }
+
+    /// What `everyPageShowsContent` cannot say: that two rasterizers leave ink on every page.
+    @Test(
+        "Two rasterizers leave ink on every page of a cover document",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func allPageParity() {
+        PDFValidation.notVerified("the raster of every page of a cover document")
     }
 }
