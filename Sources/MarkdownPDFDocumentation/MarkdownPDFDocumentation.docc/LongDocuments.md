@@ -200,6 +200,29 @@ text over more pages, and the table of contents, index and page numbers follow b
 they are derived from the final layout. The value is clamped to
 `PDFOptions/lineHeightScaleRange`.
 
+## Keeping items and sections together
+
+A page breaks wherever the text reaches the bottom margin, so a list item can start on
+one page and end on the next. In a resume or a reference card that reads badly: an
+entry's last bullet, or the second half of one, lands alone at the top of a page.
+`PDFOptions/keepTogether` names the units that stay whole:
+
+- `PDFOptions/KeepTogether/listItems` keeps a list item, with its marker and any nested
+  list, on one page. A heading directly above a list stays with the list's first item.
+- `PDFOptions/KeepTogether/sections` keeps a heading and the blocks under it, up to the
+  next heading of any level, on one page.
+
+A unit that does not fit in what is left of the page moves to the top of the next page,
+provided it fits on a page of its own. A unit taller than a page cannot be kept and
+breaks as it does by default. A section too tall to keep still has its list items kept
+when both members are set. The section that holds the table of contents is never kept.
+
+The default is empty, which leaves the layout unchanged byte for byte, and a document in
+which no unit meets the end of a page renders the same bytes with the option set. Moving
+a unit leaves the room it did not fit in empty, so the page count can grow; the table of
+contents, the index and page numbers follow because they are derived from the final
+layout.
+
 ## HTML comments
 
 ``PDFOptions/IgnoreHTMLComments`` deletes HTML comments before parsing, so markers

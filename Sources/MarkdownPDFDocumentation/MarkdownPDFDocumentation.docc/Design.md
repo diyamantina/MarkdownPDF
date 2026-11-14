@@ -120,6 +120,27 @@ all follow it. The effective line height of an element is
   and index layout do not change. Only the distance between the baselines of
   consecutive lines inside an element does.
 
+## Line Breaking
+
+Text is broken into words at spaces, and between CJK characters, and a line takes words
+until the next one does not fit the measure. The space that ends a word belongs to that
+word for drawing, but it takes no room at the end of a line: a word moves down only when
+its ink does not fit, and its trailing space may hang past the measure, where nothing is
+drawn. Spaces alone never start a line. A line that is centered or right aligned, in a
+table cell or a diagram label, is placed by its ink width for the same reason.
+
+## Keeping Blocks Together
+
+`PDFOptions/keepTogether` is answered by the layout itself. To learn whether a list item
+or a section fits, the layout runs the same drawing code on a copy of its own state,
+with pages of its own, and looks at whether the copy broke a page. There is no second
+implementation of block heights to drift from the first. A unit that does not fit where
+it stands and does fit on an empty page starts the next page; one that fits nowhere is
+drawn in place and breaks as before. Units inside a unit being measured are not measured
+again, so the cost grows with the nesting depth, not exponentially with it. A unit that
+directly follows a heading is never moved alone: the heading is placed first, together
+with the first item or the section under it.
+
 A larger value suits a document that is read closely or marked up, such as a contract.
 The witness is geometric: the baseline distance between consecutive lines of a
 paragraph, list item, block quote, code block, and wrapped table cell is measured from

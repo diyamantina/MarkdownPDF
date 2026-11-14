@@ -217,6 +217,26 @@ private extension MarkdownDocument {
 }
 
 private extension MarkdownBlock {
+    var isHeading: Bool {
+        if case .heading = self {
+            return true
+        }
+        return false
+    }
+
+    /// The list cut down to its first item, or nil when the block is not a list or
+    /// the list is empty.
+    var firstListItemAlone: MarkdownBlock? {
+        switch self {
+        case let .unorderedList(items):
+            items.first.map { .unorderedList([$0]) }
+        case let .orderedList(start, items):
+            items.first.map { .orderedList(start: start, items: [$0]) }
+        default:
+            nil
+        }
+    }
+
     var containsNonWinAnsiText: Bool {
         switch self {
         case let .heading(_, content), let .paragraph(content):
@@ -516,6 +536,14 @@ private struct Layout {
     var y: Double
     var listDepth = 0
 
+    /// True while a block is being laid out only to learn whether it fits. See
+    /// ``fits(onFreshPage:_:)``.
+    var isMeasuring = false
+
+    /// Where the last heading ended. A block that starts exactly there is not moved
+    /// to the next page on its own, which would leave the heading behind.
+    var headingEnd: (page: Int, y: Double)?
+
     /// One entry per open block quote, innermost last.
     ///
     /// `hasDrawn` distinguishes "the quote started on this page" from "the quote's
@@ -688,6 +716,11 @@ private struct Layout {
                 // on the same page: the end of the document, or a forced page break.
                 let endsPage = index == blocks.count - 1
                     && (unitIndex == units.count - 1 || startsEachUnitOnNewPage)
+                try keepHeadingWithItsSection(
+                    at: index,
+                    in: blocks,
+                    contentsIndex: unitIndex == 0 && tableOfContentsEntries != nil ? tableOfContentsInsertionIndex : nil,
+                )
                 keepHeadingWithNextBlock(block, isLast: endsPage)
                 try render(block)
                 if unitIndex == 0, tableOfContentsInsertionIndex == index + 1, let tableOfContentsEntries {
@@ -779,6 +812,7 @@ private struct Layout {
                 indexable: true,
             )
             y -= size * style.spacingAfterMultiplier
+            headingEnd = (currentPageIndex, y)
         case let .paragraph(content):
             if !content.isEmpty, content.allSatisfy(\.isIndexMarker) {
                 // A paragraph of nothing but index markers draws nothing and takes no
@@ -1420,17 +1454,59 @@ private struct Layout {
         var number = start ?? 0
         listDepth += 1
         defer { listDepth -= 1 }
+        let keepsItems = options.keepTogether.contains(.listItems)
         for item in items {
-            let itemElement = beginStructureElement(.listItem)
-            ensureSpace(leadingBlockHeight(of: item))
-            if start != nil {
+            let label = start == nil ? nil : number
+            if keepsItems {
+                try keepTogether { layout in
+                    try layout.renderListItem(item, number: label)
+                }
+            } else {
+                try renderListItem(item, number: label)
+            }
+            number += 1
+        }
+        y -= listTrailingSpacing
+    }
+
+    /// Draws one list item: its marker, then its blocks, indented. `number` is the
+    /// label of an ordered item, nil for a bullet or a task.
+    private mutating func renderListItem(_ item: MarkdownBlock.ListItem, number: Int?) throws {
+        let itemElement = beginStructureElement(.listItem)
+        ensureSpace(leadingBlockHeight(of: item))
+        if let number {
+            let labelElement = beginStructureElement(.listLabel)
+            let markerStyle = style(for: .listMarker)
+            try drawRuns(
+                [
+                    PDFTextRun(
+                        text: "\(number).",
+                        font: standardFont(for: markerStyle.fontRole),
+                        size: fontSize(for: .listMarker),
+                        color: markerStyle.color,
+                    ),
+                ],
+                x: options.margins.left,
+                y: y,
+                applyBidi: false,
+            )
+            endStructureElement(labelElement)
+        } else if let checkbox = item.checkbox {
+            let labelElement = beginStructureElement(.listLabel)
+            drawTaskCheckbox(checkbox, x: options.margins.left, baselineY: y)
+            endStructureElement(labelElement)
+        } else {
+            // Unordered item. Draw the bullet through the same `.listMarker`
+            // role the ordered branch uses, so a theme styles both alike.
+            let markerStyle = style(for: .listMarker)
+            let markerFont = standardFont(for: markerStyle.fontRole)
+            if let marker = unorderedMarkerText(for: markerFont) {
                 let labelElement = beginStructureElement(.listLabel)
-                let markerStyle = style(for: .listMarker)
                 try drawRuns(
                     [
                         PDFTextRun(
-                            text: "\(number).",
-                            font: standardFont(for: markerStyle.fontRole),
+                            text: marker,
+                            font: markerFont,
                             size: fontSize(for: .listMarker),
                             color: markerStyle.color,
                         ),
@@ -1440,45 +1516,17 @@ private struct Layout {
                     applyBidi: false,
                 )
                 endStructureElement(labelElement)
-                number += 1
-            } else if let checkbox = item.checkbox {
-                let labelElement = beginStructureElement(.listLabel)
-                drawTaskCheckbox(checkbox, x: options.margins.left, baselineY: y)
-                endStructureElement(labelElement)
-            } else {
-                // Unordered item. Draw the bullet through the same `.listMarker`
-                // role the ordered branch uses, so a theme styles both alike.
-                let markerStyle = style(for: .listMarker)
-                let markerFont = standardFont(for: markerStyle.fontRole)
-                if let marker = unorderedMarkerText(for: markerFont) {
-                    let labelElement = beginStructureElement(.listLabel)
-                    try drawRuns(
-                        [
-                            PDFTextRun(
-                                text: marker,
-                                font: markerFont,
-                                size: fontSize(for: .listMarker),
-                                color: markerStyle.color,
-                            ),
-                        ],
-                        x: options.margins.left,
-                        y: y,
-                        applyBidi: false,
-                    )
-                    endStructureElement(labelElement)
-                }
             }
-            let savedLeft = options.margins.left
-            indentLeftMargin(by: 24)
-            let bodyElement = beginStructureElement(.listBody)
-            for block in item.blocks {
-                try render(block)
-            }
-            endStructureElement(bodyElement)
-            options.margins.left = savedLeft
-            endStructureElement(itemElement)
         }
-        y -= listTrailingSpacing
+        let savedLeft = options.margins.left
+        indentLeftMargin(by: 24)
+        let bodyElement = beginStructureElement(.listBody)
+        for block in item.blocks {
+            try render(block)
+        }
+        endStructureElement(bodyElement)
+        options.margins.left = savedLeft
+        endStructureElement(itemElement)
     }
 
     /// The unordered-list marker the font bound to `font` can actually draw, or
@@ -4506,6 +4554,103 @@ private struct Layout {
     private mutating func ensureSpace(_ height: Double) {
         if y - height < options.margins.bottom {
             startNewPage()
+        }
+    }
+
+    /// Draws what `body` draws, moved to the top of the next page when it does not
+    /// fit in what is left of this one and does fit on a page of its own. A body
+    /// taller than a page is drawn where it stands and breaks as it always did.
+    ///
+    /// Nothing moves at the top of a page, where there is no more room to be had,
+    /// nor directly under a heading: ``keepHeadingWithItsSection(at:in:contentsIndex:)``
+    /// has already placed the heading for what follows it, and moving on from here
+    /// would leave the heading behind.
+    private mutating func keepTogether(_ body: (inout Layout) throws -> Void) throws {
+        let followsHeading = headingEnd.map { $0.page == currentPageIndex && $0.y == y } ?? false
+        if !isMeasuring, y < pageTopY, !followsHeading,
+           try !fits(onFreshPage: false, body),
+           try fits(onFreshPage: true, body)
+        {
+            startNewPage()
+        }
+        try body(&self)
+    }
+
+    /// Whether `body` draws without breaking a page, from here or from the top of a
+    /// new page.
+    ///
+    /// The answer comes from running `body` itself on a copy of the layout, so it is
+    /// the layout's own arithmetic and cannot drift from it. The copy draws on
+    /// pages of its own and records structure and index hits in registries of its
+    /// own, all discarded: page canvases are the only state the layout shares by
+    /// reference, and nothing a block draws depends on what the registries hold.
+    /// Blocks inside the copy are not measured again, which keeps the work linear in
+    /// the nesting depth. Skipping them cannot change the answer: an inner block is
+    /// only ever moved when it would break a page, and then the body does not fit.
+    private func fits(onFreshPage: Bool, _ body: (inout Layout) throws -> Void) throws -> Bool {
+        var trial = self
+        trial.isMeasuring = true
+        trial.pages = Array(repeating: PDFPageCanvas(), count: pages.count - 1) + [PDFPageCanvas()]
+        trial.indexRegistry = IndexRegistry()
+        if taggedContentBuilder != nil {
+            trial.taggedContentBuilder = PDFTaggedContentBuilder()
+        }
+        if onFreshPage {
+            trial.startNewPage()
+        }
+        let pageCount = trial.pages.count
+        try body(&trial)
+        return trial.pages.count == pageCount
+    }
+
+    /// Breaks the page before the heading at `index` when that keeps the heading
+    /// with what ``PDFOptions/keepTogether`` ties to it.
+    ///
+    /// With ``PDFOptions/KeepTogether/sections`` that is every block up to the next
+    /// heading. With ``PDFOptions/KeepTogether/listItems`` it is the first item of a
+    /// list that follows the heading directly, since that item will not break. The
+    /// larger group is tried first, and a group that fits on no page is left to the
+    /// smaller one. `contentsIndex` is the block the table of contents is drawn
+    /// before; a group that would hold the contents is left alone.
+    private mutating func keepHeadingWithItsSection(
+        at index: Int,
+        in blocks: [MarkdownBlock],
+        contentsIndex: Int?,
+    ) throws {
+        guard !options.keepTogether.isEmpty, !isMeasuring, y < pageTopY, blocks[index].isHeading else {
+            return
+        }
+
+        var groups: [[MarkdownBlock]] = []
+        if options.keepTogether.contains(.sections) {
+            let end = blocks[(index + 1)...].firstIndex(where: \.isHeading) ?? blocks.endIndex
+            let holdsContents = contentsIndex.map { $0 > index && $0 < end } ?? false
+            if end > index + 1, !holdsContents {
+                groups.append(Array(blocks[index ..< end]))
+            }
+        }
+        if options.keepTogether.contains(.listItems),
+           index + 1 < blocks.count,
+           contentsIndex != index + 1,
+           let firstItem = blocks[index + 1].firstListItemAlone
+        {
+            groups.append([blocks[index], firstItem])
+        }
+
+        for group in groups {
+            let body: (inout Layout) throws -> Void = { layout in
+                layout.keepHeadingWithNextBlock(group[0], isLast: false)
+                for block in group {
+                    try layout.render(block)
+                }
+            }
+            if try fits(onFreshPage: false, body) {
+                return
+            }
+            if try fits(onFreshPage: true, body) {
+                startNewPage()
+                return
+            }
         }
     }
 

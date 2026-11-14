@@ -80,6 +80,10 @@ public struct PDFOptions: Equatable, Sendable {
     /// ``DocumentStrings/winAnsi``, which preserves existing output byte for byte.
     public var documentStrings: DocumentStrings
 
+    /// What stays on one page when it fits on one: nothing, list items, sections or
+    /// both. The default is empty, which preserves existing output byte for byte.
+    public var keepTogether: KeepTogether
+
     public init(
         pageSize: PageSize = .a4,
         margins: Margins = .standard,
@@ -105,6 +109,7 @@ public struct PDFOptions: Equatable, Sendable {
         colophon: Colophon = .disabled,
         lineHeightScale: Double = Self.defaultLineHeightScale,
         documentStrings: DocumentStrings = .winAnsi,
+        keepTogether: KeepTogether = [],
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -130,6 +135,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.colophon = colophon
         self.lineHeightScale = lineHeightScale
         self.documentStrings = documentStrings
+        self.keepTogether = keepTogether
     }
 
     /// The standalone image height cap used when none is given.

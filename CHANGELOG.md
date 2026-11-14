@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plain ASCII as a UTF-16BE text string with a byte order mark, so a name such as
   `Mihaljević` no longer reaches the outline and the title bar as `Mihaljevi?`. A string
   of ASCII only is written the same way in both modes.
+- `PDFOptions.keepTogether` (`PDFOptions.KeepTogether`, an option set of `.listItems` and
+  `.sections`) keeps a unit on one page when it fits on one. A list item, with its marker
+  and any nested list, or a heading with the blocks under it up to the next heading,
+  moves to the top of the next page instead of breaking where the page ends. With
+  `.listItems`, a heading directly above a list stays with the list's first item. A unit
+  taller than a page breaks as before. The default is empty, so existing output is
+  unchanged byte for byte, and a document in which no unit meets the end of a page
+  renders the same bytes with the option set.
 
 ### Fixed
 - **Output change: lines fill the measure.** A line was broken early whenever its next

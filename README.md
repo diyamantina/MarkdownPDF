@@ -218,6 +218,18 @@ let markdown = "# Agreement\n\nTerms that are easy to read and mark up."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
 
+Keep list items and sections from breaking across pages. Each one moves to the next
+page whole when it does not fit in what is left of the current page. The default keeps
+nothing together, which leaves existing output unchanged:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(keepTogether: [.listItems, .sections])
+let markdown = "## Experience\n\n- Built the capture pipeline.\n- Led the audit.\n"
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
 Keep a title, an author or a heading outside Western European intact in the PDF
 metadata and the outline. The default writes these strings as WinAnsi and replaces
 what it cannot hold, which leaves existing output unchanged:
