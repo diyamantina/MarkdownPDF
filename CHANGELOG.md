@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged byte for byte, and a document in which no unit meets the end of a page
   renders the same bytes with the option set.
 
+- `PDFDocumentReader` reads a PDF this engine wrote back into Swift values: the pages and
+  their sizes, the text of each page as positioned runs and as lines, the Info title and
+  author, the outline with levels and pages, and the link annotations with their
+  rectangles and targets. It reads plain and `FlateDecode` streams, the base fonts and
+  embedded fonts through their `/ToUnicode` maps, and `/ActualText` spans, on every
+  platform the engine builds on. It is not a general PDF reader: a cross-reference
+  stream, an encrypted file or another stream filter throws
+  `PDFDocumentReader.ReadError.unsupported`. Nothing in rendering uses it, so output is
+  unchanged.
 - `ResumeMarkdownTemplate.Options.fieldSyntax` (`.plainText`, the default, or `.markdown`)
   chooses how the text of a resume field is read. With `.markdown`, inline Markdown is
   kept, so a field can hold links, bold, italics and code. Either way a field stays one

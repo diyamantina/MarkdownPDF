@@ -120,6 +120,22 @@ all follow it. The effective line height of an element is
   and index layout do not change. Only the distance between the baselines of
   consecutive lines inside an element does.
 
+## Reading A Document Back
+
+`PDFDocumentReader` is the engine's own witness for what it wrote. It parses the file
+from its cross-reference table, walks the page tree, and interprets each content stream
+far enough to say what text is shown where: the font and size in force, the text
+position, strings decoded as WinAnsi for a base font or through the `/ToUnicode` map of
+an embedded font, and `/ActualText` standing in for the glyphs of its span. A run's
+width comes from the widths the font declares, or from the engine's standard tables for
+a base font, which is what the layout measured with. The Info strings and the outline
+titles are decoded as text strings, UTF-16BE after a byte order mark.
+
+The reader covers what this engine writes and no more. A feature outside that set is
+reported as unsupported instead of being read approximately, so a check built on the
+reader cannot pass on a misread file. The tests check it first against a file written
+by hand, then use it to read rendered documents back.
+
 ## Line Breaking
 
 Text is broken into words at spaces, and between CJK characters, and a line takes words

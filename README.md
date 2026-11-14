@@ -230,6 +230,20 @@ let markdown = "## Experience\n\n- Built the capture pipeline.\n- Led the audit.
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
 
+Read a rendered PDF back, to check it from Swift without another program: page count
+and sizes, the text of each page, the title and author, the outline and the links.
+The reader reads the files this engine writes and refuses anything else:
+
+```swift
+import MarkdownPDF
+
+let data = try MarkdownPDFRenderer().render(markdown: "# Title\n\nSee [the site](https://example.com).")
+let document = try PDFDocumentReader(data: data)
+let lines = document.pages[0].lines          // ["Title", "See the site."]
+let headings = document.outline.map(\.title) // ["Title"]
+let targets = document.links.map(\.target)   // [.uri("https://example.com"), ...]
+```
+
 Keep a title, an author or a heading outside Western European intact in the PDF
 metadata and the outline. The default writes these strings as WinAnsi and replaces
 what it cannot hold, which leaves existing output unchanged:
