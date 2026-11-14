@@ -1304,8 +1304,8 @@ struct PDFVisualLayoutValidationTests {
 
         This fixture checks proportional spacing, **bold spacing**, *italic spacing*,
         `monospaced spacing`, URI text, table cells, list indentation, and diagram
-        labels on narrow pages. The point is to give Poppler and MuPDF enough
-        material to disagree if the renderer starts placing glyphs badly.
+        labels on narrow pages. The point is to give the reader's word boxes enough
+        material to collide if the renderer starts placing glyphs badly.
 
         ## Inline stress
 
@@ -1316,8 +1316,8 @@ struct PDFVisualLayoutValidationTests {
 
         The same paragraph family also checks **bold words near normal words**,
         *italic words near normal words*, and `code tokens beside prose`. A later
-        regression in font metrics should appear as either overlapping Poppler word
-        boxes or overlapping MuPDF character quads.
+        regression in font metrics should appear as either overlapping word boxes
+        on a line or words that leave the page.
 
         - First bullet item has enough text to wrap onto a second line while the
           marker remains separate from the body text.
@@ -1362,7 +1362,7 @@ struct PDFVisualLayoutValidationTests {
         | Parse | Headings, lists, tables, and Mermaid fences | Extractable labels |
         | Layout | Page breaks and table rows | Non-overlapping boxes |
         | Serialize | Streams, resources, and xref entries | Valid PDF bytes |
-        | Inspect | Poppler, MuPDF, and qpdf witnesses | Actionable failures |
+        | Inspect | Structure, text, and word box witnesses | Actionable failures |
 
         More prose follows the second table so the document spans more than a
         token amount of content. The renderer should keep line spacing consistent
@@ -1386,9 +1386,9 @@ struct PDFVisualLayoutValidationTests {
         The final section is intentionally not empty. It validates that the last
         page still has enough ink for raster comparison and that tail content is
         not clipped. Several short sentences follow. First, text extraction must
-        include the closing words. Second, glyph quads must move monotonically in
-        each visible run. Third, raster bounds from Poppler and MuPDF must overlap
-        enough to prove both engines saw the same broad layout.
+        include the closing words. Second, word boxes must move monotonically in
+        each visible line. Third, every word must stay inside the page it is
+        drawn on, with a width and a height.
 
         A compact summary ends the fixture with known labels: Markdown source,
         Block tree, PDF layout, PDF bytes, Author input, Swift parser, PDF renderer,
