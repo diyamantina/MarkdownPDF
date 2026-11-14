@@ -185,11 +185,14 @@ struct KeepTogetherTests {
 
     @Test("A section moves whole to the next page")
     func sectionsStayWhole() throws {
-        let section = { (number: Int) in
-            "## sec\(number)\n\n" + Array(repeating: "sec\(number)", count: 90 + number * 17).joined(separator: " ") + "\n\n"
-                + (1 ... 2).map { _ in "- " + Array(repeating: "sec\(number)", count: 12).joined(separator: " ") }.joined(separator: "\n") + "\n\n"
+        // A heading, a paragraph and two list items, all made of the section's own word.
+        var markdown = ""
+        for number in 1 ... 6 {
+            let word = "sec\(number)"
+            let paragraph: String = Array(repeating: word, count: 90 + number * 17).joined(separator: " ")
+            let item = "- " + Array(repeating: word, count: 12).joined(separator: " ")
+            markdown += "## \(word)\n\n\(paragraph)\n\n\(item)\n\(item)\n\n"
         }
-        let markdown = (1 ... 6).map(section).joined()
         // A taller page: a section starts with room to spare and still runs over.
         let plain = try Self.render(markdown, Self.options(lines: 45))
         let kept = try Self.render(markdown, Self.options(.sections, lines: 45))
