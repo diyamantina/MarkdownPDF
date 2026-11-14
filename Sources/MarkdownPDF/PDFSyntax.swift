@@ -249,6 +249,31 @@ enum PDFSyntax {
             .literalString(LiteralString(rawValue))
         }
 
+        /// A PDF text string (ISO 32000-1, 7.9.2.2): a string a reader shows as text,
+        /// such as a title or an outline entry.
+        ///
+        /// With ``PDFOptions/DocumentStrings/winAnsi`` this is ``pdfString(_:)``,
+        /// unchanged. With ``PDFOptions/DocumentStrings/unicode`` a string of ASCII
+        /// only is still ``pdfString(_:)``, and any other string is the canonically
+        /// composed text in UTF-16BE behind a byte order mark, written as a hex
+        /// string, so no character is replaced.
+        static func pdfTextString(_ rawValue: String, as documentStrings: PDFOptions.DocumentStrings) -> Value {
+            switch documentStrings {
+            case .winAnsi:
+                return .pdfString(rawValue)
+            case .unicode:
+                let composed = rawValue.precomposedStringWithCanonicalMapping
+                guard composed.unicodeScalars.contains(where: { !$0.isASCII }) else {
+                    return .pdfString(rawValue)
+                }
+                var codes = [Self.utf16ByteOrderMark]
+                codes.append(contentsOf: composed.utf16)
+                return .hexString(HexString(twoByteCodes: codes))
+            }
+        }
+
+        private static let utf16ByteOrderMark: UInt16 = 0xFEFF
+
         static func pdfArray(_ values: [Value]) -> Value {
             .array(Array(values))
         }

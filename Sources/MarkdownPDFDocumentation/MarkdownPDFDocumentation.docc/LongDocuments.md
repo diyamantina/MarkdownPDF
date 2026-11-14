@@ -68,6 +68,21 @@ missing. A missing or undecodable image throws
 ``PDFOptions/author`` is document metadata written beside the title: `/Author` in the
 Info dictionary and `dc:creator` in the XMP packet.
 
+## Titles outside Western European
+
+The title, the author, the outline entries and the alternate description of an image
+are strings a reader shows in its own interface: the window title, the bookmark
+sidebar, a screen reader. By default they are written as WinAnsi bytes, and a
+character WinAnsi cannot hold, such as the `ć` of a Croatian name or any CJK
+character, is replaced by an ASCII stand-in or by `?`. The page itself is not
+affected: there the embedded fonts draw the real glyphs.
+
+``PDFOptions/documentStrings`` set to ``PDFOptions/DocumentStrings/unicode`` keeps
+every character. A string of ASCII only is written exactly as before, and any other
+string is written as a UTF-16BE text string with a byte order mark. The default is
+``PDFOptions/DocumentStrings/winAnsi``, which leaves existing output unchanged byte
+for byte. The XMP packet is UTF-8 in both modes.
+
 ## Page numbers
 
 ``PDFOptions/PageNumbers`` draws a footer in the bottom margin of every page.

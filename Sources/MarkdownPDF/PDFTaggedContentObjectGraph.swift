@@ -4,6 +4,7 @@ struct PDFTaggedContentObjectGraph {
     var parentTree: PDFSyntax.Reference
     var elementReferences: [PDFSyntax.Reference]
     var pageReferences: [PDFSyntax.Reference]
+    var documentStrings: PDFOptions.DocumentStrings = .winAnsi
 
     var structTreeRootDictionary: PDFSyntax.Dictionary {
         var entries: [PDFSyntax.Dictionary.Entry] = [
@@ -49,7 +50,7 @@ struct PDFTaggedContentObjectGraph {
         if !element.kids.isEmpty {
             entries.append(.init("K", kidsValue(element.kids)))
         }
-        entries.append(contentsOf: element.attributes.pdfEntries)
+        entries.append(contentsOf: element.attributes.pdfEntries(documentStrings: documentStrings))
         return PDFSyntax.Dictionary(entries)
     }
 

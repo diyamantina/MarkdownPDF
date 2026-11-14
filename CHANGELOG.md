@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `PDFOptions.documentStrings` chooses how the strings a reader shows outside the page
+  are written: the Info `/Title` and `/Author`, the outline titles and the alternate
+  descriptions of a tagged PDF. The default, `.winAnsi`, writes them as before, so
+  existing output is unchanged byte for byte. `.unicode` writes a string that is not
+  plain ASCII as a UTF-16BE text string with a byte order mark, so a name such as
+  `Mihaljević` no longer reaches the outline and the title bar as `Mihaljevi?`. A string
+  of ASCII only is written the same way in both modes.
+
 ## [0.13.0] - 2026-10-28
 
 ### Added

@@ -75,6 +75,11 @@ public struct PDFOptions: Equatable, Sendable {
     /// ``Colophon/disabled``.
     public var colophon: Colophon
 
+    /// How the Info `/Title` and `/Author`, the outline titles and the alternate
+    /// descriptions of a tagged PDF are written. The default is
+    /// ``DocumentStrings/winAnsi``, which preserves existing output byte for byte.
+    public var documentStrings: DocumentStrings
+
     public init(
         pageSize: PageSize = .a4,
         margins: Margins = .standard,
@@ -99,6 +104,7 @@ public struct PDFOptions: Equatable, Sendable {
         ignoreHTMLComments: IgnoreHTMLComments = .disabled,
         colophon: Colophon = .disabled,
         lineHeightScale: Double = Self.defaultLineHeightScale,
+        documentStrings: DocumentStrings = .winAnsi,
     ) {
         self.pageSize = pageSize
         self.margins = margins
@@ -123,6 +129,7 @@ public struct PDFOptions: Equatable, Sendable {
         self.ignoreHTMLComments = ignoreHTMLComments
         self.colophon = colophon
         self.lineHeightScale = lineHeightScale
+        self.documentStrings = documentStrings
     }
 
     /// The standalone image height cap used when none is given.

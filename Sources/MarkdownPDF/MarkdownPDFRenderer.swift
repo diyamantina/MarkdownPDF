@@ -739,6 +739,7 @@ private struct Layout {
             streamCompression: options.streamCompression,
             taggedContent: taggedContentBuilder?.build(language: options.taggedPDF.language),
             conformance: options.conformance,
+            documentStrings: options.documentStrings,
         ).data()
     }
 

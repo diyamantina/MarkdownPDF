@@ -218,6 +218,18 @@ let markdown = "# Agreement\n\nTerms that are easy to read and mark up."
 let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
 ```
 
+Keep a title, an author or a heading outside Western European intact in the PDF
+metadata and the outline. The default writes these strings as WinAnsi and replaces
+what it cannot hold, which leaves existing output unchanged:
+
+```swift
+import MarkdownPDF
+
+let options = PDFOptions(title: "Životopis", author: "Mihaela Mihaljević Jakić", documentStrings: .unicode)
+let markdown = "# Mihaela Mihaljević Jakić\n\nSenior iOS Architect."
+let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
+```
+
 Generate a visible table of contents:
 
 ```swift

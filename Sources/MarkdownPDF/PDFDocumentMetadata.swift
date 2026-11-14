@@ -4,6 +4,7 @@ struct PDFDocumentMetadata {
     var title: String?
     var author: String?
     var conformance: PDFOptions.Conformance = .none
+    var documentStrings: PDFOptions.DocumentStrings = .winAnsi
 
     var isEmpty: Bool {
         cleanTitle == nil && cleanAuthor == nil && !conformance.isEnabled
@@ -29,10 +30,10 @@ struct PDFDocumentMetadata {
             PDFSyntax.Dictionary.Entry("Producer", .pdfString(Self.producer)),
         ]
         if let cleanTitle {
-            entries.insert(.init("Title", .pdfString(cleanTitle)), at: 0)
+            entries.insert(.init("Title", .pdfTextString(cleanTitle, as: documentStrings)), at: 0)
         }
         if let cleanAuthor {
-            entries.insert(.init("Author", .pdfString(cleanAuthor)), at: cleanTitle == nil ? 0 : 1)
+            entries.insert(.init("Author", .pdfTextString(cleanAuthor, as: documentStrings)), at: cleanTitle == nil ? 0 : 1)
         }
         return entries
     }

@@ -28,10 +28,10 @@ struct PDFTaggedContent {
             self.listNumbering = listNumbering
         }
 
-        var pdfEntries: [PDFSyntax.Dictionary.Entry] {
+        func pdfEntries(documentStrings: PDFOptions.DocumentStrings) -> [PDFSyntax.Dictionary.Entry] {
             var entries: [PDFSyntax.Dictionary.Entry] = []
             if let alternateDescription {
-                entries.append(.init("Alt", .pdfString(alternateDescription)))
+                entries.append(.init("Alt", .pdfTextString(alternateDescription, as: documentStrings)))
             }
             if let tableHeaderScope {
                 entries.append(

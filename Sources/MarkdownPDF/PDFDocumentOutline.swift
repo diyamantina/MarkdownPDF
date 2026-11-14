@@ -1,5 +1,6 @@
 struct PDFDocumentOutline {
     var destinations: [PDFNamedDestinations.ResolvedDestination]
+    var documentStrings: PDFOptions.DocumentStrings = .winAnsi
 
     func outlineObjects(
         root: PDFSyntax.Reference,
@@ -78,7 +79,7 @@ struct PDFDocumentOutline {
     ) -> PDFSyntax.Dictionary {
         let siblings = siblingIndexes(for: node, nodes: nodes)
         var entries: [PDFSyntax.Dictionary.Entry] = [
-            .init("Title", .pdfString(node.resolved.destination.title)),
+            .init("Title", .pdfTextString(node.resolved.destination.title, as: documentStrings)),
             .init("Parent", .reference(parentReference(for: node, root: root, itemReferences: itemReferences))),
             .init("Dest", .array(node.resolved.destination.destinationArray(page: node.resolved.page))),
         ]
