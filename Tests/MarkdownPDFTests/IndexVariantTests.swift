@@ -8,8 +8,9 @@ import Testing
 ///
 /// Witnesses, independent of the matcher: a pure closed form (split into words,
 /// fold with Foundation, compare word sequences), hand-written expectations, and a
-/// generated multi-page document whose page text is read back by Poppler and by
-/// MuPDF before the index is compared with it.
+/// generated multi-page document whose page text is read back by `PDFDocumentReader`
+/// and by the content stream inspector of this test target before the index is
+/// compared with it.
 @Suite("Index term variants")
 struct IndexVariantTests {
     // MARK: Parsing
@@ -228,13 +229,9 @@ struct IndexVariantTests {
         try MarkdownPDFRenderer(options: options).render(markdown: markdown)
     }
 
-    /// The index page as Poppler reads it: rows like `a, 1, 3-4` as `heading -> pages`.
+    /// The index page as the reader reads it: rows like `a, 1, 3-4` as `heading -> pages`.
     private func listing(of pdf: Data) throws -> [(heading: String, pages: [Int])] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: "index-variants-listing")
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        let pages = result.output.components(separatedBy: "\u{0C}").filter {
-            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        let pages = try PDFValidation.pageTexts(pdf)
         let last = try #require(pages.last)
         var entries: [(String, [Int])] = []
         for row in last.components(separatedBy: "\n") where row.contains(", ") {
@@ -253,44 +250,17 @@ struct IndexVariantTests {
         return entries
     }
 
-    /// The text of every body page as Poppler reads it, the index page dropped.
-    private func poppler(_ pdf: Data) throws -> [String] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: "index-variants")
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        var pages = result.output.components(separatedBy: "\u{0C}")
-        if pages.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            pages.removeLast()
-        }
-        return Array(pages.dropLast())
+    /// The text of every body page as `PDFDocumentReader` reads it, the index page dropped.
+    private func readerPages(_ pdf: Data) throws -> [String] {
+        try Array(PDFValidation.pageTexts(pdf).dropLast())
     }
 
-    private func mupdf(_ pdf: Data) throws -> [String] {
-        let stext = try PDFValidation.mutoolStructuredText(data: pdf, name: "index-variants-mupdf")
-        try #require(stext.exitCode == 0, "mutool failed:\n\(stext.output)")
-        let pages = try MuPDFStructuredText(xml: stext.output).pages
-        return pages.dropLast().map { Self.decodingCharacterReferences($0.lines.map(\.text).joined(separator: "\n")) }
-    }
-
-    /// The MuPDF reader leaves numeric character references such as `&#xe9;` in its
-    /// text; this is the witness-side decoding of them.
-    private static func decodingCharacterReferences(_ text: String) -> String {
-        var result = ""
-        var rest = Substring(text)
-        while let start = rest.range(of: "&#x") {
-            result += rest[rest.startIndex ..< start.lowerBound]
-            let after = rest[start.upperBound...]
-            if let end = after.firstIndex(of: ";"),
-               let value = UInt32(after[after.startIndex ..< end], radix: 16),
-               let scalar = Unicode.Scalar(value)
-            {
-                result.unicodeScalars.append(scalar)
-                rest = after[after.index(after: end)...]
-            } else {
-                result += "&#x"
-                rest = after
-            }
-        }
-        return result + rest
+    /// The text of every body page as the content stream inspector of this test
+    /// target reads it, the index page dropped. It shares no code with the reader:
+    /// it matches the text operators in the raw stream with a pattern and resolves
+    /// the string escapes itself.
+    private func contentStreamPages(_ pdf: Data) -> [String] {
+        Array(ContentStreamGeometry(pdf: pdf).pages.map(\.text).dropLast())
     }
 
     /// Pages (1-based) of `text` that hold any form of `term`, by whole-word
@@ -325,7 +295,7 @@ struct IndexVariantTests {
         #expect(listed.count == 4)
 
         // Independent page readers.
-        for (name, texts) in try [("poppler", poppler(pdf)), ("mupdf", mupdf(pdf))] {
+        for (name, texts) in try [("reader", readerPages(pdf)), ("content stream", contentStreamPages(pdf))] {
             try #require(texts.count == Self.pages.count, "\(name) page count \(texts.count)")
             for term in Self.terms {
                 let parsed = try PDFOptions.Index.Term(parsing: term)
@@ -424,8 +394,7 @@ struct IndexVariantTests {
     func validPDF() throws {
         let options = PDFOptions(index: PDFOptions.Index(isEnabled: true, terms: Self.terms))
         let pdf = try render(options)
-        let qpdf = try PDFValidation.qpdfCheck(data: pdf, name: "index-variants-valid")
-        #expect(qpdf.exitCode == 0, "qpdf failed:\n\(qpdf.output)")
+        PDFValidation.expectSoundStructure(pdf, name: "index-variants-valid")
         let inspector = PDFInspector(pdf)
         #expect(inspector.canonicalStructureIssues().isEmpty, "\(inspector.canonicalStructureReport())")
     }

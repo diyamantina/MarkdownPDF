@@ -4,7 +4,7 @@ import Testing
 
 /// Oracle: documents whose pages are fixed by explicit page breaks, so the pages a
 /// term lands on are known by construction; and a long document whose term pages
-/// are read back independently from Poppler's per-page text.
+/// are read back independently from the per-page text of `PDFDocumentReader`.
 @Suite("Index rendering")
 struct IndexRenderTests {
     private static let sixPages = [
@@ -32,14 +32,8 @@ struct IndexRenderTests {
         }
     }
 
-    private func pageTexts(_ pdf: Data, name: String) throws -> [String] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: name)
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        var pages = result.output.components(separatedBy: "\u{0C}")
-        if pages.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            pages.removeLast()
-        }
-        return pages
+    private func pageTexts(_ pdf: Data, name _: String) throws -> [String] {
+        try PDFValidation.pageTexts(pdf)
     }
 
     @Test("Markers and term-list matches land on the right pages, sorted and grouped")
@@ -66,7 +60,7 @@ struct IndexRenderTests {
             }
         }
 
-        // Poppler reads the same index.
+        // The reader reads the same index.
         let pages = try pageTexts(pdf, name: "index-layout")
         #expect(pages.count == 7)
         #expect(pages[6].contains("alpha, 1, 3"))
@@ -86,8 +80,7 @@ struct IndexRenderTests {
         }
         #expect(!inspector.text.contains("mdpdf-page-5"))
         #expect(!inspector.text.contains("mdpdf-page-7"))
-        let qpdf = try PDFValidation.qpdfCheck(data: pdf, name: "index-links")
-        try #require(qpdf.exitCode == 0, "qpdf failed:\n\(qpdf.output)")
+        try PDFValidation.requireSoundStructure(pdf, name: "index-links")
     }
 
     @Test("The index heading is in the outline and in the table of contents with its page number")
@@ -179,7 +172,10 @@ struct IndexRenderTests {
         let geometry = ContentStreamGeometry(pdf: pdf)
         #expect(geometry.pages.count == 1)
         let text = try #require(pageTexts(pdf, name: "empty-marker").first)
-        #expect(text.contains("Text and end."))
+        // The reader keeps every space the page shows, and a space stays on each side
+        // of a marker that was removed, so runs of spaces are folded before comparing.
+        let folded = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        #expect(folded.contains("Text and end."))
     }
 
     @Test("A long run of references wraps with a hanging indent and never starts a line with a comma")
@@ -217,7 +213,7 @@ struct IndexRenderTests {
     }
 
     @Test("Table of contents, page numbers and index converge, and every index page really holds the term")
-    func convergesAndAgreesWithPoppler() throws {
+    func convergesAndAgreesWithTheReader() throws {
         var sections: [String] = []
         let zetaSections: Set = [3, 17, 18, 19, 33]
         for number in 1 ... 40 {
@@ -239,7 +235,7 @@ struct IndexRenderTests {
         let pages = try pageTexts(pdf, name: "index-converges")
         let indexPage = pages.count - 1
 
-        // Independent oracle: the pages (printed labels) whose Poppler text holds ZETA.
+        // Independent oracle: the pages (printed labels) whose text, read back, holds ZETA.
         let expected = pages.indices.filter { $0 != indexPage && pages[$0].contains("ZETA") }.map { $0 + 3 }
         // Several of the chapters share a page, so there are fewer pages than chapters.
         #expect(expected.count >= 3 && expected.count <= zetaSections.count)
@@ -259,7 +255,7 @@ struct IndexRenderTests {
                 listed.append(single)
             }
         }
-        #expect(listed == expected, "index lists \(listed), Poppler finds \(expected)")
+        #expect(listed == expected, "index lists \(listed), the reader finds \(expected)")
 
         // The contents entry for the index carries the index page's printed label.
         let contents = pages[0] + pages[1]

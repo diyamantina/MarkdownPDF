@@ -4,20 +4,14 @@ import Testing
 
 /// Oracle: with the option on, the parse of a document with comments equals the parse
 /// of the same document written without them; with it off, nothing changes and the
-/// comments are visible text. Rendered PDFs are read back through Poppler.
+/// comments are visible text. Rendered PDFs are read back with `PDFDocumentReader`.
 @Suite("HTML comment option")
 struct HTMLCommentRenderTests {
     private let on = MarkdownParser(options: MarkdownParser.Options(ignoreHTMLComments: true))
     private let off = MarkdownParser()
 
-    private func pageTexts(_ pdf: Data, name: String) throws -> [String] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: name)
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        var pages = result.output.components(separatedBy: "\u{0C}")
-        if pages.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            pages.removeLast()
-        }
-        return pages
+    private func pageTexts(_ pdf: Data, name _: String) throws -> [String] {
+        try PDFValidation.pageTexts(pdf)
     }
 
     // MARK: Parser

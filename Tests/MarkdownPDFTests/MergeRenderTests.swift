@@ -23,14 +23,8 @@ struct MergeRenderTests {
         return directory
     }
 
-    private func pageTexts(_ pdf: Data, name: String) throws -> [String] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: name)
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        var pages = result.output.components(separatedBy: "\u{0C}")
-        if pages.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            pages.removeLast()
-        }
-        return pages
+    private func pageTexts(_ pdf: Data, name _: String) throws -> [String] {
+        try PDFValidation.pageTexts(pdf)
     }
 
     @Test("Each source resolves its own relative images")

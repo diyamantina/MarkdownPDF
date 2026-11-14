@@ -6,7 +6,7 @@ import Testing
 /// `firstPageNumber + i`, computed here by an independent reference (a lookup of
 /// Roman numerals, plain decimal), at the x the position rule gives, inside the
 /// bottom margin and clear of every body line. Geometry comes from the content
-/// stream; text comes from Poppler.
+/// stream; text comes from `PDFDocumentReader`.
 @Suite("Page numbers")
 struct PageNumberTests {
     /// Five pages of body text separated by explicit page breaks.
@@ -27,14 +27,8 @@ struct PageNumberTests {
         PDFTextRun(text: text.string, font: .helvetica, size: text.size).width(fontSet: .pdfBase)
     }
 
-    private func pageTexts(_ pdf: Data, name: String) throws -> [String] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: name)
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        var pages = result.output.components(separatedBy: "\u{0C}")
-        if pages.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            pages.removeLast()
-        }
-        return pages
+    private func pageTexts(_ pdf: Data, name _: String) throws -> [String] {
+        try PDFValidation.pageTexts(pdf)
     }
 
     @Test("Plain format prints 1 ... N, in the bottom margin, below all body text")
@@ -165,8 +159,7 @@ struct PageNumberTests {
             #expect(stream.hasSuffix(footer) || stream.firstMatch(of: pattern) != nil, "page \(index + 1) footer is not wrapped as an artifact")
         }
         #expect(inspector.canonicalStructureIssues().isEmpty, "\(inspector.canonicalStructureReport())")
-        let qpdf = try PDFValidation.qpdfCheck(data: pdf, name: "tagged-page-numbers")
-        try #require(qpdf.exitCode == 0, "qpdf failed:\n\(qpdf.output)")
+        try PDFValidation.requireSoundStructure(pdf, name: "tagged-page-numbers")
     }
 
     @Test("Embedded-font documents draw the footer in the document font")
@@ -182,21 +175,36 @@ struct PageNumberTests {
         #expect(inspector.text.contains("/Subtype /Type0"), "the body should have selected the bundled DejaVu faces")
     }
 
-    @Test("PDF/UA-1 and PDF/A-2a output with page numbers validates")
-    func conformanceWithPageNumbers() throws {
+    private func conformancePDFWithPageNumbers() throws -> Data {
         let options = PDFOptions(
             embeddedFonts: .dejaVu,
             title: "Conformance Book",
             conformance: .pdfUA1AndPDFA2A,
             pageNumbers: PDFOptions.PageNumbers(isEnabled: true, format: .ofTotal),
         )
-        let pdf = try MarkdownPDFRenderer(options: options).render(markdown: Self.fivePages)
-        let ua1 = try PDFValidation.veraPDF(data: pdf, name: "page-numbers-ua1", flavour: "ua1")
-        #expect(ua1.exitCode == 0, "veraPDF ua1 failed:\n\(ua1.output)")
-        #expect(ua1.output.contains("\"compliant\" : true"))
-        let a2a = try PDFValidation.veraPDF(data: pdf, name: "page-numbers-2a", flavour: "2a")
-        #expect(a2a.exitCode == 0, "veraPDF 2a failed:\n\(a2a.output)")
-        #expect(a2a.output.contains("\"compliant\" : true"))
+        return try MarkdownPDFRenderer(options: options).render(markdown: Self.fivePages)
+    }
+
+    @Test("PDF/UA-1 and PDF/A-2a output with page numbers keeps what the profiles require of the file")
+    func conformancePrerequisitesWithPageNumbers() throws {
+        let pdf = try conformancePDFWithPageNumbers()
+
+        PDFValidation.expectSoundStructure(pdf, name: "page-numbers-conformance")
+        try PDFValidation.expectConformancePrerequisites(pdf, profiles: [.pdfUA1, .pdfA2A])
+        // The footers are on the pages, in the embedded font, and outside the structure tree.
+        let document = try PDFDocumentReader(data: pdf)
+        #expect(document.pages.map { $0.text.contains("Page") } == Array(repeating: true, count: 5))
+        #expect(document.pages[4].text.contains("Page 5 of 5"))
+        #expect(document.fonts.filter { !$0.isEmbedded } == [])
+    }
+
+    @Test(
+        "PDF/UA-1 and PDF/A-2a output with page numbers validates",
+        .disabled("not verified: needs a PDF/A and PDF/UA validator inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func conformanceWithPageNumbers() throws {
+        _ = try conformancePDFWithPageNumbers()
+        PDFValidation.notVerified("a full PDF/UA-1 and PDF/A-2a conformance run")
     }
 
     @Test("A conformance profile with base fonts refuses page numbers like any other text")

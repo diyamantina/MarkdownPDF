@@ -6,7 +6,7 @@ import Testing
 ///
 /// - Position: documents whose body pages are fixed by explicit page breaks, so the
 ///   expected page count is known by construction; the last page is read back from
-///   Poppler's per-page text, independently of the renderer's page logic.
+///   the per-page text of `PDFDocumentReader`, independently of the renderer's page logic.
 /// - Text: the default blocks are compared with the parse of the Markdown that the
 ///   feature's specification states, so the AST is checked against the written
 ///   contract and not against itself.
@@ -21,14 +21,8 @@ struct ColophonTests {
     private static let threePages = (1 ... 3).map { "# Chapter \($0)\n\nThe word alpha appears in chapter \($0)." }
         .joined(separator: "\n\n<!-- pagebreak -->\n\n")
 
-    private func pageTexts(_ pdf: Data, name: String) throws -> [String] {
-        let result = try PDFValidation.pdftotext(data: pdf, name: name)
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        var pages = result.output.components(separatedBy: "\u{0C}")
-        if pages.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            pages.removeLast()
-        }
-        return pages
+    private func pageTexts(_ pdf: Data, name _: String) throws -> [String] {
+        try PDFValidation.pageTexts(pdf)
     }
 
     /// A solid RGB PNG, stored uncompressed so it builds quickly.
