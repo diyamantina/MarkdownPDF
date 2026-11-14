@@ -50,6 +50,28 @@ decorative cues that invite irrelevant inference.
 - Skills are grouped, compact, and near the end.
 - The template does not add photos, icons, sidebars, or visual scoring elements.
 
+## Fields
+
+A field is one line of text. A line break inside it becomes a space, and text that
+would start a heading, a list, a quote, a rule or a code fence is escaped, so a field
+can never change the structure of the document.
+
+By default a field is plain text: Markdown punctuation is escaped, and `**bold**`
+prints with its asterisks. With `ResumeMarkdownTemplate.Options.fieldSyntax` set to
+`.markdown`, inline Markdown is kept, so a highlight can link to a release post or set
+a product name in bold:
+
+```swift
+let template = ResumeMarkdownTemplate(options: .init(fieldSyntax: .markdown))
+let markdown = template.markdown(for: resume)
+```
+
+A title with a `url` field is written as a link. When the title already holds a link of
+its own, it keeps that link and the `url` field is not used, since links do not nest.
+
+The contact line shows the email address itself, linked with `mailto:`, so it can be
+read on paper. The address is always literal text.
+
 ## Use
 
 ```sh

@@ -17,12 +17,34 @@ public struct ResumeMarkdownTemplate: Sendable {
         public var uppercaseSectionHeadings: Bool
         public var includeGeneratedNote: Bool
 
+        /// How the text of a field is read. The default is ``FieldSyntax/plainText``.
+        public var fieldSyntax: FieldSyntax
+
         public init(
             uppercaseSectionHeadings: Bool = true,
             includeGeneratedNote: Bool = false,
+            fieldSyntax: FieldSyntax = .plainText,
         ) {
             self.uppercaseSectionHeadings = uppercaseSectionHeadings
             self.includeGeneratedNote = includeGeneratedNote
+            self.fieldSyntax = fieldSyntax
+        }
+
+        /// How the text of a resume field reaches the Markdown.
+        ///
+        /// Either way a field stays the one line of text the template put it in: a
+        /// line break in it becomes a space, and text that would start a heading, a
+        /// list, a quote, a rule or a code fence is escaped. The email address is
+        /// always written literally.
+        public enum FieldSyntax: Equatable, Sendable {
+            /// Every character is text. Markdown punctuation is escaped, so
+            /// `**bold**` prints with its asterisks.
+            case plainText
+
+            /// Inline Markdown is kept: links, bold, italics, code and
+            /// strikethrough work inside a field. A title that already holds a link
+            /// is not wrapped in the link of its `url` field, since links do not nest.
+            case markdown
         }
     }
 }
@@ -58,7 +80,10 @@ private struct Writer {
     mutating func contact(_ basics: ResumeDocument.Basics) {
         var parts: [String] = []
         if let email = basics.email.cleanValue {
-            parts.append(link("Email", url: email.hasPrefix("mailto:") ? email : "mailto:\(email)"))
+            // The address itself is the link text, so it is readable on paper. It
+            // is an address, not prose, so it is never read as Markdown.
+            let address = email.hasPrefix("mailto:") ? String(email.dropFirst("mailto:".count)) : email
+            parts.append("[\(plainText(address))](\(markdownDestination("mailto:\(address)")))")
         }
         if let phone = basics.phone.cleanValue {
             parts.append(markdownText(phone))
@@ -263,7 +288,12 @@ private struct Writer {
     }
 
     func link(_ label: String, url: String) -> String {
-        "[\(markdownText(label))](\(markdownDestination(url)))"
+        let text = markdownText(label)
+        // Links do not nest: a Markdown label that holds a link keeps its own.
+        if options.fieldSyntax == .markdown, text.contains("](") {
+            return text
+        }
+        return "[\(text)](\(markdownDestination(url)))"
     }
 
     func dateRange(start: String?, end: String?) -> String? {
@@ -274,13 +304,20 @@ private struct Writer {
         return values.map(markdownText).joined(separator: " - ")
     }
 
+    /// The text of a field as one line of Markdown, under ``ResumeMarkdownTemplate/Options/fieldSyntax``.
     func markdownText(_ value: String) -> String {
+        switch options.fieldSyntax {
+        case .plainText:
+            plainText(value)
+        case .markdown:
+            value.onOneLine().escapingInitialBlockMarker().escapingInitialMarkdownBlockMarker()
+        }
+    }
+
+    /// The field with every Markdown character escaped.
+    func plainText(_ value: String) -> String {
         var output = ""
-        for character in value
-            .replacingOccurrences(of: "\r\n", with: " ")
-            .replacingOccurrences(of: "\r", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-        {
+        for character in value.onOneLine() {
             switch character {
             case "\\", "`", "*", "_", "[", "]", "(", ")", "<", ">", "!", "|", "~":
                 output.append("\\")
@@ -338,6 +375,35 @@ private extension String {
     var cleanValue: String? {
         let value = trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value
+    }
+
+    func onOneLine() -> String {
+        replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+    }
+
+    /// Escapes what ``escapingInitialBlockMarker()`` leaves to the escaping of
+    /// plain text: a quote, a bullet written with an asterisk, a rule and a code
+    /// fence. Emphasis that opens the field (`*word*`, `_word_`, `**word**`) is kept.
+    func escapingInitialMarkdownBlockMarker() -> String {
+        guard let first else {
+            return self
+        }
+        let isRule = count >= 3 && allSatisfy { $0 == first || $0 == " " } && filter { $0 == first }.count >= 3
+        let startsBlock = switch first {
+        case ">":
+            true
+        case "*":
+            dropFirst().first.map { $0 == " " } ?? true || isRule
+        case "_":
+            isRule
+        case "`", "~":
+            hasPrefix("```") || hasPrefix("~~~")
+        default:
+            false
+        }
+        return startsBlock ? "\\\(self)" : self
     }
 
     func escapingInitialBlockMarker() -> String {

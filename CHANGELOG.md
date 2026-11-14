@@ -24,7 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged byte for byte, and a document in which no unit meets the end of a page
   renders the same bytes with the option set.
 
+- `ResumeMarkdownTemplate.Options.fieldSyntax` (`.plainText`, the default, or `.markdown`)
+  chooses how the text of a resume field is read. With `.markdown`, inline Markdown is
+  kept, so a field can hold links, bold, italics and code. Either way a field stays one
+  line and cannot start a heading, a list, a quote, a rule or a code fence. A title that
+  already holds a link is not wrapped in the link of its `url` field. The default escapes
+  every Markdown character as before.
+
 ### Fixed
+- **Output change: the resume shows the email address.** The contact line of
+  `ResumeMarkdownTemplate` linked the word `Email` to the address, so the address could
+  not be read on paper. The link text is the address itself now, as literal text, still
+  linked with `mailto:`.
 - **Output change: lines fill the measure.** A line was broken early whenever its next
   word fit but the space after that word did not, so some lines ended one word short and
   the right edge was more ragged than the text called for. The space that ends a line
