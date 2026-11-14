@@ -11,6 +11,8 @@ enum PDFReadContent {
         var widths: [Int: Double] = [:]
         /// The advance of a code `widths` lacks.
         var defaultWidth = 0.0
+        /// Whether the font's descriptor holds a font program.
+        var isEmbedded = false
 
         /// The advance of the string at `size`, in points.
         func width(of bytes: [UInt8], size: Double) -> Double {
@@ -59,9 +61,11 @@ enum PDFReadContent {
                 bytesPerCode: composite ? 2 : 1,
                 toUnicode: toUnicode,
             )
+            let descendants = try store.resolve(dictionary["DescendantFonts"]).array ?? []
+            let descendant = try store.resolve(descendants.first).dictionary ?? [:]
+            let descriptor = try store.resolve(composite ? descendant["FontDescriptor"] : dictionary["FontDescriptor"]).dictionary ?? [:]
+            font.isEmbedded = ["FontFile", "FontFile2", "FontFile3"].contains { descriptor[$0] != nil }
             if composite {
-                let descendants = try store.resolve(dictionary["DescendantFonts"]).array ?? []
-                let descendant = try store.resolve(descendants.first).dictionary ?? [:]
                 font.defaultWidth = try store.resolve(descendant["DW"]).number ?? 1000
                 font.widths = try compositeWidths(store.resolve(descendant["W"]).array ?? [], store: store)
             } else if let first = try store.resolve(dictionary["FirstChar"]).number {

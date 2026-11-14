@@ -83,7 +83,7 @@ struct PDFDocumentReaderTests {
     }
 
     @Test("What is not a PDF this reader reads is refused, never read wrongly")
-    func refusals() throws {
+    func refusals() {
         func error(_ data: Data) -> PDFDocumentReader.ReadError? {
             do {
                 _ = try PDFDocumentReader(data: data)
@@ -174,6 +174,24 @@ struct PDFDocumentReaderTests {
 
         #expect(document.pages[0].lines == [text])
         #expect(document.pages[0].runs.allSatisfy { $0.fontName.hasSuffix("DejaVuSans") })
+        #expect(document.fonts.count == 1)
+        #expect(document.fonts.allSatisfy { $0.isEmbedded && $0.name.hasSuffix("DejaVuSans") })
+    }
+
+    @Test("The fonts and the tagged flag are the ones the options asked for")
+    func fontsAndTagging() throws {
+        let markdown = "Plain, **bold** and `code`."
+        let plain = try PDFDocumentReader(data: MarkdownPDFRenderer().render(markdown: markdown))
+        #expect(plain.fonts == [
+            PDFDocumentReader.Font(name: "Courier", isEmbedded: false),
+            PDFDocumentReader.Font(name: "Helvetica", isEmbedded: false),
+            PDFDocumentReader.Font(name: "Helvetica-Bold", isEmbedded: false),
+        ])
+        #expect(!plain.isTagged)
+
+        let tagged = try PDFDocumentReader(data: MarkdownPDFRenderer(options: PDFOptions(taggedPDF: .enabled)).render(markdown: markdown))
+        #expect(tagged.isTagged)
+        #expect(tagged.pages[0].lines == ["Plain, bold and code."])
     }
 
     @Test("A run's width is the advance the layout measured, in a base font and in an embedded one", arguments: [false, true])

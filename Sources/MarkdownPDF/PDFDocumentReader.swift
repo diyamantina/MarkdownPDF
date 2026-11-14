@@ -125,7 +125,19 @@ public struct PDFDocumentReader: Sendable {
         public var pageIndex: Int?
     }
 
+    /// A font the pages use.
+    public struct Font: Hashable, Sendable {
+        /// The base font name, such as `Helvetica` or `ABCDEF+DejaVuSans`.
+        public var name: String
+        /// Whether the font program is in the file. A standard font is not embedded.
+        public var isEmbedded: Bool
+    }
+
     public let pages: [Page]
+    /// The fonts the pages use, each once, sorted by name.
+    public let fonts: [Font]
+    /// Whether the catalog marks the document as tagged and holds a structure tree.
+    public let isTagged: Bool
     /// The Info dictionary `/Title`, or nil when there is none.
     public let title: String?
     /// The Info dictionary `/Author`, or nil when there is none.
@@ -153,8 +165,12 @@ public struct PDFDocumentReader: Sendable {
         var pages: [Page] = []
         var visited = Set<Int>()
         var pageObjects: [Int] = []
-        try Self.collectPages(catalog["Pages"], inherited: [:], store: store, visited: &visited, objects: &pageObjects, into: &pages)
+        var fonts = Set<Font>()
+        try Self.collectPages(catalog["Pages"], inherited: [:], store: store, visited: &visited, objects: &pageObjects, fonts: &fonts, into: &pages)
         self.pages = pages
+        self.fonts = fonts.sorted { ($0.name, $0.isEmbedded ? 1 : 0) < ($1.name, $1.isEmbedded ? 1 : 0) }
+        let marked = try store.resolve(store.resolve(catalog["MarkInfo"]).dictionary?["Marked"]) == .boolean(true)
+        isTagged = try marked && store.resolve(catalog["StructTreeRoot"]).dictionary != nil
 
         let info = try store.resolve(store.trailer["Info"]).dictionary ?? [:]
         title = try store.resolve(info["Title"]).bytes.map(Self.textString)
@@ -194,6 +210,7 @@ public struct PDFDocumentReader: Sendable {
         store: PDFReadObjects,
         visited: inout Set<Int>,
         objects: inout [Int],
+        fonts used: inout Set<Font>,
         into pages: inout [Page],
     ) throws {
         var objectNumber = 0
@@ -212,7 +229,7 @@ public struct PDFDocumentReader: Sendable {
         }
         if dictionary["Type"]?.name == "Pages" {
             for kid in try store.resolve(dictionary["Kids"]).array ?? [] {
-                try collectPages(kid, inherited: inherited, store: store, visited: &visited, objects: &objects, into: &pages)
+                try collectPages(kid, inherited: inherited, store: store, visited: &visited, objects: &objects, fonts: &used, into: &pages)
             }
             return
         }
@@ -224,6 +241,9 @@ public struct PDFDocumentReader: Sendable {
         }
         let resources = try store.resolve(inherited["Resources"]).dictionary ?? [:]
         let fonts = try PDFReadContent.fonts(in: store.resolve(resources["Font"]).dictionary ?? [:], store: store)
+        for font in fonts.values {
+            used.insert(Font(name: font.name, isEmbedded: font.isEmbedded))
+        }
         var content: [UInt8] = []
         let contents = try store.resolve(dictionary["Contents"])
         for part in contents.array ?? [contents] {
