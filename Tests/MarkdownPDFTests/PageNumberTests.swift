@@ -44,17 +44,17 @@ struct PageNumberTests {
         #expect(geometry.pages.count == 5)
 
         for (index, page) in geometry.pages.enumerated() {
-            let footer = try #require(footer(of: page), "page \(index + 1) has no footer")
-            #expect(footer.string == "\(index + 1)")
-            #expect(abs(footer.size - 11 * 0.8) < 0.001)
+            let stamp = try #require(footer(of: page), "page \(index + 1) has no footer")
+            #expect(stamp.string == "\(index + 1)")
+            #expect(abs(stamp.size - 11 * 0.8) < 0.001)
             // The footer lies wholly inside the margin band, with a gap above it.
-            #expect(footer.top < options.margins.bottom - 4)
-            #expect(footer.bottom > 0)
-            for body in page.texts where body != footer {
+            #expect(stamp.top < options.margins.bottom - 4)
+            #expect(stamp.bottom > 0)
+            for body in page.texts where body != stamp {
                 #expect(body.bottom >= options.margins.bottom, "body line '\(body.string)' dips into the margin")
             }
             // Centred on the content area.
-            let centre = footer.x + footerWidth(footer) / 2
+            let centre = stamp.x + footerWidth(stamp) / 2
             #expect(abs(centre - options.pageSize.width / 2) < 0.01)
         }
     }
@@ -77,8 +77,8 @@ struct PageNumberTests {
         let geometry = ContentStreamGeometry(pdf: pdf)
         let last = first + 4
         for (index, page) in geometry.pages.enumerated() {
-            let footer = try #require(footer(of: page))
-            #expect(footer.string == "Page \(first + index) of \(last)")
+            let stamp = try #require(footer(of: page))
+            #expect(stamp.string == "Page \(first + index) of \(last)")
         }
         // Poppler reads the same words.
         let pages = try pageTexts(pdf, name: "of-total-\(first)")
@@ -123,19 +123,19 @@ struct PageNumberTests {
             PDFOptions(pageNumbers: PDFOptions.PageNumbers(isEnabled: true, position: .bottomOutside, firstPageNumber: 2)),
         )
         for (index, page) in outside.pages.enumerated() {
-            let footer = try #require(footer(of: page))
+            let stamp = try #require(footer(of: page))
             let number = 2 + index
             if number.isMultiple(of: 2) {
-                #expect(abs(footer.x - margin) < 0.01, "even page \(number) belongs on the left")
+                #expect(abs(stamp.x - margin) < 0.01, "even page \(number) belongs on the left")
             } else {
-                #expect(abs(footer.x + footerWidth(footer) - (pageWidth - margin)) < 0.01, "odd page \(number) belongs on the right")
+                #expect(abs(stamp.x + footerWidth(stamp) - (pageWidth - margin)) < 0.01, "odd page \(number) belongs on the right")
             }
         }
 
         let right = try geometryOf(Self.fivePages, PDFOptions(pageNumbers: PDFOptions.PageNumbers(isEnabled: true, position: .bottomRight)))
         for page in right.pages {
-            let footer = try #require(footer(of: page))
-            #expect(abs(footer.x + footerWidth(footer) - (pageWidth - margin)) < 0.01)
+            let stamp = try #require(footer(of: page))
+            #expect(abs(stamp.x + footerWidth(stamp) - (pageWidth - margin)) < 0.01)
         }
     }
 

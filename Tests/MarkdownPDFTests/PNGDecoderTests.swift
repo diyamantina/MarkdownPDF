@@ -55,9 +55,14 @@ struct PNGDecoderTests {
     }
 
     static func palette(entries: Int) -> [UInt8] {
-        (0 ..< entries).flatMap { index in
-            [UInt8((index * 5) & 0xFF), UInt8((index * 11 + 3) & 0xFF), UInt8((index * 17 + 7) & 0xFF)]
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(entries * 3)
+        for index in 0 ..< entries {
+            bytes.append(UInt8((index * 5) & 0xFF))
+            bytes.append(UInt8((index * 11 + 3) & 0xFF))
+            bytes.append(UInt8((index * 17 + 7) & 0xFF))
         }
+        return bytes
     }
 
     @Test("Decodes every colour type, depth, interlace and compression to the exact grid", arguments: cases)
