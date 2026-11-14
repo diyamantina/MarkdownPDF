@@ -3,9 +3,9 @@ import Foundation
 /// The indirect objects of a PDF file, found through its cross-reference table and
 /// read on demand, for ``PDFDocumentReader``.
 struct PDFReadObjects {
-    private let bytes: [UInt8]
+    let bytes: [UInt8]
     /// The byte offset of each object in use, by object number.
-    private let offsets: [Int: Int]
+    let offsets: [Int: Int]
     /// The trailer dictionary of the newest cross-reference section.
     let trailer: [String: PDFReadValue]
 

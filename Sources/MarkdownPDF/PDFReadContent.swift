@@ -26,6 +26,14 @@ enum PDFReadContent {
             return total * size / 1000
         }
 
+        /// Each code of the string as its text and its advance at `size`, in points.
+        func characters(for bytes: [UInt8], size: Double) -> [(text: String, width: Double)] {
+            stride(from: 0, to: bytes.count - bytesPerCode + 1, by: bytesPerCode).map { index in
+                let code = Array(bytes[index ..< index + bytesPerCode])
+                return (text(for: code), width(of: code, size: size))
+            }
+        }
+
         func text(for bytes: [UInt8]) -> String {
             var text = ""
             var index = 0
@@ -167,12 +175,16 @@ enum PDFReadContent {
     private struct MarkedContent {
         var actualText: String?
         var run: Int?
+        /// The index of the word the span's text became, when it is not white space.
+        var word: Int?
     }
 
-    /// The text runs of a content stream, in drawing order. Inside an `/ActualText`
-    /// span the span's text stands in for what is drawn, once, where the span starts.
-    static func runs(in content: [UInt8], fonts: [String: Font]) throws -> [PDFDocumentReader.TextRun] {
+    /// The text runs of a content stream, in drawing order, and the same text as
+    /// words. Inside an `/ActualText` span the span's text stands in for what is
+    /// drawn, once, where the span starts.
+    static func text(in content: [UInt8], fonts: [String: Font]) throws -> (runs: [PDFDocumentReader.TextRun], words: [PDFDocumentReader.Word]) {
         var runs: [PDFDocumentReader.TextRun] = []
+        var words = PDFReadWords()
         var font: Font?
         var fontSize = 0.0
         var lineX = 0.0
@@ -189,11 +201,20 @@ enum PDFReadContent {
                 if let run = marked[span].run {
                     // More of the same span: its run grows to the end of this string.
                     runs[run].width = max(runs[run].width, lineX + width - runs[run].x)
+                    if let word = marked[span].word {
+                        words.extend(word, to: lineX + width)
+                    }
                 } else if let text = marked[span].actualText {
                     marked[span].run = runs.count
+                    marked[span].word = words.add(text, x: lineX, y: lineY, width: width, fontSize: fontSize)
                     runs.append(PDFDocumentReader.TextRun(x: lineX, y: lineY, width: width, fontSize: fontSize, fontName: font.name, text: text))
                 }
                 return
+            }
+            var x = lineX
+            for character in font.characters(for: bytes, size: fontSize) {
+                words.add(character.text, x: x, y: lineY, width: character.width, fontSize: fontSize)
+                x += character.width
             }
             runs.append(PDFDocumentReader.TextRun(x: lineX, y: lineY, width: width, fontSize: fontSize, fontName: font.name, text: font.text(for: bytes)))
         }
@@ -248,6 +269,6 @@ enum PDFReadContent {
                 continue
             }
         }
-        return runs
+        return (runs, words.words)
     }
 }

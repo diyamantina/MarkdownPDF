@@ -74,6 +74,8 @@ public struct PDFDocumentReader: Sendable {
         /// Every piece of text, in the order it was drawn.
         public var runs: [TextRun]
         public var links: [Link]
+        /// The text as words, each with its box, in the order they were drawn.
+        public var words: [Word]
 
         /// The text as lines: runs drawn one after another on one baseline are joined,
         /// with a space where a run starts clear of the end of the one before it (a
@@ -125,6 +127,62 @@ public struct PDFDocumentReader: Sendable {
         public var pageIndex: Int?
     }
 
+    /// A word: text with no space in it, and the box its characters advance through.
+    ///
+    /// The widths are the ones the fonts declare in the file, which is what a viewer
+    /// advances by, so a word box that leaves the page or runs into its neighbor
+    /// shows a layout or a width table that is wrong. The text of an `/ActualText`
+    /// span is one word, spaces included, over the box of what the span draws.
+    public struct Word: Equatable, Sendable {
+        /// The left end of the baseline, in points from the left edge of the page.
+        public var x: Double
+        /// The baseline, in points from the bottom edge of the page.
+        public var y: Double
+        /// The advance of the word, in points.
+        public var width: Double
+        /// The largest font size in the word.
+        public var fontSize: Double
+        public var text: String
+    }
+
+    /// An output intent of the catalog: the color space the document is meant for.
+    public struct OutputIntent: Equatable, Sendable {
+        /// The `/S` subtype, such as `GTS_PDFA1`.
+        public var subtype: String
+        /// The `/OutputConditionIdentifier`, such as `sRGB IEC61966-2.1`.
+        public var outputConditionIdentifier: String?
+        /// The number of color components of the embedded ICC profile (`/N`), or nil
+        /// when the intent holds no profile stream.
+        public var profileComponents: Int?
+    }
+
+    /// An element of the structure tree of a tagged document.
+    public struct StructureElement: Equatable, Sendable {
+        /// The structure type (`/S`), such as `Document`, `H1`, `P` or `Figure`.
+        public var type: String
+        /// The alternate description (`/Alt`), when the element has one.
+        public var alternateText: String?
+        /// How many pieces of marked page content the element holds directly.
+        public var markedContentCount: Int
+        public var children: [StructureElement]
+
+        /// The element and everything under it, parents before children.
+        public var flattened: [StructureElement] {
+            [self] + children.flatMap(\.flattened)
+        }
+    }
+
+    /// Something wrong with the structure of a file, found by ``structureIssues(in:)``.
+    public struct StructureIssue: Equatable, Sendable, CustomStringConvertible {
+        /// The number of the object the issue is in, or nil when it is about the file as a whole.
+        public var object: Int?
+        public var message: String
+
+        public var description: String {
+            object.map { "object \($0): \(message)" } ?? message
+        }
+    }
+
     /// A font the pages use.
     public struct Font: Hashable, Sendable {
         /// The base font name, such as `Helvetica` or `ABCDEF+DejaVuSans`.
@@ -143,9 +201,68 @@ public struct PDFDocumentReader: Sendable {
     /// The Info dictionary `/Author`, or nil when there is none.
     public let author: String?
     public let outline: [OutlineItem]
+    /// The version the header names, such as `1.4` for `%PDF-1.4`.
+    public let version: String
+    /// The Info dictionary `/Producer`, or nil when there is none.
+    public let producer: String?
+    /// The natural language of the document (the catalog `/Lang`), such as `en-US`.
+    public let language: String?
+    /// Whether the catalog asks a viewer to show the document title in its window
+    /// (`/ViewerPreferences /DisplayDocTitle true`), as PDF/UA requires.
+    public let displaysDocumentTitle: Bool
+    /// The XMP packet of the catalog `/Metadata` stream as text, or nil when there is none.
+    public let xmpMetadata: String?
+    /// The output intents of the catalog, in order.
+    public let outputIntents: [OutputIntent]
+    /// The elements directly under the root of the structure tree, each with its
+    /// own children. Empty when the document has no structure tree.
+    public let structure: [StructureElement]
 
     public var pageCount: Int {
         pages.count
+    }
+
+    /// The PDF/A part and level the XMP metadata declares, such as `2A`, or nil
+    /// when it declares none. A declaration is a claim, not a proof of conformance.
+    public var pdfAConformance: String? {
+        guard let part = xmpProperty("pdfaid:part") else {
+            return nil
+        }
+        return part + (xmpProperty("pdfaid:conformance") ?? "")
+    }
+
+    /// The PDF/UA part the XMP metadata declares, such as 1, or nil when it
+    /// declares none. A declaration is a claim, not a proof of conformance.
+    public var pdfUAPart: Int? {
+        xmpProperty("pdfuaid:part").flatMap { Int($0) }
+    }
+
+    /// The value of a simple XMP property, written as an element or as an attribute.
+    func xmpProperty(_ name: String) -> String? {
+        guard let xmp = xmpMetadata else {
+            return nil
+        }
+        if let open = xmp.range(of: "<\(name)>"), let close = xmp.range(of: "</\(name)>", range: open.upperBound ..< xmp.endIndex) {
+            return xmp[open.upperBound ..< close.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let open = xmp.range(of: "\(name)=\""), let close = xmp.range(of: "\"", range: open.upperBound ..< xmp.endIndex) {
+            return String(xmp[open.upperBound ..< close.lowerBound])
+        }
+        return nil
+    }
+
+    /// Checks the structure of a file this engine wrote and returns what is wrong
+    /// with it, or nothing when it is sound.
+    ///
+    /// Every object the cross-reference table lists is read where the table says it
+    /// is: it carries its own number, it parses, it ends with `endobj`, and a stream
+    /// ends exactly where its `/Length` says. Every reference names an object the
+    /// file holds. Every stream the reader can decode decodes. The page tree is
+    /// walked: each node counts the pages under it and each child names its parent.
+    /// The trailer `/Size` covers every object, the file ends with `%%EOF`, and the
+    /// whole document reads with ``init(data:)``.
+    public static func structureIssues(in data: Data) -> [StructureIssue] {
+        PDFReadStructure.issues(in: Array(data))
     }
 
     /// The text of every page, pages separated by a form feed.
@@ -182,6 +299,19 @@ public struct PDFDocumentReader: Sendable {
             try Self.collectOutline(first: root["First"], level: 1, store: store, pageObjects: pageObjects, visited: &seen, into: &outline)
         }
         self.outline = outline
+
+        version = PDFReadStructure.version(of: store.bytes)
+        producer = try store.resolve(info["Producer"]).bytes.map(Self.textString)
+        language = try store.resolve(catalog["Lang"]).bytes.map(Self.textString)
+        let preferences = try store.resolve(catalog["ViewerPreferences"]).dictionary ?? [:]
+        displaysDocumentTitle = try store.resolve(preferences["DisplayDocTitle"]) == .boolean(true)
+        if case .stream = try store.resolve(catalog["Metadata"]) {
+            xmpMetadata = try String(decoding: store.streamData(catalog["Metadata"]), as: UTF8.self)
+        } else {
+            xmpMetadata = nil
+        }
+        outputIntents = try PDFReadStructure.outputIntents(of: catalog, store: store)
+        structure = try PDFReadStructure.elements(of: catalog, store: store)
     }
 
     // MARK: Strings
@@ -253,10 +383,12 @@ public struct PDFDocumentReader: Sendable {
             content += try store.streamData(part)
             content.append(0x0A)
         }
+        let text = try PDFReadContent.text(in: content, fonts: fonts)
         try pages.append(Page(
             size: PDFOptions.PageSize(width: box[2] - box[0], height: box[3] - box[1]),
-            runs: PDFReadContent.runs(in: content, fonts: fonts),
+            runs: text.runs,
             links: links(of: dictionary, store: store),
+            words: text.words,
         ))
     }
 

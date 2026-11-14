@@ -33,6 +33,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stream, an encrypted file or another stream filter throws
   `PDFDocumentReader.ReadError.unsupported`. Nothing in rendering uses it, so output is
   unchanged.
+- `PDFDocumentReader.Page.words` gives the text of a page as words (`PDFDocumentReader.Word`),
+  each with the box its characters advance through by the widths the fonts declare in the
+  file. Pieces of one word shown by several operators join; text drawn over other text
+  stays a word of its own, so overlapping boxes can be found.
+- `PDFDocumentReader` reads what a conformance check starts from: `version`, `producer`,
+  `language`, `displaysDocumentTitle`, the XMP packet as `xmpMetadata` with the declared
+  `pdfAConformance` and `pdfUAPart`, the `outputIntents` (`PDFDocumentReader.OutputIntent`)
+  and the structure tree of a tagged document as `structure`
+  (`PDFDocumentReader.StructureElement`: type, alternate text, marked content count and
+  children). These report what the file declares; they do not prove conformance.
+- `PDFDocumentReader.structureIssues(in:)` checks that a file this engine wrote is sound and
+  returns what is wrong as `PDFDocumentReader.StructureIssue` values: every object the
+  cross-reference table lists is where the table says, carries its number, parses and
+  ends with `endobj`; every stream ends where its `/Length` says and decodes; every
+  reference names an object the file holds; each page tree node counts its pages and each
+  child names its parent; the trailer `/Size` covers every object; the file ends with
+  `%%EOF`; and the whole document reads. Nothing in rendering uses any of this, so output
+  is unchanged.
 - `ResumeMarkdownTemplate.Options.fieldSyntax` (`.plainText`, the default, or `.markdown`)
   chooses how the text of a resume field is read. With `.markdown`, inline Markdown is
   kept, so a field can hold links, bold, italics and code. Either way a field stays one
