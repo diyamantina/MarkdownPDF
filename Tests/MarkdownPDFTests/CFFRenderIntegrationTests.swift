@@ -6,9 +6,11 @@ import Testing
 /// renders. A CID-keyed CFF (the shape of CJK system fonts) goes out as a
 /// `CIDFontType0` descendant with a `CIDFontType0C` `FontFile3`, addressing glyphs by
 /// the CID its charset assigns; a name-keyed CFF goes out as `CIDFontType0` with an
-/// `OpenType` `FontFile3`. The glyph raster, the `/W` width geometry, and `/ToUnicode`
-/// extraction are all checked by the shared visual witness. Tests that need a system
-/// CFF font skip when it is absent (as no CFF font can be committed to a public repo).
+/// `OpenType` `FontFile3`. The `/W` width geometry and `/ToUnicode` extraction are
+/// checked by the shared visual witness. That a rasterizer can draw the glyphs from
+/// the embedded CFF program is not verified: see `rasterWitness` below. Tests that
+/// need a system CFF font skip when it is absent (as no CFF font can be committed to
+/// a public repo).
 @Suite("CFF render integration")
 struct CFFRenderIntegrationTests {
     /// A CID-keyed CFF collection face: Hiragino Sans GB (Adobe-GB1). CJK fonts ship
@@ -66,8 +68,8 @@ struct CFFRenderIntegrationTests {
         let options = PDFOptions(embeddedFonts: .allRoles(
             PDFOptions.EmbeddedFontSource(data: data, baseName: "HiraginoSansGB", faceIndex: 0),
         ))
-        // A heading plus a fuller paragraph, so the raster carries enough ink for the
-        // shared witness's density floor while every distinct character is checked
+        // A heading plus a fuller paragraph, so the page carries several lines of
+        // words for the shared witness while every distinct character is checked
         // below through extraction.
         let heading = "# \u{6F22}\u{5B57} \u{65E5}\u{672C}\u{8A9E} \u{4E2D}\u{6587}\n\n" // 漢字 日本語 中文
         let body = String(repeating: "\u{6F22}\u{5B57}\u{8868}\u{793A}\u{30C6}\u{30B9}\u{30C8}\u{65E5}\u{672C}\u{8A9E}\u{4E2D}\u{6587}\u{30AB}\u{30CA} ", count: 8)
@@ -227,9 +229,8 @@ struct CFFRenderIntegrationTests {
         let options = PDFOptions(embeddedFonts: .allRoles(
             PDFOptions.EmbeddedFontSource(data: collection, baseName: "STIXCollection", faceIndex: 1),
         ))
-        // The same sentence the single-face STIX test uses, so the raster clears the
-        // visual witness's ink-density floor; the reconstructed sfnt renders as the
-        // standalone STIX face would.
+        // The same sentence the single-face STIX test uses: the reconstructed sfnt
+        // must lay out and extract as the standalone STIX face does.
         let pdf = try MarkdownPDFRenderer(options: options)
             .render(markdown: "The quick brown fox jumps over 12345.")
 
@@ -263,5 +264,18 @@ struct CFFRenderIntegrationTests {
         #expect(inspector.text.contains("/FontFile2"))
         #expect(!inspector.text.contains("/CIDFontType0"))
         #expect(!inspector.text.contains("/FontFile3"))
+    }
+
+    /// The raster step the three embedded-font witnesses of this suite ended with:
+    /// two outside rasterizers drew the pages from the embedded CFF program and
+    /// their ink had to agree. It was the only check that the glyph outlines of the
+    /// embedded font program can be drawn at all.
+    @Test(
+        "The glyphs of an embedded CFF font rasterize to comparable ink",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+        arguments: ["cff-cid-keyed-cjk", "cff-name-keyed-latin", "cff-name-keyed-collection"],
+    )
+    func rasterWitness(_ name: String) {
+        PDFValidation.notVerified("the raster of \(name)")
     }
 }

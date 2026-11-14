@@ -4,22 +4,19 @@ import Testing
 
 @Suite("PDF visual layout validation")
 struct PDFVisualLayoutValidationTests {
-    @Test("Generated PDFs do not have overlapping Poppler word boxes")
-    func generatedPDFsDoNotHaveOverlappingPopplerWordBoxes() throws {
+    @Test("Generated PDFs do not have overlapping word boxes")
+    func generatedPDFsDoNotHaveOverlappingWordBoxes() throws {
         let data = try visualValidationPDF()
-        let result = try PDFValidation.pdftotextTSV(data: data, name: "visual-layout")
-        try #require(result.exitCode == 0, "pdftotext -tsv failed:\n\(result.output)")
-        try PDFValidation.writeTextArtifact(result.output, name: "visual-layout/poppler.tsv")
+        let document = try PDFDocumentReader(data: data)
+        let layout = ReaderTextLayout(document)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "visual-layout/words.tsv")
+        try PDFValidation.writeTextArtifact(document.text, name: "visual-layout/text.txt")
+        let sizes = document.pages.map { "\($0.size.width) x \($0.size.height) pts" }
+        try PDFValidation.writeTextArtifact(
+            (["Pages: \(document.pageCount)", "PDF version: \(document.version)", "Title: \(document.title ?? "")"] + sizes).joined(separator: "\n") + "\n",
+            name: "visual-layout/document.txt",
+        )
 
-        let textResult = try PDFValidation.pdftotext(data: data, name: "visual-layout-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "visual-layout/text.txt")
-
-        let infoResult = try PDFValidation.pdfinfo(data: data, name: "visual-layout-info")
-        try #require(infoResult.exitCode == 0, "pdfinfo failed:\n\(infoResult.output)")
-        try PDFValidation.writeTextArtifact(infoResult.output, name: "visual-layout/pdfinfo.txt")
-
-        let layout = try PopplerTextLayout(tsv: result.output)
         let issues = layout.visualLayoutIssues()
 
         #expect(layout.pages.count >= 4)
@@ -28,7 +25,7 @@ struct PDFVisualLayoutValidationTests {
         #expect(layout.words.contains { $0.text == "Contents" })
         #expect(
             issues.isEmpty,
-            "Poppler text layout has visual issues:\n\(issues.joined(separator: "\n"))",
+            "The text layout has visual issues:\n\(issues.joined(separator: "\n"))",
         )
     }
 
@@ -49,10 +46,7 @@ struct PDFVisualLayoutValidationTests {
             ),
         ).render(markdown: markdown)
 
-        let result = try PDFValidation.pdftotextTSV(data: data, name: "code-block-wrap")
-        try #require(result.exitCode == 0, "pdftotext -tsv failed:\n\(result.output)")
-
-        let layout = try PopplerTextLayout(tsv: result.output)
+        let layout = try ReaderTextLayout(data: data)
         #expect(layout.visualLayoutIssues().isEmpty)
         #expect(layout.words.contains { $0.text == "Renderer[PDF" })
         #expect(layout.words.contains { $0.text == "tools]\"" })
@@ -61,7 +55,7 @@ struct PDFVisualLayoutValidationTests {
     @Test("Syntax-colored manuscript passes visual witness stack")
     func syntaxColoredManuscriptPassesVisualWitnessStack() throws {
         let data = try syntaxColoringManuscriptPDF()
-        let url = try PDFValidation.temporaryPDF(name: "syntax-coloring-manuscript", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "syntax-coloring-manuscript")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
@@ -71,79 +65,32 @@ struct PDFVisualLayoutValidationTests {
         #expect(streamText.contains("0.280 0.380 0.280 rg"))
         try PDFValidation.writeArtifact(data, name: "syntax-coloring-manuscript.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "syntax-coloring-manuscript/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "syntax-coloring-manuscript/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("Portable Syntax Coloring Manuscript"))
         #expect(normalizedText.contains("Source coloring must preserve extraction and spacing."))
         #expect(normalizedText.contains("TabbedSyntaxColoringWitnessLongIdent"))
         #expect(normalizedText.contains("plainUnsupported"))
         #expect(normalizedText.contains("Syntax Coloring Manuscript Exit Marker"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "syntax-coloring-manuscript/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "syntax-coloring-manuscript/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 220)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 220)
         #expect(
-            popplerIssues.isEmpty,
-            "Syntax-colored manuscript Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Syntax-colored manuscript word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "syntax-coloring-manuscript/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 1200)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Syntax-colored manuscript MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "syntax-coloring-manuscript/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "syntax-coloring-manuscript/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "syntax-coloring-manuscript-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "syntax-coloring-manuscript-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Syntax-colored manuscript raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 1200)
     }
 
     @Test("RTL manuscript passes visual witness stack")
     func rtlManuscriptPassesVisualWitnessStack() throws {
         let data = try rtlManuscriptPDF()
-        let url = try PDFValidation.temporaryPDF(name: "rtl-manuscript", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "rtl-manuscript")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
         let hebrewWord = "\u{05D0}\u{05D1}\u{05D2}\u{05D3}"
@@ -185,23 +132,18 @@ struct PDFVisualLayoutValidationTests {
         try PDFValidation.writeTextArtifact(Self.rtlManuscriptManifest, name: "rtl-manuscript/README.txt")
         try PDFValidation.writeArtifact(data, name: "rtl-manuscript.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "rtl-manuscript/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "rtl-manuscript/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("RTLPARATOKENA"))
         #expect(normalizedText.contains("ULISTTOKENA"))
         #expect(normalizedText.contains("OLISTTOKENA"))
         #expect(normalizedText.contains("QUOTETOKENA"))
         #expect(normalizedText.contains("ROWA"))
 
-        let rawTextResult = try PDFValidation.pdftotextRaw(url: url)
-        try #require(rawTextResult.exitCode == 0, "pdftotext -raw failed:\n\(rawTextResult.output)")
-        try PDFValidation.writeTextArtifact(rawTextResult.output, name: "rtl-manuscript/raw-text.txt")
-        let compactRawText = compactLogicalExtractedText(rawTextResult.output)
+        // The reader gives text in the order of the content stream, which is the
+        // logical order the writer emits: this is the logical-order witness.
+        let compactRawText = compactLogicalExtractedText(extractedText)
         #expect(compactRawText.contains("\(hebrewWord)(123)CODE\(arabicWord)\(arabicIndic12)RTLPARATOKENA."))
         #expect(compactRawText.contains("\(arabicWord)[CODE]\(hebrewWord)ULISTTOKENA."))
         #expect(compactRawText.contains("\(hebrewWord)\"CODE\"\(arabicWord)OLISTTOKENA."))
@@ -209,271 +151,117 @@ struct PDFVisualLayoutValidationTests {
         #expect(compactRawText.contains("\(hebrewWord)HEADER"))
         #expect(compactRawText.contains("\(arabicWord)\(arabicIndic12)ROWA"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "rtl-manuscript/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "rtl-manuscript/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 90)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 90)
         #expect(
-            popplerIssues.isEmpty,
-            "RTL manuscript Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "RTL manuscript word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "rtl-manuscript/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues(allowRightToLeftRuns: true)
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 500)
-        #expect(
-            mupdfIssues.isEmpty,
-            "RTL manuscript MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "rtl-manuscript/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "rtl-manuscript/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "rtl-manuscript-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "rtl-manuscript-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "RTL manuscript raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 500)
     }
 
-    @Test("Generated PDFs do not have overlapping MuPDF character quads")
-    func generatedPDFsDoNotHaveOverlappingMuPDFCharacterQuads() throws {
+    @Test("Generated PDFs keep every visible character in a word box on its page")
+    func generatedPDFsKeepEveryVisibleCharacterInAWordBox() throws {
         let data = try visualValidationPDF()
-        let result = try PDFValidation.mutoolStructuredText(data: data, name: "visual-layout-mupdf")
-        try #require(result.exitCode == 0, "mutool structured text failed:\n\(result.output)")
-        try PDFValidation.writeTextArtifact(result.output, name: "visual-layout/mupdf-stext.xml")
-
-        let layout = try MuPDFStructuredText(xml: result.output)
-        let visibleGlyphCount = layout.glyphs.count(where: { !$0.isWhitespace })
-        let issues = layout.characterQuadIssues()
+        let document = try PDFDocumentReader(data: data)
+        let layout = ReaderTextLayout(document)
+        let issues = layout.visualLayoutIssues()
 
         #expect(layout.pages.count >= 4)
-        #expect(visibleGlyphCount > 1200)
+        #expect(layout.visibleCharacterCount > 1200)
+        // Every character the pages show is in a word: nothing is drawn that the boxes do not cover.
+        let shown = document.pages.flatMap(\.runs).reduce(0) { $0 + $1.text.count(where: { !$0.isWhitespace }) }
+        #expect(layout.visibleCharacterCount == shown)
         #expect(
             issues.isEmpty,
-            "MuPDF character layout has visual issues:\n\(issues.joined(separator: "\n"))",
+            "The character layout has visual issues:\n\(issues.joined(separator: "\n"))",
         )
     }
 
-    @Test("Poppler and MuPDF render comparable ink bounds")
-    func popplerAndMuPDFRenderComparableInkBounds() throws {
-        let data = try visualValidationPDF()
-        let url = try PDFValidation.temporaryPDF(name: "visual-layout-raster", data: data)
-        let pageCount = PDFInspector(data).pageCount
-
-        #expect(pageCount >= 4)
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "visual-layout/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "visual-layout/mupdf-render.log")
-
-        var issues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "visual-layout-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "visual-layout-pages/mupdf/page-\(page).pnm",
-            )
-            issues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            issues.isEmpty,
-            "Poppler and MuPDF raster output diverged:\n\(issues.joined(separator: "\n"))",
-        )
+    /// The raster step the witness stacks of this suite ended with: two outside
+    /// rasterizers drew every page, each had to leave ink, and their ink bounds
+    /// had to agree. One case for each PDF that went through it.
+    @Test(
+        "Every page of a witness PDF rasterizes to comparable ink",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+        arguments: PDFVisualLayoutValidationTests.rasterWitnessNames,
+    )
+    func rasterWitness(_ name: String) {
+        PDFValidation.notVerified("the raster of \(name)")
     }
+
+    static let rasterWitnessNames = [
+        "visual-layout", "syntax-coloring-manuscript", "rtl-manuscript", "article-grade-stress", "hard-markdown-corpus",
+        "crazy-markdown-torture", "a4-manuscript", "text-encoding-profile", "embedded-cid-text", "cjk-diacritics-manuscript",
+        "embedded-font-public-api", "oversized-blocks", "measured-tables", "native-charts", "diagram-policy",
+        "source-code-spacing", "screenshot-source-code-regressions",
+    ]
 
     @Test("Article stress fixture passes visual witness stack")
     func articleStressFixturePassesVisualWitnessStack() throws {
         let data = try articleStressFixturePDF()
-        let url = try PDFValidation.temporaryPDF(name: "article-grade-stress", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "article-grade-stress")
         let pageCount = PDFInspector(data).pageCount
 
         #expect(pageCount >= 6)
         try PDFValidation.writeArtifact(data, name: "article-grade-stress.pdf")
 
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "article-stress/text.txt")
-        #expect(textResult.output.contains("Portable Article Stress Corpus"))
-        #expect(textResult.output.contains("Table of Contents"))
-        #expect(textResult.output.contains("Local chart placeholder"))
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "article-stress/text.txt")
+        #expect(extractedText.contains("Portable Article Stress Corpus"))
+        #expect(extractedText.contains("Table of Contents"))
+        #expect(extractedText.contains("Local chart placeholder"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "article-stress/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "article-stress/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 500)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 500)
         #expect(
-            popplerIssues.isEmpty,
-            "Article stress fixture Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Article stress fixture word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "article-stress/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 2500)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Article stress fixture MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "article-stress/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "article-stress/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "article-stress-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "article-stress-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Article stress fixture raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 2500)
     }
 
     @Test("Hard Markdown fixture passes visual witness stack")
     func hardMarkdownFixturePassesVisualWitnessStack() throws {
         let data = try hardMarkdownFixturePDF()
-        let url = try PDFValidation.temporaryPDF(name: "hard-markdown-corpus", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "hard-markdown-corpus")
         let pageCount = PDFInspector(data).pageCount
 
         #expect(pageCount >= 8)
         try PDFValidation.writeArtifact(data, name: "hard-markdown-corpus.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "hard-markdown-corpus/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "hard-markdown-corpus/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("Portable Hard Markdown Corpus"))
         #expect(normalizedText.contains("Raw HTML fallback for the hard corpus"))
         #expect(normalizedText.contains("Hard Fixture Exit Marker"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "hard-markdown-corpus/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "hard-markdown-corpus/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 850)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 850)
         #expect(
-            popplerIssues.isEmpty,
-            "Hard Markdown fixture Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Hard Markdown fixture word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "hard-markdown-corpus/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 4500)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Hard Markdown fixture MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "hard-markdown-corpus/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "hard-markdown-corpus/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "hard-markdown-corpus-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "hard-markdown-corpus-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Hard Markdown fixture raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 4500)
     }
 
     @Test("Crazy Markdown fixture passes visual witness stack")
     func crazyMarkdownFixturePassesVisualWitnessStack() throws {
         let data = try crazyMarkdownFixturePDF()
-        let url = try PDFValidation.temporaryPDF(name: "crazy-markdown-torture", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "crazy-markdown-torture")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
 
@@ -488,13 +276,9 @@ struct PDFVisualLayoutValidationTests {
             "Crazy Markdown fixture emitted unexpected vertical rule operators:\n\(verticalRuleLines.joined(separator: "\n"))",
         )
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "crazy-markdown-torture/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "crazy-markdown-torture/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("Crazy Markdown Torture Manuscript"))
         #expect(normalizedText.contains("DeepListLevelThreeMarker"))
         #expect(normalizedText.contains("QuoteBulletTwoMarker"))
@@ -506,145 +290,53 @@ struct PDFVisualLayoutValidationTests {
         #expect(normalizedText.contains("café"))
         #expect(!normalizedText.contains("cafe?"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "crazy-markdown-torture/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "crazy-markdown-torture/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 1000)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 1000)
         #expect(
-            popplerIssues.isEmpty,
-            "Crazy Markdown fixture Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Crazy Markdown fixture word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "crazy-markdown-torture/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 6500)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Crazy Markdown fixture MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "crazy-markdown-torture/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "crazy-markdown-torture/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "crazy-markdown-torture-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "crazy-markdown-torture-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Crazy Markdown fixture raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 6500)
     }
 
     @Test("A4 manuscript fixture passes visual witness stack")
     func a4ManuscriptFixturePassesVisualWitnessStack() throws {
         let data = try a4ManuscriptFixturePDF()
-        let url = try PDFValidation.temporaryPDF(name: "a4-manuscript", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "a4-manuscript")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
 
         #expect(pageCount >= 5)
         try PDFValidation.writeArtifact(data, name: "a4-manuscript.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.pageCount == pageCount)
+        // A4 is 595.28 x 841.89 points, to the two decimals the file gives.
+        #expect(document.pages.allSatisfy { abs($0.size.width - 595.28) < 0.005 && abs($0.size.height - 841.89) < 0.005 })
 
-        let infoResult = try PDFValidation.pdfinfo(url: url)
-        try #require(infoResult.exitCode == 0, "pdfinfo failed:\n\(infoResult.output)")
-        try PDFValidation.writeTextArtifact(infoResult.output, name: "a4-manuscript/pdfinfo.txt")
-        let info = PDFValidation.parsedInfo(from: infoResult)
-        #expect(info["Pages"] == "\(pageCount)")
-        #expect(info["Page size"]?.contains("595.28 x 841.89 pts") == true)
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "a4-manuscript/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "a4-manuscript/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("Portable A4 Manuscript Fixture"))
         #expect(normalizedText.contains("Table of Contents"))
         #expect(normalizedText.contains("A4 Manuscript Exit Marker"))
         #expect(normalizedText.contains("A4 manuscript chart"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "a4-manuscript/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "a4-manuscript/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 1600)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 1600)
         #expect(
-            popplerIssues.isEmpty,
-            "A4 manuscript fixture Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "A4 manuscript fixture word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "a4-manuscript/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 9000)
-        #expect(
-            mupdfIssues.isEmpty,
-            "A4 manuscript fixture MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "a4-manuscript/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "a4-manuscript/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "a4-manuscript-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "a4-manuscript-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "A4 manuscript fixture raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 9000)
     }
 
     @Test("Portable text encoding profile passes visual witness stack")
@@ -661,7 +353,7 @@ struct PDFVisualLayoutValidationTests {
         Unicode: \u{010D} \u{03C0} \u{1F680}.
         """
         let data = try MarkdownPDFRenderer(options: PDFOptions(baseFontSize: 10)).render(markdown: markdown)
-        let url = try PDFValidation.temporaryPDF(name: "portable-text-encoding", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "portable-text-encoding")
         let inspector = PDFInspector(data)
 
         #expect(inspector.pageCount == 1)
@@ -669,58 +361,26 @@ struct PDFVisualLayoutValidationTests {
         #expect(inspector.text.contains("/FontFile2"))
         try PDFValidation.writeArtifact(data, name: "text-encoding-profile.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "text-encoding/text.txt")
-        #expect(textResult.output.contains("ASCII: The quick brown fox stays portable."))
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "text-encoding/text.txt")
+        #expect(extractedText.contains("ASCII: The quick brown fox stays portable."))
         // Accented Latin, NBSP, curly quotes, and the euro sign now render
         // through the base-14 WinAnsi encoding with no embedded font.
-        #expect(textResult.output.contains("Latin: Café niño NBSP done."))
-        #expect(textResult.output.contains("WinAnsi: \u{201C}quoted\u{201D} \u{20AC}."))
+        // The reader gives the no-break space as the character the file holds
+        // (WinAnsi code 160), where an extractor that rebuilds spacing gave a plain space.
+        #expect(extractedText.contains("Latin: Café niño NBSP\u{00A0}done."))
+        #expect(extractedText.contains("WinAnsi: \u{201C}quoted\u{201D} \u{20AC}."))
         // Non-WinAnsi content selects the bundled font. Scalars it covers render
         // directly; an unsupported emoji draws .notdef but remains extractable
         // through the run's ActualText override.
-        #expect(textResult.output.contains("Unicode: č π 🚀."))
+        #expect(extractedText.contains("Unicode: č π 🚀."))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "text-encoding/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "text-encoding/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
         #expect(
-            popplerIssues.isEmpty,
-            "Text encoding Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
-        )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "text-encoding/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(
-            mupdfIssues.isEmpty,
-            "Text encoding MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNM(url: url)
-        let mupdf = try PDFValidation.mutoolPNM(url: url)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "text-encoding/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "text-encoding/mupdf-render.log")
-        try PDFValidation.copyArtifact(from: poppler.pnmURL, name: "text-encoding-pages/poppler/page-1.ppm")
-        try PDFValidation.copyArtifact(from: mupdf.pnmURL, name: "text-encoding-pages/mupdf/page-1.pnm")
-
-        let rasterIssues = try rasterComparisonIssues(
-            poppler: PNMImage(data: Data(contentsOf: poppler.pnmURL)),
-            mupdf: PNMImage(data: Data(contentsOf: mupdf.pnmURL)),
-        )
-        #expect(
-            rasterIssues.isEmpty,
-            "Text encoding raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Text encoding word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
     }
 
@@ -735,12 +395,9 @@ struct PDFVisualLayoutValidationTests {
         """
         let data = try MarkdownPDFRenderer().render(markdown: markdown)
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "winansi-western")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "winansi-western-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        let extracted = textResult.output
+        PDFValidation.expectSoundStructure(data, name: "winansi-western")
+        let extracted = try PDFValidation.text(data)
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
         // The representable characters extract as themselves, not "?".
         for token in [
             "Café", "résumé", "naïve", "Zürich", "señor", "garçon",
@@ -758,7 +415,7 @@ struct PDFVisualLayoutValidationTests {
     @Test("Embedded CID text profile passes visual witness stack")
     func embeddedCIDTextProfilePassesVisualWitnessStack() throws {
         let data = try embeddedCIDTextPDF()
-        let url = try PDFValidation.temporaryPDF(name: "embedded-cid-text", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "embedded-cid-text")
         let inspector = PDFInspector(data)
 
         #expect(inspector.pageCount == 1)
@@ -771,60 +428,26 @@ struct PDFVisualLayoutValidationTests {
         try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
         try PDFValidation.writeArtifact(data, name: "embedded-cid-text.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "embedded-cid-text/text.txt")
+        #expect(extractedText.contains("WIDE WILLIAM MINIMUM MARGIN"))
+        #expect(extractedText.contains("LATIN CID TEXT STAYS ALIGNED"))
 
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "embedded-cid-text/text.txt")
-        #expect(textResult.output.contains("WIDE WILLIAM MINIMUM MARGIN"))
-        #expect(textResult.output.contains("LATIN CID TEXT STAYS ALIGNED"))
-
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "embedded-cid-text/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
-        #expect(popplerLayout.words.count >= 18)
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "embedded-cid-text/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
+        #expect(layout.words.count >= 18)
         #expect(
-            popplerIssues.isEmpty,
-            "Embedded CID text Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Embedded CID text word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "embedded-cid-text/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) >= 88)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Embedded CID text MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNM(url: url)
-        let mupdf = try PDFValidation.mutoolPNM(url: url)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "embedded-cid-text/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "embedded-cid-text/mupdf-render.log")
-        try PDFValidation.copyArtifact(from: poppler.pnmURL, name: "embedded-cid-text-pages/poppler/page-1.ppm")
-        try PDFValidation.copyArtifact(from: mupdf.pnmURL, name: "embedded-cid-text-pages/mupdf/page-1.pnm")
-
-        let rasterIssues = try rasterComparisonIssues(
-            poppler: PNMImage(data: Data(contentsOf: poppler.pnmURL)),
-            mupdf: PNMImage(data: Data(contentsOf: mupdf.pnmURL)),
-        )
-        #expect(
-            rasterIssues.isEmpty,
-            "Embedded CID text raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount >= 88)
     }
 
     @Test("CJK and diacritics manuscript passes visual witness stack")
     func cjkAndDiacriticsManuscriptPassesVisualWitnessStack() throws {
         let data = try cjkDiacriticsManuscriptPDF()
-        let url = try PDFValidation.temporaryPDF(name: "cjk-diacritics-manuscript", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "cjk-diacritics-manuscript")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
 
@@ -843,14 +466,10 @@ struct PDFVisualLayoutValidationTests {
         try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
         try PDFValidation.writeArtifact(data, name: "cjk-diacritics-manuscript.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "cjk-diacritics-manuscript/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
-        let compactText = textResult.output.filter { !$0.isWhitespace }
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "cjk-diacritics-manuscript/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
+        let compactText = extractedText.filter { !$0.isWhitespace }
         #expect(normalizedText.contains("Latin text"))
         #expect(normalizedText.contains("1."))
         #expect(compactText.contains("漢字語漢字語"))
@@ -858,66 +477,23 @@ struct PDFVisualLayoutValidationTests {
         #expect(compactText.contains("漢\u{0301}字語"))
         #expect(try compactText.unicodeScalars.contains(#require(UnicodeScalar(0x0301))))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "cjk-diacritics-manuscript/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "cjk-diacritics-manuscript/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(Set(popplerLayout.words.map(\.page)).count == pageCount)
+        #expect(layout.pages.count == pageCount)
+        #expect(Set(layout.words.map(\.page)).count == pageCount)
         #expect(
-            popplerIssues.isEmpty,
-            "CJK and diacritics Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "CJK and diacritics word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "cjk-diacritics-manuscript/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 500)
-        #expect(
-            mupdfIssues.isEmpty,
-            "CJK and diacritics MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "cjk-diacritics-manuscript/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "cjk-diacritics-manuscript/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "cjk-diacritics-manuscript-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "cjk-diacritics-manuscript-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "CJK and diacritics raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 500)
     }
 
     @Test("Embedded font public API profile passes visual witness stack")
     func embeddedFontPublicAPIProfilePassesVisualWitnessStack() throws {
         let data = try embeddedFontPublicAPIPDF()
-        let url = try PDFValidation.temporaryPDF(name: "embedded-font-public-api", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "embedded-font-public-api")
         let inspector = PDFInspector(data)
 
         #expect(inspector.pageCount >= 2)
@@ -932,70 +508,24 @@ struct PDFVisualLayoutValidationTests {
         try PDFValidation.writeTextArtifact(Self.artifactManifest, name: "README.txt")
         try PDFValidation.writeArtifact(data, name: "embedded-font-public-api.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "embedded-font-public-api/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "embedded-font-public-api/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("PUBLIC EMBEDDED FONT PROFILE"))
         #expect(normalizedText.contains("BOLD ROLE"))
         #expect(normalizedText.contains("ITALIC ROLE"))
         #expect(normalizedText.contains("CODE ROLE"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "embedded-font-public-api/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
-        #expect(popplerLayout.pages.count == inspector.pageCount)
-        #expect(popplerLayout.words.count > 120)
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "embedded-font-public-api/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
+        #expect(layout.pages.count == inspector.pageCount)
+        #expect(layout.words.count > 120)
         #expect(
-            popplerIssues.isEmpty,
-            "Embedded font public API Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Embedded font public API word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "embedded-font-public-api/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(mupdfLayout.pages.count == inspector.pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 700)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Embedded font public API MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: inspector.pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: inspector.pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "embedded-font-public-api/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "embedded-font-public-api/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... inspector.pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "embedded-font-public-api-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "embedded-font-public-api-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Embedded font public API raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 700)
     }
 
     @Test("Oversized blocks split or scale inside page bounds")
@@ -1039,7 +569,7 @@ struct PDFVisualLayoutValidationTests {
                 baseFontSize: 9,
             ),
         ).render(markdown: markdown, assetsBaseURL: assetsBaseURL)
-        let url = try PDFValidation.temporaryPDF(name: "oversized-blocks", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "oversized-blocks")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
 
@@ -1047,63 +577,18 @@ struct PDFVisualLayoutValidationTests {
         #expect(inspector.streams.contains { $0.body.contains("32 0 0 80 22 70 cm") })
         try PDFValidation.writeArtifact(data, name: "oversized-blocks.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "oversized-blocks/text.txt")
+        #expect(extractedText.contains("Tall row"))
+        #expect(extractedText.contains("Unsupported Mermaid diagram"))
+        #expect(extractedText.contains("code_line_18"))
 
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "oversized-blocks/text.txt")
-        #expect(textResult.output.contains("Tall row"))
-        #expect(textResult.output.contains("Unsupported Mermaid diagram"))
-        #expect(textResult.output.contains("code_line_18"))
-
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "oversized-blocks/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "oversized-blocks/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
         #expect(
-            popplerIssues.isEmpty,
-            "Oversized block Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
-        )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "oversized-blocks/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(
-            mupdfIssues.isEmpty,
-            "Oversized block MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "oversized-blocks/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "oversized-blocks/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "oversized-blocks-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "oversized-blocks-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Oversized block raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Oversized block word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
     }
 
@@ -1137,7 +622,7 @@ struct PDFVisualLayoutValidationTests {
                 baseFontSize: 9,
             ),
         ).render(markdown: markdown)
-        let url = try PDFValidation.temporaryPDF(name: "measured-tables", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "measured-tables")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
 
@@ -1146,62 +631,17 @@ struct PDFVisualLayoutValidationTests {
         #expect(tableRectangleWidths(in: inspector).contains { $0 > 95 })
         try PDFValidation.writeArtifact(data, name: "measured-tables.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "measured-tables/text.txt")
+        #expect(extractedText.contains("row-16"))
+        #expect(extractedText.components(separatedBy: "Description").count >= 3)
 
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "measured-tables/text.txt")
-        #expect(textResult.output.contains("row-16"))
-        #expect(textResult.output.components(separatedBy: "Description").count >= 3)
-
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "measured-tables/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "measured-tables/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
         #expect(
-            popplerIssues.isEmpty,
-            "Measured table Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
-        )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "measured-tables/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(
-            mupdfIssues.isEmpty,
-            "Measured table MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "measured-tables/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "measured-tables/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "measured-tables-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "measured-tables-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Measured table raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Measured table word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
     }
 
@@ -1250,7 +690,7 @@ struct PDFVisualLayoutValidationTests {
                 baseFontSize: 9,
             ),
         ).render(markdown: markdown)
-        let url = try PDFValidation.temporaryPDF(name: "native-charts", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "native-charts")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
@@ -1261,69 +701,24 @@ struct PDFVisualLayoutValidationTests {
         #expect(streamText.contains(" l"))
         try PDFValidation.writeArtifact(data, name: "native-charts.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "native-charts/text.txt")
+        #expect(extractedText.contains("Deployment Share"))
+        #expect(extractedText.contains("Stable 68"))
+        #expect(extractedText.contains("Quarterly Revenue"))
+        #expect(extractedText.contains("Actual"))
+        #expect(extractedText.contains("Adoption Trend"))
+        #expect(extractedText.contains("Accounts"))
+        #expect(extractedText.contains("Impact Map"))
+        #expect(extractedText.contains("Trials"))
+        #expect(!extractedText.contains("Unsupported chart"))
 
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "native-charts/text.txt")
-        #expect(textResult.output.contains("Deployment Share"))
-        #expect(textResult.output.contains("Stable 68"))
-        #expect(textResult.output.contains("Quarterly Revenue"))
-        #expect(textResult.output.contains("Actual"))
-        #expect(textResult.output.contains("Adoption Trend"))
-        #expect(textResult.output.contains("Accounts"))
-        #expect(textResult.output.contains("Impact Map"))
-        #expect(textResult.output.contains("Trials"))
-        #expect(!textResult.output.contains("Unsupported chart"))
-
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "native-charts/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "native-charts/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
         #expect(
-            popplerIssues.isEmpty,
-            "Native chart Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
-        )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "native-charts/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(
-            mupdfIssues.isEmpty,
-            "Native chart MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "native-charts/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "native-charts/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "native-charts-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "native-charts-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Native chart raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Native chart word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
     }
 
@@ -1356,77 +751,32 @@ struct PDFVisualLayoutValidationTests {
                 baseFontSize: 10,
             ),
         ).render(markdown: markdown)
-        let url = try PDFValidation.temporaryPDF(name: "diagram-policy", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "diagram-policy")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
 
         #expect(pageCount >= 1)
         try PDFValidation.writeArtifact(data, name: "diagram-policy.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "diagram-policy/text.txt")
+        #expect(extractedText.contains("Markdown input"))
+        #expect(extractedText.contains("parse"))
+        #expect(extractedText.contains("draw"))
+        #expect(!extractedText.contains("Source[\"Markdown input\"]"))
+        #expect(!extractedText.contains("Parser[\"Flow parser\"]"))
+        #expect(extractedText.contains("Native chart"))
+        #expect(extractedText.contains("Alpha 3"))
+        #expect(extractedText.contains("Beta 2"))
+        #expect(extractedText.contains("Unsupported Mermaid diagram"))
+        #expect(extractedText.contains("sequenceDiagram"))
 
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "diagram-policy/text.txt")
-        #expect(textResult.output.contains("Markdown input"))
-        #expect(textResult.output.contains("parse"))
-        #expect(textResult.output.contains("draw"))
-        #expect(!textResult.output.contains("Source[\"Markdown input\"]"))
-        #expect(!textResult.output.contains("Parser[\"Flow parser\"]"))
-        #expect(textResult.output.contains("Native chart"))
-        #expect(textResult.output.contains("Alpha 3"))
-        #expect(textResult.output.contains("Beta 2"))
-        #expect(textResult.output.contains("Unsupported Mermaid diagram"))
-        #expect(textResult.output.contains("sequenceDiagram"))
-
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "diagram-policy/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "diagram-policy/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
         #expect(
-            popplerIssues.isEmpty,
-            "Diagram policy Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
-        )
-
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "diagram-policy/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-        #expect(
-            mupdfIssues.isEmpty,
-            "Diagram policy MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "diagram-policy/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "diagram-policy/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "diagram-policy-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "diagram-policy-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Diagram policy raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Diagram policy word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
     }
 
@@ -1477,25 +827,23 @@ struct PDFVisualLayoutValidationTests {
         ).render(markdown: markdown)
         try PDFValidation.writeArtifact(data, name: "quote-spacing.pdf")
 
-        let tsvResult = try PDFValidation.pdftotextTSV(data: data, name: "quote-spacing")
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "quote-spacing/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "quote-spacing/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
         #expect(
-            popplerIssues.isEmpty,
-            "Quote spacing Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Quote spacing word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
 
-        let codeEnd = try word("CodeBlockEndToken;", in: popplerLayout)
-        let quoteStart = try word("QuoteStartToken", in: popplerLayout)
-        let quoteEnd = try word("QuoteEndToken", in: popplerLayout)
-        let afterParagraph = try word("AfterQuoteParagraph", in: popplerLayout)
-        let secondCodeEnd = try word("SecondCodeBlockEndToken;", in: popplerLayout)
-        let secondQuoteStart = try word("SecondQuoteStartToken", in: popplerLayout)
-        let secondQuoteEnd = try word("SecondQuoteEndToken", in: popplerLayout)
-        let afterHeading = try word("AfterQuoteHeading", in: popplerLayout)
+        let codeEnd = try word("CodeBlockEndToken;", in: layout)
+        let quoteStart = try word("QuoteStartToken", in: layout)
+        let quoteEnd = try word("QuoteEndToken", in: layout)
+        let afterParagraph = try word("AfterQuoteParagraph", in: layout)
+        let secondCodeEnd = try word("SecondCodeBlockEndToken;", in: layout)
+        let secondQuoteStart = try word("SecondQuoteStartToken", in: layout)
+        let secondQuoteEnd = try word("SecondQuoteEndToken", in: layout)
+        let afterHeading = try word("AfterQuoteHeading", in: layout)
 
         #expect(quoteStart.page == codeEnd.page)
         #expect(afterParagraph.page == quoteEnd.page)
@@ -1508,17 +856,6 @@ struct PDFVisualLayoutValidationTests {
         } else {
             #expect(afterHeading.page > secondQuoteEnd.page)
         }
-
-        let structuredText = try PDFValidation.mutoolStructuredText(data: data, name: "quote-spacing-mupdf")
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "quote-spacing/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(
-            mupdfIssues.isEmpty,
-            "Quote spacing MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
     }
 
     @Test("Source code witness stack catches crammed flow and glyph overlap")
@@ -1575,7 +912,7 @@ struct PDFVisualLayoutValidationTests {
                 title: "Source Code Witness",
             ),
         ).render(markdown: markdown)
-        let url = try PDFValidation.temporaryPDF(name: "source-code-spacing", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "source-code-spacing")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
 
@@ -1592,86 +929,40 @@ struct PDFVisualLayoutValidationTests {
             "Source code witness emitted unexpected vertical rule operators:\n\(verticalRuleLines.joined(separator: "\n"))",
         )
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "source-code-spacing/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "source-code-spacing/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("SourceCodeEndToken"))
         #expect(normalizedText.contains("QuoteStartToken"))
         #expect(normalizedText.contains("AfterQuoteHeadingToken"))
         #expect(normalizedText.contains("SecondCodeEndToken"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "source-code-spacing/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "source-code-spacing/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 260)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 260)
         #expect(
-            popplerIssues.isEmpty,
-            "Source code spacing Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Source code spacing word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
 
-        let codeEnd = try word("SourceCodeEndToken", in: popplerLayout)
-        let quoteStart = try word("QuoteStartToken", in: popplerLayout)
-        let quoteEnd = try word("QuoteEndToken", in: popplerLayout)
-        let afterParagraph = try word("AfterQuoteParagraph", in: popplerLayout)
-        let afterParagraphEnd = try word("AfterQuoteParagraphEndToken", in: popplerLayout)
-        let afterHeading = try word("AfterQuoteHeadingToken", in: popplerLayout)
-        let secondCodeEnd = try word("SecondCodeEndToken", in: popplerLayout)
-        let afterSecondCode = try word("AfterSecondCodeParagraph", in: popplerLayout)
+        let codeEnd = try word("SourceCodeEndToken", in: layout)
+        let quoteStart = try word("QuoteStartToken", in: layout)
+        let quoteEnd = try word("QuoteEndToken", in: layout)
+        let afterParagraph = try word("AfterQuoteParagraph", in: layout)
+        let afterParagraphEnd = try word("AfterQuoteParagraphEndToken", in: layout)
+        let afterHeading = try word("AfterQuoteHeadingToken", in: layout)
+        let secondCodeEnd = try word("SecondCodeEndToken", in: layout)
+        let afterSecondCode = try word("AfterSecondCodeParagraph", in: layout)
 
         expectVerticalGap(after: codeEnd, before: quoteStart, minimum: 10, context: "code block to quote")
         expectVerticalGap(after: quoteEnd, before: afterParagraph, minimum: 4, context: "quote to paragraph")
         expectVerticalGap(after: afterParagraphEnd, before: afterHeading, minimum: 8, context: "paragraph to heading")
         expectVerticalGap(after: secondCodeEnd, before: afterSecondCode, minimum: 8, context: "code block to paragraph")
 
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "source-code-spacing/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 1800)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Source code spacing MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "source-code-spacing/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "source-code-spacing/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "source-code-spacing-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "source-code-spacing-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Source code spacing raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 1800)
     }
 
     @Test("Screenshot source-code regression witness covers spacing, strokes, and images")
@@ -1763,7 +1054,7 @@ struct PDFVisualLayoutValidationTests {
                 title: "Screenshot Source Code Regression Witness",
             ),
         ).render(markdown: markdown, assetsBaseURL: assetsBaseURL)
-        let url = try PDFValidation.temporaryPDF(name: "screenshot-source-code-regressions", data: data)
+        try PDFValidation.requireSoundStructure(data, name: "screenshot-source-code-regressions")
         let inspector = PDFInspector(data)
         let pageCount = inspector.pageCount
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
@@ -1790,13 +1081,9 @@ struct PDFVisualLayoutValidationTests {
             "Screenshot source-code witness emitted unexpected vertical rule operators:\n\(verticalRuleLines.joined(separator: "\n"))",
         )
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-
-        let textResult = try PDFValidation.pdftotext(url: url)
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try PDFValidation.writeTextArtifact(textResult.output, name: "screenshot-source-code-regressions/text.txt")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let extractedText = try PDFValidation.text(data)
+        try PDFValidation.writeTextArtifact(extractedText, name: "screenshot-source-code-regressions/text.txt")
+        let normalizedText = normalizedExtractedText(extractedText)
         #expect(normalizedText.contains("DirectCodeEndToken"))
         #expect(normalizedText.contains("DirectQuoteStartToken"))
         #expect(normalizedText.contains("DirectAfterQuoteHeadingToken"))
@@ -1808,32 +1095,30 @@ struct PDFVisualLayoutValidationTests {
         #expect(normalizedText.contains("Reference style regression fallback text"))
         #expect(normalizedText.contains("AfterUnsupportedImageSyntaxParagraph"))
 
-        let tsvResult = try PDFValidation.pdftotextTSV(url: url)
-        try #require(tsvResult.exitCode == 0, "pdftotext -tsv failed:\n\(tsvResult.output)")
-        try PDFValidation.writeTextArtifact(tsvResult.output, name: "screenshot-source-code-regressions/poppler.tsv")
-        let popplerLayout = try PopplerTextLayout(tsv: tsvResult.output)
-        let popplerIssues = popplerLayout.visualLayoutIssues()
+        let layout = try ReaderTextLayout(data: data)
+        try PDFValidation.writeTextArtifact(layout.tabSeparated, name: "screenshot-source-code-regressions/words.tsv")
+        let layoutIssues = layout.visualLayoutIssues()
 
-        #expect(popplerLayout.pages.count == pageCount)
-        #expect(popplerLayout.words.count > 420)
+        #expect(layout.pages.count == pageCount)
+        #expect(layout.words.count > 420)
         #expect(
-            popplerIssues.isEmpty,
-            "Screenshot source-code Poppler layout issues:\n\(popplerIssues.joined(separator: "\n"))",
+            layoutIssues.isEmpty,
+            "Screenshot source-code word-box layout issues:\n\(layoutIssues.joined(separator: "\n"))",
         )
 
-        let directCodeEnd = try word("DirectCodeEndToken", in: popplerLayout)
-        let directQuoteStart = try word("DirectQuoteStartToken", in: popplerLayout)
-        let directQuoteEnd = try word("DirectQuoteEndToken", in: popplerLayout)
-        let directHeading = try word("DirectAfterQuoteHeadingToken", in: popplerLayout)
-        let firstCodeEnd = try word("ScreenshotCodeEndToken1", in: popplerLayout)
-        let firstQuoteStart = try word("ScreenshotQuoteStartToken1", in: popplerLayout)
-        let firstQuoteEnd = try word("ScreenshotQuoteEndToken1", in: popplerLayout)
-        let firstAfterParagraph = try word("ScreenshotAfterQuoteParagraph1", in: popplerLayout)
-        let firstHeading = try word("ScreenshotAfterQuoteHeadingToken1", in: popplerLayout)
-        let lastCodeEnd = try word("ScreenshotCodeEndToken5", in: popplerLayout)
-        let lastQuoteStart = try word("ScreenshotQuoteStartToken5", in: popplerLayout)
-        let afterRemoteImage = try word("AfterRemoteImageParagraph", in: popplerLayout)
-        let afterUnsupportedImage = try word("AfterUnsupportedImageSyntaxParagraph", in: popplerLayout)
+        let directCodeEnd = try word("DirectCodeEndToken", in: layout)
+        let directQuoteStart = try word("DirectQuoteStartToken", in: layout)
+        let directQuoteEnd = try word("DirectQuoteEndToken", in: layout)
+        let directHeading = try word("DirectAfterQuoteHeadingToken", in: layout)
+        let firstCodeEnd = try word("ScreenshotCodeEndToken1", in: layout)
+        let firstQuoteStart = try word("ScreenshotQuoteStartToken1", in: layout)
+        let firstQuoteEnd = try word("ScreenshotQuoteEndToken1", in: layout)
+        let firstAfterParagraph = try word("ScreenshotAfterQuoteParagraph1", in: layout)
+        let firstHeading = try word("ScreenshotAfterQuoteHeadingToken1", in: layout)
+        let lastCodeEnd = try word("ScreenshotCodeEndToken5", in: layout)
+        let lastQuoteStart = try word("ScreenshotQuoteStartToken5", in: layout)
+        let afterRemoteImage = try word("AfterRemoteImageParagraph", in: layout)
+        let afterUnsupportedImage = try word("AfterUnsupportedImageSyntaxParagraph", in: layout)
 
         expectVerticalGap(after: directCodeEnd, before: directQuoteStart, minimum: 10, context: "direct code block to quote")
         expectVerticalGap(after: directQuoteEnd, before: directHeading, minimum: 8, context: "direct quote to heading")
@@ -1843,47 +1128,7 @@ struct PDFVisualLayoutValidationTests {
         expectVerticalGap(after: lastCodeEnd, before: lastQuoteStart, minimum: 10, context: "last code block to quote")
         expectVerticalGap(after: afterRemoteImage, before: afterUnsupportedImage, minimum: 10, context: "remote fallback to unsupported image text")
 
-        let structuredText = try PDFValidation.mutoolStructuredText(url: url)
-        try #require(structuredText.exitCode == 0, "mutool structured text failed:\n\(structuredText.output)")
-        try PDFValidation.writeTextArtifact(structuredText.output, name: "screenshot-source-code-regressions/mupdf-stext.xml")
-        let mupdfLayout = try MuPDFStructuredText(xml: structuredText.output)
-        let mupdfIssues = mupdfLayout.characterQuadIssues()
-
-        #expect(mupdfLayout.pages.count == pageCount)
-        #expect(mupdfLayout.glyphs.count(where: { !$0.isWhitespace }) > 2600)
-        #expect(
-            mupdfIssues.isEmpty,
-            "Screenshot source-code MuPDF layout issues:\n\(mupdfIssues.joined(separator: "\n"))",
-        )
-
-        let poppler = try PDFValidation.pdftoppmPNMs(url: url, pageCount: pageCount)
-        let mupdf = try PDFValidation.mutoolPNMs(url: url, pageCount: pageCount)
-        try #require(poppler.result.exitCode == 0, "pdftoppm PNM failed:\n\(poppler.result.output)")
-        try #require(mupdf.result.exitCode == 0, "mutool PNM failed:\n\(mupdf.result.output)")
-        try PDFValidation.writeTextArtifact(poppler.result.output, name: "screenshot-source-code-regressions/poppler-render.log")
-        try PDFValidation.writeTextArtifact(mupdf.result.output, name: "screenshot-source-code-regressions/mupdf-render.log")
-
-        var rasterIssues: [String] = []
-        for page in 1 ... pageCount {
-            let popplerImage = try PNMImage(data: Data(contentsOf: poppler.pnmURLs[page - 1]))
-            let mupdfImage = try PNMImage(data: Data(contentsOf: mupdf.pnmURLs[page - 1]))
-            try PDFValidation.copyArtifact(
-                from: poppler.pnmURLs[page - 1],
-                name: "screenshot-source-code-regressions-pages/poppler/page-\(page).ppm",
-            )
-            try PDFValidation.copyArtifact(
-                from: mupdf.pnmURLs[page - 1],
-                name: "screenshot-source-code-regressions-pages/mupdf/page-\(page).pnm",
-            )
-            rasterIssues += rasterComparisonIssues(poppler: popplerImage, mupdf: mupdfImage).map {
-                "page \(page): \($0)"
-            }
-        }
-
-        #expect(
-            rasterIssues.isEmpty,
-            "Screenshot source-code raster output diverged:\n\(rasterIssues.joined(separator: "\n"))",
-        )
+        #expect(layout.visibleCharacterCount > 2600)
     }
 
     @Test("Screenshot source-code regression witness rejects mutated failures")
@@ -1895,43 +1140,22 @@ struct PDFVisualLayoutValidationTests {
         """
         #expect(!verticalRuleOperatorLines(in: strokeMutation).isEmpty)
 
-        let mutatedLayout = try PopplerTextLayout(tsv: """
-        level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext
-        1\t1\t0\t0\t0\t0\t0.000000\t0.000000\t220.000000\t220.000000\t-1\t###PAGE###
-        4\t1\t0\t1\t0\t0\t10.000000\t90.000000\t120.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t0\t0\t10.00\t90.00\t80.00\t10.00\t100\tDirectCodeEndToken
-        4\t1\t0\t1\t1\t0\t10.000000\t94.000000\t130.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t1\t0\t10.00\t94.00\t120.00\t10.00\t100\tDirectQuoteStartToken
-        4\t1\t0\t1\t2\t0\t10.000000\t130.000000\t120.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t2\t0\t10.00\t130.00\t60.00\t10.00\t100\tOverlapLeft
-        5\t1\t0\t1\t2\t1\t50.00\t130.00\t60.00\t10.00\t100\tOverlapRight
-        """)
+        let mutatedLayout = ReaderTextLayout(pages: [PDFOptions.PageSize(width: 220, height: 220)], words: [
+            Self.box(1, "DirectCodeEndToken", left: 10, top: 90, width: 80),
+            Self.box(2, "DirectQuoteStartToken", left: 10, top: 94, width: 120),
+            Self.box(3, "OverlapLeft", left: 10, top: 130, width: 60),
+            Self.box(4, "OverlapRight", left: 50, top: 130, width: 60),
+        ])
         let mutatedCodeEnd = try word("DirectCodeEndToken", in: mutatedLayout)
         let mutatedQuoteStart = try word("DirectQuoteStartToken", in: mutatedLayout)
-        let mutatedStructuredText = try MuPDFStructuredText(xml: """
-        <?xml version="1.0"?>
-        <document filename="mutated-source-code-witness.pdf">
-        <page id="page1" width="100" height="100">
-        <block bbox="10 10 40 20" justify="unknown">
-        <line bbox="10 10 40 20" wmode="0" dir="1 0" flags="0" text="AB">
-        <font name="Helvetica" size="12">
-        <char quad="10 10 20 10 10 20 20 20" x="10" y="20" c="A"/>
-        <char quad="19 10 30 10 19 20 30 20" x="19" y="20" c="B"/>
-        </font>
-        </line>
-        </block>
-        </page>
-        </document>
-        """)
-        let mutatedPopplerRaster = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 2 ... 5))
-        let mutatedMuPDFRaster = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 16 ... 19))
+        // The same failure read from a file: "B" is shown a point before "A" ends.
+        let mutatedFile = try ReaderTextLayout(data: HandWrittenPDF.onePage(
+            content: "BT /F1 12 Tf 10 80 Td (A) Tj ET\nBT /F1 12 Tf 17 80 Td (B) Tj ET",
+        ))
 
-        #expect(mutatedLayout.visualLayoutIssues().contains { $0.contains("overlaps") })
-        #expect(mutatedStructuredText.characterQuadIssues().contains { $0.contains("overlaps") })
-        #expect(
-            rasterComparisonIssues(poppler: mutatedPopplerRaster, mupdf: mutatedMuPDFRaster)
-                .contains { $0.contains("ink bounds differ") },
-        )
+        #expect(mutatedLayout.visualLayoutIssues().contains { $0.contains("'OverlapLeft' overlaps") })
+        #expect(mutatedLayout.visualLayoutIssues().contains { $0.contains("'DirectCodeEndToken' collides vertically") })
+        #expect(mutatedFile.visualLayoutIssues().contains { $0.contains("overlaps") })
         #expect(
             verticalGapIssue(
                 after: mutatedCodeEnd,
@@ -1949,123 +1173,114 @@ struct PDFVisualLayoutValidationTests {
     }
 
     @Test("Visual layout validator rejects overlapping words")
-    func visualLayoutValidatorRejectsOverlappingWords() throws {
-        let layout = try PopplerTextLayout(tsv: """
-        level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext
-        1\t1\t0\t0\t0\t0\t0.000000\t0.000000\t200.000000\t200.000000\t-1\t###PAGE###
-        4\t1\t0\t1\t0\t0\t10.000000\t20.000000\t60.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t0\t0\t10.00\t20.00\t40.00\t10.00\t100\tFirst
-        5\t1\t0\t1\t0\t1\t49.00\t20.00\t30.00\t10.00\t100\tSecond
-        """)
+    func visualLayoutValidatorRejectsOverlappingWords() {
+        let layout = ReaderTextLayout(pages: [PDFOptions.PageSize(width: 200, height: 200)], words: [
+            Self.box(1, "First", left: 10, top: 20, width: 40),
+            Self.box(2, "Second", left: 49, top: 20, width: 30),
+        ])
 
-        #expect(layout.visualLayoutIssues().contains { $0.contains("overlaps") })
+        #expect(layout.visualLayoutIssues() == ["page 1 word 1 'First' overlaps page 1 word 2 'Second'"])
+        // Words that only touch, within the half point tolerance, do not overlap.
+        let touching = ReaderTextLayout(pages: layout.pages, words: [
+            Self.box(1, "First", left: 10, top: 20, width: 40),
+            Self.box(2, "Second", left: 49.6, top: 20, width: 30),
+        ])
+        #expect(touching.visualLayoutIssues().isEmpty)
     }
 
-    @Test("Visual layout validator normalizes offset Poppler page rows")
-    func visualLayoutValidatorNormalizesOffsetPopplerPageRows() throws {
-        let layout = try PopplerTextLayout(tsv: """
-        level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext
-        1\t2\t0\t0\t0\t0\t205.970000\t253.270000\t260.000000\t320.000000\t-1\t###PAGE###
-        4\t2\t0\t0\t0\t0\t95.280000\t41.481600\t69.440800\t8.140000\t-1\t###LINE###
-        5\t2\t0\t0\t0\t0\t95.28\t41.48\t40.59\t8.14\t100\tMarkdown
-        5\t2\t0\t0\t0\t1\t138.31\t41.48\t26.41\t8.14\t100\tsource
-        """)
+    @Test("Visual layout validator checks each word against the size of its own page")
+    func visualLayoutValidatorChecksEachWordAgainstItsOwnPage() {
+        let pages = [PDFOptions.PageSize(width: 100, height: 100), PDFOptions.PageSize(width: 260, height: 320)]
+        let onLargePage = ReaderTextLayout(pages: pages, words: [
+            Self.box(1, "Markdown", page: 2, left: 95.28, top: 41.48, width: 40.59, height: 8.14),
+            Self.box(2, "source", page: 2, left: 138.31, top: 41.48, width: 26.41, height: 8.14),
+        ])
+        #expect(onLargePage.visualLayoutIssues().isEmpty)
 
-        #expect(layout.visualLayoutIssues().isEmpty)
+        let onSmallPage = ReaderTextLayout(pages: pages, words: [
+            Self.box(1, "source", page: 1, left: 138.31, top: 41.48, width: 26.41, height: 8.14),
+        ])
+        #expect(onSmallPage.visualLayoutIssues() == ["page 1 word 1 'source' is outside page bounds"])
+
+        let onNoPage = ReaderTextLayout(pages: pages, words: [Self.box(1, "lost", page: 3, left: 10, top: 10, width: 20)])
+        #expect(onNoPage.visualLayoutIssues() == ["page 3 word 1 'lost' references missing page 3"])
     }
 
     @Test("Visual layout validator allows table columns on the same row")
-    func visualLayoutValidatorAllowsTableColumnsOnSameRow() throws {
-        let layout = try PopplerTextLayout(tsv: """
-        level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext
-        1\t1\t0\t0\t0\t0\t0.000000\t0.000000\t220.000000\t220.000000\t-1\t###PAGE###
-        4\t1\t0\t1\t0\t0\t20.000000\t60.000000\t40.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t0\t0\t20.00\t60.00\t40.00\t10.00\t100\tLeft
-        4\t1\t0\t1\t1\t0\t90.000000\t60.000000\t50.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t1\t0\t90.00\t60.00\t50.00\t10.00\t100\tRight
-        """)
+    func visualLayoutValidatorAllowsTableColumnsOnSameRow() {
+        let layout = ReaderTextLayout(pages: [PDFOptions.PageSize(width: 220, height: 220)], words: [
+            Self.box(1, "Left", left: 20, top: 60, width: 40),
+            Self.box(2, "Right", left: 90, top: 60, width: 50),
+        ])
 
         #expect(layout.visualLayoutIssues().isEmpty)
     }
 
     @Test("Visual layout validator rejects collisions hidden behind table columns")
-    func visualLayoutValidatorRejectsCollisionsHiddenBehindTableColumns() throws {
-        let layout = try PopplerTextLayout(tsv: """
-        level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext
-        1\t1\t0\t0\t0\t0\t0.000000\t0.000000\t220.000000\t220.000000\t-1\t###PAGE###
-        4\t1\t0\t1\t0\t0\t20.000000\t60.000000\t40.000000\t20.000000\t-1\t###LINE###
-        5\t1\t0\t1\t0\t0\t20.00\t60.00\t40.00\t20.00\t100\tTop
-        4\t1\t0\t1\t1\t0\t90.000000\t65.000000\t50.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t1\t0\t90.00\t65.00\t50.00\t10.00\t100\tSide
-        4\t1\t0\t1\t2\t0\t22.000000\t70.000000\t40.000000\t10.000000\t-1\t###LINE###
-        5\t1\t0\t1\t2\t0\t22.00\t70.00\t40.00\t10.00\t100\tBottom
-        """)
+    func visualLayoutValidatorRejectsCollisionsHiddenBehindTableColumns() {
+        let layout = ReaderTextLayout(pages: [PDFOptions.PageSize(width: 220, height: 220)], words: [
+            Self.box(1, "Top", left: 20, top: 60, width: 40, height: 20),
+            Self.box(2, "Side", left: 90, top: 65, width: 50),
+            Self.box(3, "Bottom", left: 22, top: 70, width: 40),
+        ])
 
-        #expect(layout.visualLayoutIssues().contains { $0.contains("collides vertically") })
+        #expect(layout.visualLayoutIssues() == ["page 1 word 1 'Top' collides vertically with page 1 word 3 'Bottom'"])
     }
 
-    @Test("MuPDF character quad validator rejects overlapping glyphs")
-    func muPDFCharacterQuadValidatorRejectsOverlappingGlyphs() throws {
-        let layout = try MuPDFStructuredText(xml: """
-        <?xml version="1.0"?>
-        <document filename="overlap.pdf">
-        <page id="page1" width="100" height="100">
-        <block bbox="10 10 40 20" justify="unknown">
-        <line bbox="10 10 40 20" wmode="0" dir="1 0" flags="0" text="AB">
-        <font name="Helvetica" size="12">
-        <char quad="10 10 20 10 10 20 20 20" x="10" y="20" c="A"/>
-        <char quad="19 10 30 10 19 20 30 20" x="19" y="20" c="B"/>
-        </font>
-        </line>
-        </block>
-        </page>
-        </document>
-        """)
+    @Test("Visual layout validator rejects text a file draws over other text")
+    func visualLayoutValidatorRejectsTextDrawnOverText() throws {
+        // Helvetica "A" is 667 thousandths: at 12 points it ends at 18.004, and "B" starts at 17.
+        let layout = try ReaderTextLayout(data: HandWrittenPDF.onePage(
+            content: "BT /F1 12 Tf 10 80 Td (A) Tj ET\nBT /F1 12 Tf 17 80 Td (B) Tj ET",
+        ))
 
-        #expect(layout.characterQuadIssues().contains { $0.contains("overlaps") })
+        #expect(layout.words.map(\.text) == ["A", "B"])
+        #expect(layout.visualLayoutIssues() == ["page 1 word 1 'A' overlaps page 1 word 2 'B'"])
     }
 
-    @Test("MuPDF character quad validator allows ToUnicode expansion continuations")
-    func muPDFCharacterQuadValidatorAllowsToUnicodeExpansionContinuations() throws {
-        let layout = try MuPDFStructuredText(xml: """
-        <?xml version="1.0"?>
-        <document filename="ligature.pdf">
-        <page id="page1" width="100" height="100">
-        <block bbox="10 10 40 24" justify="unknown">
-        <line bbox="10 10 40 24" wmode="0" dir="1 0" flags="0" text="file">
-        <font name="Ligature" size="12">
-        <char quad="10 12 20 12 10 22 20 22" x="10" y="22" c="f"/>
-        <char quad="20 10 20 10 20 24 20 24" x="20" y="22" c="i"/>
-        <char quad="20 12 25 12 20 22 25 22" x="20" y="22" c="l"/>
-        <char quad="25 12 34 12 25 22 34 22" x="25" y="22" c="e"/>
-        </font>
-        </line>
-        </block>
-        </page>
-        </document>
-        """)
+    @Test("Visual layout validator allows a glyph that stands for several characters")
+    func visualLayoutValidatorAllowsLigatureGlyphs() throws {
+        // Code 1 is one glyph that the ToUnicode map reads as "fi": two characters, one advance.
+        let layout = try ReaderTextLayout(data: HandWrittenPDF.onePage(
+            content: "BT /F1 12 Tf 10 80 Td <000100020003> Tj ET",
+            fontObjects: Self.compositeFontObjects(widths: "1 [600 300 500]"),
+        ))
 
-        #expect(layout.characterQuadIssues().isEmpty)
+        #expect(layout.words.map(\.text) == ["file"])
+        #expect(layout.visibleCharacterCount == 4)
+        #expect(abs((layout.words.first?.width ?? 0) - 16.8) < 1e-9)
+        #expect(layout.visualLayoutIssues().isEmpty)
     }
 
-    @Test("MuPDF character quad validator rejects isolated zero-width glyphs")
-    func muPDFCharacterQuadValidatorRejectsIsolatedZeroWidthGlyphs() throws {
-        let layout = try MuPDFStructuredText(xml: """
-        <?xml version="1.0"?>
-        <document filename="zero-width.pdf">
-        <page id="page1" width="100" height="100">
-        <block bbox="10 10 40 24" justify="unknown">
-        <line bbox="10 10 40 24" wmode="0" dir="1 0" flags="0" text="A">
-        <font name="Broken" size="12">
-        <char quad="15 12 15 12 15 22 15 22" x="15" y="22" c="A"/>
-        </font>
-        </line>
-        </block>
-        </page>
-        </document>
-        """)
+    @Test("Visual layout validator rejects a glyph the font gives no width")
+    func visualLayoutValidatorRejectsZeroWidthGlyphs() throws {
+        let layout = try ReaderTextLayout(data: HandWrittenPDF.onePage(
+            content: "BT /F1 12 Tf 15 80 Td <0001> Tj ET",
+            fontObjects: Self.compositeFontObjects(widths: "1 [0 300 500]"),
+        ))
 
-        #expect(layout.characterQuadIssues().contains { $0.contains("non-positive size") })
+        #expect(layout.visualLayoutIssues() == ["page 1 word 1 'fi' has non-positive size"])
+    }
+
+    /// A composite font written by hand: codes 1, 2 and 3 read as "fi", "l" and "e".
+    private static func compositeFontObjects(widths: String) -> [String] {
+        [
+            "<< /Type /Font /Subtype /Type0 /BaseFont /Ligature /Encoding /Identity-H /DescendantFonts [6 0 R] /ToUnicode 7 0 R >>",
+            "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Ligature /DW 500 /W [\(widths)] >>",
+            HandWrittenPDF.stream("3 beginbfchar\n<0001> <00660069>\n<0002> <006C>\n<0003> <0065>\nendbfchar"),
+        ]
+    }
+
+    private static func box(
+        _ word: Int,
+        _ text: String,
+        page: Int = 1,
+        left: Double,
+        top: Double,
+        width: Double,
+        height: Double = 10,
+    ) -> ReaderTextLayout.Box {
+        ReaderTextLayout.Box(page: page, word: word, left: left, top: top, width: width, height: height, text: text)
     }
 
     @Test("Source code witness rule detector rejects stroked and filled vertical rules")
@@ -2081,14 +1296,6 @@ struct PDFVisualLayoutValidationTests {
         """
 
         #expect(verticalRuleOperatorLines(in: stream) == ["S", "54 620 1.5 80 re"])
-    }
-
-    @Test("Raster comparison rejects divergent ink bounds")
-    func rasterComparisonRejectsDivergentInkBounds() throws {
-        let poppler = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 2 ... 5))
-        let mupdf = try PNMImage(data: pnmImage(width: 20, height: 20, inkBox: 16 ... 19))
-
-        #expect(rasterComparisonIssues(poppler: poppler, mupdf: mupdf).contains { $0.contains("ink bounds differ") })
     }
 
     private func visualValidationPDF() throws -> Data {
@@ -2449,13 +1656,13 @@ struct PDFVisualLayoutValidationTests {
         return try String(contentsOf: fixtureURL, encoding: .utf8)
     }
 
-    private func word(_ text: String, in layout: PopplerTextLayout) throws -> PopplerTextLayout.Box {
+    private func word(_ text: String, in layout: ReaderTextLayout) throws -> ReaderTextLayout.Box {
         try #require(layout.words.first { $0.text == text }, "Missing extracted word \(text)")
     }
 
     private func expectVerticalGap(
-        after upper: PopplerTextLayout.Box,
-        before lower: PopplerTextLayout.Box,
+        after upper: ReaderTextLayout.Box,
+        before lower: ReaderTextLayout.Box,
         minimum: Double,
         context: String,
     ) {
@@ -2464,8 +1671,8 @@ struct PDFVisualLayoutValidationTests {
     }
 
     private func verticalGapIssue(
-        after upper: PopplerTextLayout.Box,
-        before lower: PopplerTextLayout.Box,
+        after upper: ReaderTextLayout.Box,
+        before lower: ReaderTextLayout.Box,
         minimum: Double,
         context: String,
     ) -> String? {
@@ -2605,184 +1812,32 @@ struct PDFVisualLayoutValidationTests {
     private static let artifactManifest = """
     MarkdownPDF PDF witness artifacts
 
-    visual-layout-stress.pdf
-    Representative generated PDF used by the visual layout tests.
+    Every artifact is written by the test target from what the package's own
+    reader, PDFDocumentReader, finds in the rendered file. No outside program
+    takes part.
 
-    visual-layout/text.txt
-    Poppler pdftotext output for text extraction review.
+    <name>.pdf
+    The rendered PDF of a witness test, such as a4-manuscript.pdf or rtl-manuscript.pdf.
 
-    visual-layout/pdfinfo.txt
-    Poppler pdfinfo output for page count and metadata review.
+    <name>/text.txt
+    The text of the document as the reader extracts it, in the order of the
+    content stream, pages separated by a form feed.
 
-    visual-layout/poppler.tsv
-    Poppler pdftotext -tsv geometry output used for word and line checks.
+    <name>/words.tsv
+    One line for each word: the page, the position of the word among the words of
+    its page, then left, top, width and height in points from the top left corner
+    of the page, and the text. The boxes come from the position of each text
+    operator and the widths the fonts declare in the file.
 
-    visual-layout/mupdf-stext.xml
-    MuPDF structured text output used for character quad checks.
+    <name>/README.txt
+    For the witnesses that have one: the tokens the test requires and what it expects.
 
-    visual-layout/poppler-render.log
-    Poppler raster command output.
+    visual-layout/document.txt
+    The page count, PDF version, title and page sizes of the visual layout fixture.
 
-    visual-layout/mupdf-render.log
-    MuPDF raster command output.
-
-    visual-layout-pages/poppler/
-    Poppler page rasters used for raster ink bounds comparison.
-
-    visual-layout-pages/mupdf/
-    MuPDF page rasters used for raster ink bounds comparison.
-
-    article-grade-stress.pdf
-    Heavier public article fixture used by the article-grade corpus tests.
-
-    article-stress/
-    Text, geometry, structured text, and render logs for the article fixture.
-
-    article-stress-pages/
-    Poppler and MuPDF page rasters for the article fixture.
-
-    hard-markdown-corpus.pdf
-    Hard public Markdown fixture with duplicate headings, links, nested quotes, tables, images, raw HTML, code, and Mermaid.
-
-    hard-markdown-corpus/
-    Text, geometry, structured text, and render logs for the hard Markdown fixture.
-
-    hard-markdown-corpus-pages/
-    Poppler and MuPDF page rasters for the hard Markdown fixture.
-
-    crazy-markdown-torture.pdf
-    Crazy public Markdown fixture with dense lists, several code languages, tables, local and remote images, reference-style image syntax, raw HTML, footnotes, non-ASCII replacement, and Mermaid.
-
-    crazy-markdown-torture/
-    Text, geometry, structured text, and render logs for the crazy Markdown fixture.
-
-    crazy-markdown-torture-pages/
-    Poppler and MuPDF page rasters for the crazy Markdown fixture.
-
-    a4-manuscript.pdf
-    A4 manuscript-style fixture with sustained prose, tables, figures, code, and Mermaid blocks.
-
-    a4-manuscript/
-    Text, pdfinfo, geometry, structured text, and render logs for the A4 manuscript fixture.
-
-    a4-manuscript-pages/
-    Poppler and MuPDF page rasters for the A4 manuscript fixture.
-
-    quote-spacing.pdf
-    Focused witness for code block, block quote, paragraph, and heading spacing.
-
-    quote-spacing/
-    Poppler TSV geometry and MuPDF structured text for the quote spacing witness.
-
-    source-code-spacing.pdf
-    Focused source-code witness for dense code, block quote, paragraph, heading, wrapping, and glyph spacing regressions.
-
-    source-code-spacing/README.txt
-    Manifest for source-code witness tokens, expected image count, and expected stroke behavior.
-
-    source-code-spacing/
-    Text, geometry, structured text, and render logs for the source-code witness.
-
-    source-code-spacing-pages/
-    Poppler and MuPDF page rasters for the source-code witness.
-
-    screenshot-source-code-regressions.pdf
-    Focused screenshot-regression witness for source-code, quotes, headings, local images, remote fallback, and unsupported image syntax.
-
-    screenshot-source-code-regressions/README.txt
-    Manifest for screenshot source-code witness tokens, expected image reuse, fallback text, and expected stroke behavior.
-
-    screenshot-source-code-regressions/
-    Text, geometry, structured text, and render logs for the screenshot source-code witness.
-
-    screenshot-source-code-regressions-pages/
-    Poppler and MuPDF page rasters for the screenshot source-code witness.
-
-    syntax-coloring-manuscript.pdf
-    Focused manuscript proving opt-in syntax coloring without extraction,
-    geometry, or raster regressions.
-
-    syntax-coloring-manuscript/
-    Text, geometry, structured text, and render logs for the syntax-coloring
-    manuscript.
-
-    syntax-coloring-manuscript-pages/
-    Poppler and MuPDF page rasters for the syntax-coloring manuscript.
-
-    rtl-manuscript.pdf
-    Focused manuscript proving Arabic and Hebrew bidi ordering with embedded fonts, logical ToUnicode extraction, bracket mirroring, and geometry witnesses.
-
-    rtl-manuscript/README.txt
-    Manifest for the RTL manuscript witness tokens, extraction expectations, and artifact paths.
-
-    rtl-manuscript/
-    Text, geometry, structured text, and render logs for the RTL manuscript.
-
-    rtl-manuscript-pages/
-    Poppler and MuPDF page rasters for the RTL manuscript.
-
-    text-encoding-profile.pdf
-    One-page PDF proving the portable text encoding replacement profile.
-
-    text-encoding/
-    Text, geometry, structured text, and render logs for the text encoding fixture.
-
-    text-encoding-pages/
-    Poppler and MuPDF page rasters for the text encoding fixture.
-
-    oversized-blocks.pdf
-    PDF proving oversized block split, fallback, and image scaling policies.
-
-    oversized-blocks/
-    Text, geometry, structured text, and render logs for the oversized blocks fixture.
-
-    oversized-blocks-pages/
-    Poppler and MuPDF page rasters for the oversized blocks fixture.
-
-    measured-tables.pdf
-    PDF proving measured table column widths, mixed alignment, row splitting, and repeated headers.
-
-    measured-tables/
-    Text, geometry, structured text, and render logs for the measured table fixture.
-
-    measured-tables-pages/
-    Poppler and MuPDF page rasters for the measured table fixture.
-
-    diagram-policy.pdf
-    PDF proving edge-labeled Mermaid diagrams and unsupported chart fallback.
-
-    diagram-policy/
-    Text, geometry, structured text, and render logs for the diagram policy fixture.
-
-    diagram-policy-pages/
-    Poppler and MuPDF page rasters for the diagram policy fixture.
-
-    embedded-cid-text.pdf
-    PDF proving the opt-in embedded CID text writer with FontFile2, CIDFontType2, Type0, and ToUnicode objects.
-
-    embedded-cid-text/
-    Text, geometry, structured text, and render logs for the embedded CID text fixture.
-
-    embedded-cid-text-pages/
-    Poppler and MuPDF page rasters for the embedded CID text fixture.
-
-    cjk-diacritics-manuscript.pdf
-    PDF proving manuscript-scale CJK line breaking, embedded CID text, and combining diacritic extraction.
-
-    cjk-diacritics-manuscript/
-    Text, geometry, structured text, and render logs for the CJK and diacritics manuscript fixture.
-
-    cjk-diacritics-manuscript-pages/
-    Poppler and MuPDF page rasters for the CJK and diacritics manuscript fixture.
-
-    embedded-font-public-api.pdf
-    PDF proving the public PDFOptions embedded-font role mapping through MarkdownPDFRenderer.
-
-    embedded-font-public-api/
-    Text, geometry, structured text, and render logs for the public embedded-font fixture.
-
-    embedded-font-public-api-pages/
-    Poppler and MuPDF page rasters for the public embedded-font fixture.
+    Page rasters are not written. Whether a rasterizer paints comparable ink on
+    every page is not verified until MarkdownPDF has a rasterizer of its own:
+    see Docs/NOT-VERIFIED.md.
     """
 
     private static let sourceCodeSpacingManifest = """
@@ -2804,12 +1859,7 @@ struct PDFVisualLayoutValidationTests {
     Required artifacts:
     - source-code-spacing.pdf
     - source-code-spacing/text.txt
-    - source-code-spacing/poppler.tsv
-    - source-code-spacing/mupdf-stext.xml
-    - source-code-spacing/poppler-render.log
-    - source-code-spacing/mupdf-render.log
-    - source-code-spacing-pages/poppler/
-    - source-code-spacing-pages/mupdf/
+    - source-code-spacing/words.tsv
     """
 
     private static let screenshotSourceCodeRegressionManifest = """
@@ -2841,12 +1891,7 @@ struct PDFVisualLayoutValidationTests {
     Required artifacts:
     - screenshot-source-code-regressions.pdf
     - screenshot-source-code-regressions/text.txt
-    - screenshot-source-code-regressions/poppler.tsv
-    - screenshot-source-code-regressions/mupdf-stext.xml
-    - screenshot-source-code-regressions/poppler-render.log
-    - screenshot-source-code-regressions/mupdf-render.log
-    - screenshot-source-code-regressions-pages/poppler/
-    - screenshot-source-code-regressions-pages/mupdf/
+    - screenshot-source-code-regressions/words.tsv
     """
 
     private static let rtlManuscriptManifest = """
@@ -2868,13 +1913,7 @@ struct PDFVisualLayoutValidationTests {
     Required artifacts:
     - rtl-manuscript.pdf
     - rtl-manuscript/text.txt
-    - rtl-manuscript/raw-text.txt
-    - rtl-manuscript/poppler.tsv
-    - rtl-manuscript/mupdf-stext.xml
-    - rtl-manuscript/poppler-render.log
-    - rtl-manuscript/mupdf-render.log
-    - rtl-manuscript-pages/poppler/
-    - rtl-manuscript-pages/mupdf/
+    - rtl-manuscript/words.tsv
     """
 
     private func tableRectangleWidths(in inspector: PDFInspector) -> [Double] {
@@ -2892,10 +1931,6 @@ struct PDFVisualLayoutValidationTests {
                         return Double(parts[rectangleIndex - 2])
                     }
             }
-    }
-
-    private func rasterComparisonIssues(poppler: PNMImage, mupdf: PNMImage) -> [String] {
-        embeddedFontRasterIssues(poppler: poppler, mupdf: mupdf)
     }
 
     private func normalizedExtractedText(_ text: String) -> String {
@@ -2927,201 +1962,4 @@ struct PDFVisualLayoutValidationTests {
     private static func pdfHex(_ value: Int) -> String {
         String(format: "<%04X>", locale: Locale(identifier: "en_US_POSIX"), value)
     }
-
-    private func pnmImage(width: Int, height: Int, inkBox: ClosedRange<Int>) -> Data {
-        var data = Data("P5\n\(width) \(height)\n255\n".utf8)
-        for y in 0 ..< height {
-            for x in 0 ..< width {
-                data.append(inkBox.contains(x) && inkBox.contains(y) ? 0 : 255)
-            }
-        }
-        return data
-    }
-}
-
-struct PopplerTextLayout {
-    struct Box: Equatable {
-        var level: Int
-        var page: Int
-        var paragraph: Int
-        var block: Int
-        var line: Int
-        var word: Int
-        var left: Double
-        var top: Double
-        var width: Double
-        var height: Double
-        var text: String
-
-        var right: Double {
-            left + width
-        }
-
-        var bottom: Double {
-            top + height
-        }
-    }
-
-    var boxes: [Box]
-
-    var pages: [Box] {
-        boxes.filter { $0.level == 1 }
-    }
-
-    var lines: [Box] {
-        boxes.filter { $0.level == 4 }
-    }
-
-    var words: [Box] {
-        boxes.filter { $0.level == 5 && !$0.text.isEmpty }
-    }
-
-    init(tsv: String) throws {
-        boxes = try tsv
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .dropFirst()
-            .map { line in
-                try Self.parse(line: String(line))
-            }
-    }
-
-    func visualLayoutIssues() -> [String] {
-        var issues: [String] = []
-        validateBoxesHavePositiveSize(issues: &issues)
-        validateWordsFitPageBounds(issues: &issues)
-        validateWordsDoNotOverlap(issues: &issues)
-        validateLinesDoNotOverlap(issues: &issues)
-        return issues
-    }
-
-    private func validateBoxesHavePositiveSize(issues: inout [String]) {
-        for box in words + lines + pages where box.width <= 0 || box.height <= 0 {
-            issues.append("\(boxDescription(box)) has non-positive size")
-        }
-    }
-
-    private func validateWordsFitPageBounds(issues: inout [String]) {
-        let pagesByNumber = Dictionary(uniqueKeysWithValues: pages.map { ($0.page, $0) })
-        for word in words {
-            guard let page = pagesByNumber[word.page] else {
-                issues.append("\(boxDescription(word)) references missing page \(word.page)")
-                continue
-            }
-
-            // Linux Poppler can report non-zero page-row origins on later
-            // pages even when the PDF MediaBox starts at 0,0. Generated
-            // MarkdownPDF pages use zero-origin MediaBoxes, so use the page
-            // size row as the bounds and ignore its reported origin.
-            let pageLeft = 0.0
-            let pageTop = 0.0
-            let pageRight = page.width
-            let pageBottom = page.height
-
-            if word.left < pageLeft - tolerance
-                || word.top < pageTop - tolerance
-                || word.right > pageRight + tolerance
-                || word.bottom > pageBottom + tolerance
-            {
-                issues.append("\(boxDescription(word)) is outside page bounds")
-            }
-        }
-    }
-
-    private func validateWordsDoNotOverlap(issues: inout [String]) {
-        for group in groupedWordsByLine() {
-            let sortedWords = group.sorted { left, right in
-                if left.left == right.left {
-                    return left.word < right.word
-                }
-                return left.left < right.left
-            }
-
-            for (left, right) in zip(sortedWords, sortedWords.dropFirst()) {
-                if right.left < left.right - tolerance {
-                    issues.append("\(boxDescription(left)) overlaps \(boxDescription(right))")
-                }
-            }
-        }
-    }
-
-    private func validateLinesDoNotOverlap(issues: inout [String]) {
-        for group in groupedLinesByBlock() {
-            let sortedLines = group.sorted { left, right in
-                if left.top == right.top {
-                    return left.line < right.line
-                }
-                return left.top < right.top
-            }
-
-            for topIndex in sortedLines.indices {
-                let top = sortedLines[topIndex]
-                for bottom in sortedLines.dropFirst(topIndex + 1) {
-                    if bottom.top >= top.bottom - tolerance {
-                        break
-                    }
-                    if boxesOverlapHorizontally(top, bottom) {
-                        issues.append("\(boxDescription(top)) collides vertically with \(boxDescription(bottom))")
-                    }
-                }
-            }
-        }
-    }
-
-    private func boxesOverlapHorizontally(_ left: Box, _ right: Box) -> Bool {
-        min(left.right, right.right) > max(left.left, right.left) + tolerance
-    }
-
-    private func groupedWordsByLine() -> [[Box]] {
-        Dictionary(grouping: words) { box in
-            "\(box.page):\(box.paragraph):\(box.block):\(box.line)"
-        }.values.map(Array.init)
-    }
-
-    private func groupedLinesByBlock() -> [[Box]] {
-        Dictionary(grouping: lines) { box in
-            "\(box.page):\(box.paragraph):\(box.block)"
-        }.values.map(Array.init)
-    }
-
-    private func boxDescription(_ box: Box) -> String {
-        "page \(box.page) paragraph \(box.paragraph) block \(box.block) line \(box.line) word \(box.word) '\(box.text)'"
-    }
-
-    private static func parse(line: String) throws -> Box {
-        let columns = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
-        guard columns.count >= 12,
-              let level = Int(columns[0]),
-              let page = Int(columns[1]),
-              let paragraph = Int(columns[2]),
-              let block = Int(columns[3]),
-              let lineNumber = Int(columns[4]),
-              let word = Int(columns[5]),
-              let left = Double(columns[6]),
-              let top = Double(columns[7]),
-              let width = Double(columns[8]),
-              let height = Double(columns[9])
-        else {
-            throw PDFVisualLayoutValidationError.invalidTSVLine(line)
-        }
-
-        return Box(
-            level: level,
-            page: page,
-            paragraph: paragraph,
-            block: block,
-            line: lineNumber,
-            word: word,
-            left: left,
-            top: top,
-            width: width,
-            height: height,
-            text: columns[11...].joined(separator: "\t"),
-        )
-    }
-
-    private let tolerance = 0.5
-}
-
-private enum PDFVisualLayoutValidationError: Error {
-    case invalidTSVLine(String)
 }
