@@ -248,10 +248,7 @@ private struct Format4CMap {
         }
 
         let code = UInt16(scalar.value)
-        guard let segment = segments.first(where: { $0.startCode <= code && code <= $0.endCode }) else {
-            return nil
-        }
-        guard code != 0xFFFF else {
+        guard let segment = segments.first(where: { $0.startCode <= code && code <= $0.endCode }), code != 0xFFFF else {
             return nil
         }
 

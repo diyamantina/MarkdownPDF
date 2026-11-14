@@ -86,11 +86,9 @@ private struct BlockParser {
     }
 
     private static func stripFrontMatter(_ lines: [String]) -> [String] {
-        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---" else {
-            return lines
-        }
-
-        guard let endIndex = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" }) else {
+        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---",
+              let endIndex = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" })
+        else {
             return lines
         }
 

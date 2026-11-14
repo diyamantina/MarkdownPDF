@@ -145,10 +145,8 @@ struct PDFToUnicodeCMap {
     }
 
     private static func canContinueRange(from current: Mapping, to next: Mapping) -> Bool {
-        guard current.code < UInt16.max, current.code + 1 == next.code else {
-            return false
-        }
-        guard let currentScalar = singleBasicMultilingualPlaneScalar(current.unicode),
+        guard current.code < UInt16.max, current.code + 1 == next.code,
+              let currentScalar = singleBasicMultilingualPlaneScalar(current.unicode),
               let nextScalar = singleBasicMultilingualPlaneScalar(next.unicode)
         else {
             return false

@@ -199,10 +199,7 @@ struct InlineParser {
                 return nil
             }
             let afterLabel = source.index(after: labelEnd)
-            guard afterLabel < source.endIndex, source[afterLabel] == "(" else {
-                return nil
-            }
-            guard let destination = parseDestination(from: source.index(after: afterLabel)) else {
+            guard afterLabel < source.endIndex, source[afterLabel] == "(", let destination = parseDestination(from: source.index(after: afterLabel)) else {
                 return nil
             }
 
@@ -224,10 +221,7 @@ struct InlineParser {
                 return nil
             }
             let afterLabel = source.index(after: labelEnd)
-            guard afterLabel < source.endIndex, source[afterLabel] == "(" else {
-                return nil
-            }
-            guard let destination = parseDestination(from: source.index(after: afterLabel)) else {
+            guard afterLabel < source.endIndex, source[afterLabel] == "(", let destination = parseDestination(from: source.index(after: afterLabel)) else {
                 return nil
             }
 

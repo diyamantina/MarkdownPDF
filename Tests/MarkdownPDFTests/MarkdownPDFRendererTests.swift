@@ -16,9 +16,9 @@ struct MarkdownPDFRendererTests {
             let data = SyntheticTrueTypeFont.data(glyphProfile: profile, includeGlyphOutlines: true)
             return .allRoles(PDFOptions.EmbeddedFontSource(data: data, baseName: "Marker Witness"))
         }
-        /// Embedded text is emitted as CID hex (`<0010> Tj`), never as a literal
-        /// string, so counting text-showing operators is the only way to tell a
-        /// drawn marker from an omitted one on that path.
+        // Embedded text is emitted as CID hex (`<0010> Tj`), never as a literal
+        // string, so counting text-showing operators is the only way to tell a
+        // drawn marker from an omitted one on that path.
         func showOperators(_ data: Data) -> Int {
             PDFInspector(data).text.components(separatedBy: " Tj").count - 1
         }
@@ -441,9 +441,9 @@ struct MarkdownPDFRendererTests {
         // Shallow, realistic nesting is untouched: three levels fit one page.
         #expect(try pageCount(depth: 3) == 1)
 
-        /// Block quotes indent through the same clamp. A list of deep quotes, or
-        /// quotes interleaved with lists, otherwise pushed the content column off the
-        /// page and every glyph landed outside the MediaBox, invisible.
+        // Block quotes indent through the same clamp. A list of deep quotes, or
+        // quotes interleaved with lists, otherwise pushed the content column off the
+        // page and every glyph landed outside the MediaBox, invisible.
         func offPageTextOps(_ markdown: String) throws -> Int {
             let text = try PDFInspector(MarkdownPDFRenderer().render(markdown: markdown)).text
             let rightEdge = PDFOptions.PageSize.a4.width - PDFOptions.Margins.standard.right

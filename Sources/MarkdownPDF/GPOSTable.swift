@@ -104,10 +104,7 @@ struct GPOSTable {
 
         func pairValues(first: UInt16, second: UInt16) -> PairCell? {
             if isFormat1 {
-                guard let setIndex = coverage[first], setIndex < pairSets.count else {
-                    return nil
-                }
-                guard let record = pairSets[setIndex].first(where: { $0.secondGlyph == second }) else {
+                guard let setIndex = coverage[first], setIndex < pairSets.count, let record = pairSets[setIndex].first(where: { $0.secondGlyph == second }) else {
                     return nil
                 }
                 return PairCell(first: record.firstValue, second: record.secondValue)

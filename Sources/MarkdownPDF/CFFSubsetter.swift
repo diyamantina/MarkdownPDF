@@ -106,8 +106,8 @@ enum CFFSubsetter {
         let fdSelectBytes = writeFDSelect(fds: fds)
         let privateDicts = program.privateDicts.map { writePrivateDict($0) }
 
-        /// The Font DICT references its Private DICT by (size, absolute offset); build with a
-        /// placeholder offset first so the FDArray INDEX size is fixed, then patch.
+        // The Font DICT references its Private DICT by (size, absolute offset); build with a
+        // placeholder offset first so the FDArray INDEX size is fixed, then patch.
         func buildFontDicts(privateOffsets: [Int]) -> [UInt8] {
             let dicts = program.privateDicts.indices.map { index -> [UInt8] in
                 var dict = encodeInt(privateDicts[index].count)

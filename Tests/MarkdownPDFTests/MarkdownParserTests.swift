@@ -60,8 +60,8 @@ struct MarkdownParserTests {
         let quoteBomb = MarkdownParser().parse(String(repeating: "> ", count: 5000) + "x")
         #expect(quoteBomb.blocks.count == 1)
 
-        /// Depth is capped, and the deepest item keeps its text as prose rather
-        /// than recursing further or dropping it.
+        // Depth is capped, and the deepest item keeps its text as prose rather
+        // than recursing further or dropping it.
         func depth(_ blocks: [MarkdownBlock]) -> Int {
             blocks.reduce(0) { deepest, block in
                 switch block {
