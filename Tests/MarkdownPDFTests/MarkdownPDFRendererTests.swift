@@ -595,7 +595,7 @@ struct MarkdownPDFRendererTests {
         // document, not an aborted stub.
         let inspector = try PDFInspector(data)
         #expect(inspector.text.contains("/ToUnicode"))
-        let extracted = try PDFValidation.pdftotext(data: data, name: "notdef-actual-text").output
+        let extracted = try PDFValidation.text(data, artifact: "notdef-actual-text")
         #expect(extracted.contains("AB\(missing)CD"))
     }
 
@@ -617,7 +617,7 @@ struct MarkdownPDFRendererTests {
         // The uppercase letters the font does draw still recover through ToUnicode.
         let inspector = try PDFInspector(data)
         #expect(inspector.text.contains("/ToUnicode"))
-        let extracted = try PDFValidation.pdftotext(data: data, name: "multiple-notdef-actual-text").output
+        let extracted = try PDFValidation.text(data, artifact: "multiple-notdef-actual-text")
         #expect(extracted.contains("AB😀CD emoji then 中 cjk tail"))
     }
 
@@ -638,7 +638,7 @@ struct MarkdownPDFRendererTests {
         // The all-notdef font carries no `/ToUnicode`, which is legal in a plain PDF.
         let inspector = try PDFInspector(data)
         #expect(!inspector.text.contains("/ToUnicode"))
-        let extracted = try PDFValidation.pdftotext(data: data, name: "all-notdef-actual-text").output
+        let extracted = try PDFValidation.text(data, artifact: "all-notdef-actual-text")
         #expect(extracted.contains("xyz"))
     }
 
@@ -890,13 +890,13 @@ struct MarkdownPDFRendererTests {
         - [ ]not a task
         """)
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "gfm-footnotes-tasklists")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "gfm-footnotes-tasklists-text")
-        let extractedText = normalizedExtractedText(textResult.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "gfm-footnotes-tasklists")
+        let textResult = try PDFValidation.text(data, artifact: "gfm-footnotes-tasklists-text")
+        let extractedText = normalizedExtractedText(textResult)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
+        #expect(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
         #expect(Set(inspector.namedDestinationNames).isSuperset(of: ["fn-1", "fnref-1"]))
         #expect(inspector.outlineItemCount == 0)
         #expect(inspector.internalLinkDestinationNames.count(where: { $0 == "fn-1" }) == 2)
@@ -934,28 +934,26 @@ struct MarkdownPDFRendererTests {
         """)
         try PDFValidation.writeArtifact(data, name: "math-typesetting-subset.pdf")
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-typesetting-subset")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "math-typesetting-subset-text")
-        let mupdf = try PDFValidation.mutoolStructuredText(data: data, name: "math-typesetting-subset-mupdf")
-        let extractedText = normalizedExtractedText(textResult.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "math-typesetting-subset")
+        let textResult = try PDFValidation.text(data, artifact: "math-typesetting-subset-text")
+        let extractedText = normalizedExtractedText(textResult)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try #require(mupdf.exitCode == 0, "mutool structured text failed:\n\(mupdf.output)")
-        let structuredText = try MuPDFStructuredText(xml: mupdf.output)
-        let visibleGlyphCount = structuredText.glyphs.count(where: { !$0.isWhitespace })
-        let geometryIssues = structuredText.characterQuadIssues()
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
+        #expect(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        let layout = try ReaderTextLayout(data: data)
+        let visibleGlyphCount = layout.visibleCharacterCount
+        let geometryIssues = layout.visualLayoutIssues()
 
         #expect(extractedText.contains("Inline"))
-        #expect(extractedText.contains("frac(x^{2}, sqrt(y+1))"), "Unexpected extracted text:\n\(textResult.output)")
-        #expect(extractedText.contains("sum_{i=1}^{n} i"), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(extractedText.contains("frac(x^{2}, sqrt(y+1))"), "Unexpected extracted text:\n\(textResult)")
+        #expect(extractedText.contains("sum_{i=1}^{n} i"), "Unexpected extracted text:\n\(textResult)")
         #expect(streamText.contains("/ActualText (frac\\(x^{2}, sqrt\\(y+1\\)\\))"))
         #expect(streamText.components(separatedBy: " re f").count - 1 >= 2)
         #expect(visibleGlyphCount >= 20)
         #expect(
             geometryIssues.isEmpty,
-            "MuPDF character layout has visual issues:\n\(geometryIssues.joined(separator: "\n"))",
+            "The character layout has visual issues:\n\(geometryIssues.joined(separator: "\n"))",
         )
         #expect(inspector.hasValidXrefOffsets())
         #expect(inspector.streamLengthsMatch())
@@ -974,12 +972,12 @@ struct MarkdownPDFRendererTests {
         """
         let data = try MarkdownPDFRenderer().render(markdown: markdown)
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "unresolvable-image")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "unresolvable-image-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        let extracted = normalizedExtractedText(textResult.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "unresolvable-image")
+        let textResult = try PDFValidation.text(data, artifact: "unresolvable-image-text")
+        try #require(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        let extracted = normalizedExtractedText(textResult)
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
         // The document still renders: heading and body survive.
         #expect(extracted.contains("Heading"))
         #expect(extracted.contains("Body text after the image"))
@@ -1000,23 +998,21 @@ struct MarkdownPDFRendererTests {
         $$
         """)
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-spacing")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "math-spacing-text")
-        let mupdf = try PDFValidation.mutoolStructuredText(data: data, name: "math-spacing-mupdf")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try #require(mupdf.exitCode == 0, "mutool failed:\n\(mupdf.output)")
-        let extracted = normalizedExtractedText(textResult.output)
-        let structured = try MuPDFStructuredText(xml: mupdf.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "math-spacing")
+        let textResult = try PDFValidation.text(data, artifact: "math-spacing-text")
+        try #require(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        let extracted = normalizedExtractedText(textResult)
+        let structured = try ReaderTextLayout(data: data)
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
         // No spacing command leaked as visible LaTeX source (no formula fallback).
-        #expect(!extracted.contains("quad"), "Spacing fell back to source:\n\(textResult.output)")
+        #expect(!extracted.contains("quad"), "Spacing fell back to source:\n\(textResult)")
         #expect(extracted.contains("stays in the paragraph"))
-        // The negative thin space (\!) and the positive spaces produce no corrupt
-        // or flipped character quads.
+        // The negative thin space (\!) and the positive spaces produce no word box
+        // without a size, off the page, or over another.
         #expect(
-            structured.characterQuadIssues().isEmpty,
-            "spacing produced bad quads:\n\(structured.characterQuadIssues().joined(separator: "\n"))",
+            structured.visualLayoutIssues().isEmpty,
+            "spacing produced bad boxes:\n\(structured.visualLayoutIssues().joined(separator: "\n"))",
         )
         #expect(inspector.hasValidXrefOffsets())
     }
@@ -1026,13 +1022,11 @@ struct MarkdownPDFRendererTests {
         func rightmostGlyphX(_ markdown: String, name: String) throws -> Double {
             let data = try MarkdownPDFRenderer(options: PDFOptions(mathTypesetting: .enabled))
                 .render(markdown: markdown)
-            let mupdf = try PDFValidation.mutoolStructuredText(data: data, name: name)
-            try #require(mupdf.exitCode == 0, "mutool failed:\n\(mupdf.output)")
-            let structured = try MuPDFStructuredText(xml: mupdf.output)
-            return structured.pages.flatMap(\.lines).flatMap(\.glyphs)
-                .filter { !$0.isWhitespace }
-                .map(\.box.right)
-                .max() ?? 0
+            // The right end of what the formula draws: the reader stretches the box of
+            // a formula to the end of the last glyph shown inside its /ActualText span.
+            let words = try ReaderTextLayout(data: data).words
+            try #require(!words.isEmpty, "\(name): the formula drew no text")
+            return words.map(\.right).max() ?? 0
         }
 
         // The same formula with a wider gap pushes its trailing glyph further right.
@@ -1048,20 +1042,20 @@ struct MarkdownPDFRendererTests {
         ).render(markdown: "Pressure is $\\frac{a}{b}$, the bound is $\\sqrt{x}$, and a power $x^{\\frac{1}{2}}$ inline.")
         let inspector = PDFInspector(data)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "inline-math-box")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "inline-math-box-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        let extracted = normalizedExtractedText(textResult.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "inline-math-box")
+        let textResult = try PDFValidation.text(data, artifact: "inline-math-box-text")
+        try #require(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        let extracted = normalizedExtractedText(textResult)
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
         // The inline fraction bar, radical overbar, and the fraction nested inside
         // the superscript each emit rule rectangles in the text flow rather than
         // the parenthesized prose fallback. The superscript fraction proves the
         // box survives the scripts reconstruction.
         #expect(streamText.components(separatedBy: " re f").count - 1 >= 3)
         // ActualText preserves a readable linearization for extraction.
-        #expect(extracted.contains("frac(a, b)"), "Unexpected extraction:\n\(textResult.output)")
-        #expect(extracted.contains("sqrt(x)"), "Unexpected extraction:\n\(textResult.output)")
+        #expect(extracted.contains("frac(a, b)"), "Unexpected extraction:\n\(textResult)")
+        #expect(extracted.contains("sqrt(x)"), "Unexpected extraction:\n\(textResult)")
         #expect(extracted.contains("Pressure is"))
         #expect(extracted.contains("inline"))
         #expect(inspector.hasValidXrefOffsets())
@@ -1073,13 +1067,13 @@ struct MarkdownPDFRendererTests {
         let data = try MarkdownPDFRenderer(
             options: PDFOptions(mathTypesetting: .enabled),
         ).render(markdown: #"Unsupported $\unknown{x}$ stays visible."#)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "unsupported-math-fallback")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "unsupported-math-fallback-text")
-        let extractedText = normalizedExtractedText(textResult.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "unsupported-math-fallback")
+        let textResult = try PDFValidation.text(data, artifact: "unsupported-math-fallback-text")
+        let extractedText = normalizedExtractedText(textResult)
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        #expect(extractedText.contains(#"$\unknown{x}$"#), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
+        #expect(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        #expect(extractedText.contains(#"$\unknown{x}$"#), "Unexpected extracted text:\n\(textResult)")
     }
 
     @Test("Renders fixed left right math delimiters")
@@ -1104,17 +1098,17 @@ struct MarkdownPDFRendererTests {
         $$
         """)
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-fixed-delimiters")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "math-fixed-delimiters-text")
-        let extractedText = normalizedExtractedText(textResult.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "math-fixed-delimiters")
+        let textResult = try PDFValidation.text(data, artifact: "math-fixed-delimiters-text")
+        let extractedText = normalizedExtractedText(textResult)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        #expect(extractedText.contains("(frac(x, y))"), "Unexpected extracted text:\n\(textResult.output)")
-        #expect(extractedText.contains("<x>"), "Unexpected extracted text:\n\(textResult.output)")
-        #expect(extractedText.contains("frac(x, y)}"), "Unexpected extracted text:\n\(textResult.output)")
-        #expect(extractedText.contains(#"/x\"#), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
+        #expect(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        #expect(extractedText.contains("(frac(x, y))"), "Unexpected extracted text:\n\(textResult)")
+        #expect(extractedText.contains("<x>"), "Unexpected extracted text:\n\(textResult)")
+        #expect(extractedText.contains("frac(x, y)}"), "Unexpected extracted text:\n\(textResult)")
+        #expect(extractedText.contains(#"/x\"#), "Unexpected extracted text:\n\(textResult)")
         #expect(streamText.contains("/ActualText (\\(frac\\(x, y\\)\\))"))
         #expect(streamText.components(separatedBy: " re f").count - 1 >= 2)
     }
@@ -1124,13 +1118,13 @@ struct MarkdownPDFRendererTests {
         let data = try MarkdownPDFRenderer(
             options: PDFOptions(mathTypesetting: .enabled),
         ).render(markdown: #"Malformed $\left(x$ stays visible."#)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-malformed-left-fallback")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "math-malformed-left-fallback-text")
-        let extractedText = normalizedExtractedText(textResult.output)
+        let structureIssues = PDFValidation.structureIssues(data, name: "math-malformed-left-fallback")
+        let textResult = try PDFValidation.text(data, artifact: "math-malformed-left-fallback-text")
+        let extractedText = normalizedExtractedText(textResult)
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        #expect(extractedText.contains(#"$\left(x$"#), "Unexpected extracted text:\n\(textResult.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
+        #expect(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        #expect(extractedText.contains(#"$\left(x$"#), "Unexpected extracted text:\n\(textResult)")
     }
 
     @Test("Block quotes indent without vertical border strokes")
@@ -1197,14 +1191,13 @@ struct MarkdownPDFRendererTests {
         let coloredData = try MarkdownPDFRenderer(
             options: PDFOptions(codeSyntaxHighlighting: .enabled),
         ).render(markdown: markdown)
-        let plainText = try PDFValidation.pdftotext(data: plainData, name: "plain-code-extraction")
-        let coloredText = try PDFValidation.pdftotext(data: coloredData, name: "colored-code-extraction")
+        let plainText = try PDFValidation.text(plainData, artifact: "plain-code-extraction")
+        let coloredText = try PDFValidation.text(coloredData, artifact: "colored-code-extraction")
         let coloredStream = PDFInspector(coloredData).streams.map(\.body).joined(separator: "\n")
         let plainStream = PDFInspector(plainData).streams.map(\.body).joined(separator: "\n")
 
-        try #require(plainText.exitCode == 0, "pdftotext failed for plain code:\n\(plainText.output)")
-        try #require(coloredText.exitCode == 0, "pdftotext failed for colored code:\n\(coloredText.output)")
-        #expect(normalizedExtractedText(plainText.output) == normalizedExtractedText(coloredText.output))
+        try #require(plainText.contains("extractable comment"), "no code was extracted from the plain render:\n\(plainText)")
+        #expect(normalizedExtractedText(plainText) == normalizedExtractedText(coloredText))
         #expect(!plainStream.contains(sourceCodeKeywordOperator))
         #expect(coloredStream.contains(sourceCodeKeywordOperator))
         #expect(coloredStream.contains(sourceCodeCommentOperator))
@@ -1275,20 +1268,19 @@ struct MarkdownPDFRendererTests {
         let defaultData = try MarkdownPDFRenderer(
             options: PDFOptions(codeSyntaxHighlighting: .enabled),
         ).render(markdown: markdown)
-        let defaultText = try PDFValidation.pdftotext(data: defaultData, name: "theme-default-text")
-        try #require(defaultText.exitCode == 0, "pdftotext failed for default theme:\n\(defaultText.output)")
+        let defaultText = try PDFValidation.text(defaultData, artifact: "theme-default-text")
+        try #require(defaultText.contains("theme comment"), "no code was extracted from the default theme:\n\(defaultText)")
 
         for (name, theme) in [("dark", PDFOptions.Theme.dark), ("print", PDFOptions.Theme.print)] {
             let data = try MarkdownPDFRenderer(
                 options: PDFOptions(codeSyntaxHighlighting: .enabled, theme: theme),
             ).render(markdown: markdown)
             let inspector = PDFInspector(data)
-            let qpdf = try PDFValidation.qpdfCheck(data: data, name: "theme-\(name)")
-            let text = try PDFValidation.pdftotext(data: data, name: "theme-\(name)-text")
+            let structureIssues = PDFValidation.structureIssues(data, name: "theme-\(name)")
+            let text = try PDFValidation.text(data, artifact: "theme-\(name)-text")
 
-            #expect(qpdf.exitCode == 0, "qpdf --check failed for \(name):\n\(qpdf.output)")
-            try #require(text.exitCode == 0, "pdftotext failed for \(name):\n\(text.output)")
-            #expect(normalizedExtractedText(text.output) == normalizedExtractedText(defaultText.output))
+            #expect(structureIssues.isEmpty, "the PDF structure is not sound for \(name):\n\(structureIssues.joined(separator: "\n"))")
+            #expect(normalizedExtractedText(text) == normalizedExtractedText(defaultText))
             #expect(data != defaultData)
             #expect(inspector.streams.contains { !$0.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
 
@@ -1345,11 +1337,11 @@ struct MarkdownPDFRendererTests {
         ```
         """)
         let stream = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "unsupported-code-coloring")
+        let textResult = try PDFValidation.text(data, artifact: "unsupported-code-coloring")
 
-        try #require(textResult.exitCode == 0, "pdftotext failed for unsupported code coloring:\n\(textResult.output)")
-        #expect(textResult.output.contains("plainBlock"))
-        #expect(!textResult.output.contains("Unsupported"))
+        try #require(!textResult.isEmpty, "no text was extracted for unsupported code coloring:\n\(textResult)")
+        #expect(textResult.contains("plainBlock"))
+        #expect(!textResult.contains("Unsupported"))
         #expect(!stream.contains(sourceCodeKeywordOperator))
         #expect(!stream.contains(sourceCodeCommentOperator))
         #expect(!stream.contains(sourceCodeStringOperator))
@@ -1388,13 +1380,13 @@ struct MarkdownPDFRendererTests {
         SELECT name FROM records -- sql
         ```
         """)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "additional-code-coloring")
+        let textResult = try PDFValidation.text(data, artifact: "additional-code-coloring")
         let stream = PDFInspector(data).streams.map(\.body).joined(separator: "\n")
 
-        try #require(textResult.exitCode == 0, "pdftotext failed for additional code coloring:\n\(textResult.output)")
-        #expect(textResult.output.contains("shell"))
-        #expect(textResult.output.contains("pascal"))
-        #expect(textResult.output.contains("SELECT"))
+        try #require(!textResult.isEmpty, "no text was extracted for additional code coloring:\n\(textResult)")
+        #expect(textResult.contains("shell"))
+        #expect(textResult.contains("pascal"))
+        #expect(textResult.contains("SELECT"))
         #expect(stream.contains(sourceCodeKeywordOperator))
         #expect(stream.contains(sourceCodeCommentOperator))
         #expect(stream.contains(sourceCodeStringOperator))
@@ -1412,12 +1404,12 @@ struct MarkdownPDFRendererTests {
             A["Input"] --> B["PDF"]
         ```
         """)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "syntax-coloring-mermaid")
+        let textResult = try PDFValidation.text(data, artifact: "syntax-coloring-mermaid")
 
-        try #require(textResult.exitCode == 0, "pdftotext failed for Mermaid with syntax coloring:\n\(textResult.output)")
-        #expect(textResult.output.contains("Input"))
-        #expect(textResult.output.contains("PDF"))
-        #expect(!textResult.output.contains("graph LR"))
+        try #require(!textResult.isEmpty, "no text was extracted for Mermaid with syntax coloring:\n\(textResult)")
+        #expect(textResult.contains("Input"))
+        #expect(textResult.contains("PDF"))
+        #expect(!textResult.contains("graph LR"))
     }
 
     @Test("Writes minimal canonical PDF for one text page")
@@ -1613,8 +1605,8 @@ struct MarkdownPDFRendererTests {
         let inspector = PDFInspector(data)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
         #expect(streamText.contains("2211"), "Expected a ToUnicode entry for U+2211 (summation)")
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-unicode-coverage")
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        let structureIssues = PDFValidation.structureIssues(data, name: "math-unicode-coverage")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
     }
 
     @Test("Embedded font renderer uses CJK format 12 advances for wrapping")
@@ -1644,11 +1636,11 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.text.contains("<0003> <8A9E>"))
         #expect(lineYCoordinates.count == 2)
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "cjk-format12-widths")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "cjk-format12-widths-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        #expect(textResult.output.filter { !$0.isWhitespace }.contains("漢字語漢字語"))
+        let structureIssues = PDFValidation.structureIssues(data, name: "cjk-format12-widths")
+        try #require(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
+        let textResult = try PDFValidation.text(data, artifact: "cjk-format12-widths-text")
+        try #require(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        #expect(textResult.filter { !$0.isWhitespace }.contains("漢字語漢字語"))
     }
 
     @Test("Embedded font renderer emits shaped ligature ToUnicode witnesses")
@@ -1675,15 +1667,16 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.text.contains("<0006> <00660069>"))
         try PDFValidation.writeArtifact(data, name: "shaped-ligature-renderer-witness.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "shaped-ligature-renderer-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "shaped-ligature-renderer-text")
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        #expect(textResult.output.contains("file"))
-        let mupdfText = try PDFValidation.mutoolStructuredText(data: data, name: "shaped-ligature-renderer-mupdf")
-        try #require(mupdfText.exitCode == 0, "mutool structured text failed:\n\(mupdfText.output)")
-        let layout = try MuPDFStructuredText(xml: mupdfText.output)
-        #expect(layout.characterQuadIssues().isEmpty)
+        let structureIssues = PDFValidation.structureIssues(data, name: "shaped-ligature-renderer")
+        try #require(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
+        let textResult = try PDFValidation.text(data, artifact: "shaped-ligature-renderer-text")
+        try #require(!textResult.isEmpty, "no text was extracted:\n\(textResult)")
+        #expect(textResult.contains("file"))
+        // The ligature glyph stands for two characters and takes one advance: the
+        // word is whole, with a width, inside the page.
+        let layout = try ReaderTextLayout(data: data)
+        #expect(layout.words.map(\.text) == ["file"])
+        #expect(layout.visualLayoutIssues().isEmpty)
     }
 
     @Test("Embedded font renderer rejects unsupported complex-script shaping")
@@ -1827,9 +1820,9 @@ struct MarkdownPDFRendererTests {
         $$
         """)
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "font-backed-math-profile")
+        let structureIssues = PDFValidation.structureIssues(data, name: "font-backed-math-profile")
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound:\n\(structureIssues.joined(separator: "\n"))")
         #expect(inspector.text.contains("/EF1"))
         #expect(inspector.text.contains("/FontFile2"))
         #expect(inspector.text.contains("/ActualText (frac\\(A, B\\))"))
@@ -1878,9 +1871,8 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.text.contains("/FontFile2"))
         #expect(inspector.text.contains("/ToUnicode"))
 
-        // Run the full visual witness battery so a wrong CID `/W` width array or
-        // mis-scaled FontDescriptor metric fails the build instead of shipping a
-        // garbled render. See #194 and #195.
+        // Run the witness battery so a wrong CID `/W` width array fails the build
+        // instead of shipping a garbled render. See #194 and #195.
         try assertEmbeddedFontVisualWitness(
             data,
             name: "open-font-fixture",
@@ -1915,8 +1907,8 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.text.contains("/ToUnicode"))
 
         // Extraction alone is blind to a wrong CID `/W` width array, so run the
-        // full visual witness battery (Poppler word-box geometry, MuPDF quads,
-        // and a Poppler-vs-MuPDF raster comparison). Diacritic Latin, Cyrillic,
+        // witness battery, which builds word boxes from the declared widths and
+        // rejects words that overlap or leave the page. Diacritic Latin, Cyrillic,
         // and Greek are covered by the open CI fonts (DejaVu Sans on Linux,
         // Liberation Sans on macOS) and round-trip through the subset and
         // ToUnicode map; complex tables keep their headers and mixed-script
@@ -1935,6 +1927,19 @@ struct MarkdownPDFRendererTests {
             ],
             minWords: 50,
         )
+    }
+
+    /// What three tests of this suite ended with: an outside rasterizer drew the
+    /// pages. For the two embedded-font witnesses a second rasterizer drew them
+    /// too and the ink of the two had to agree; for the PNG image test the first
+    /// page had to come out as an image with a size.
+    @Test(
+        "Pages of the renderer witnesses rasterize",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+        arguments: ["open-font-fixture", "multilingual-corpus", "png-image"],
+    )
+    func rasterWitness(_ name: String) {
+        PDFValidation.notVerified("the raster of \(name)")
     }
 
     @Test("Renders Markdown links as PDF URI annotations")
@@ -2001,10 +2006,9 @@ struct MarkdownPDFRendererTests {
         let methodsPage = try #require(pages["methods"])
         let resultsPage = try #require(pages["results"])
         let tocStream = try #require(inspector.streams.first { $0.body.contains("(Table of Contents)") }?.body)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "generated-toc")
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "generated-toc")
-        let pdfinfo = try PDFValidation.pdfinfo(data: data, name: "generated-toc")
-        let info = PDFValidation.parsedInfo(from: pdfinfo)
+        let textResult = try PDFValidation.text(data, artifact: "generated-toc")
+        let structureIssues = PDFValidation.structureIssues(data, name: "generated-toc")
+        let document = try PDFDocumentReader(data: data)
 
         #expect(methodsPage > 1)
         #expect(resultsPage >= methodsPage)
@@ -2015,11 +2019,13 @@ struct MarkdownPDFRendererTests {
         #expect(inspector.internalLinkDestinationNames.contains("methods"))
         #expect(inspector.internalLinkDestinationNames.contains("results"))
         #expect(inspector.linkAnnotationCount >= inspector.namedDestinationNames.count)
-        #expect(qpdf.exitCode == 0, "qpdf --check failed for generated ToC PDF:\n\(qpdf.output)")
-        #expect(pdfinfo.exitCode == 0, "pdfinfo failed for generated ToC PDF:\n\(pdfinfo.output)")
-        #expect(info["Pages"] == "\(inspector.pageCount)")
-        #expect(textResult.exitCode == 0, "pdftotext failed for generated ToC PDF:\n\(textResult.output)")
-        #expect(textResult.output.contains("Table of Contents"))
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound for generated ToC PDF:\n\(structureIssues.joined(separator: "\n"))")
+        #expect(document.pageCount == inspector.pageCount)
+        // The contents entries lead where the page numbers they print say.
+        #expect(document.outline.first { $0.title == "Methods" }?.pageIndex == methodsPage - 1)
+        #expect(document.outline.first { $0.title == "Results" }?.pageIndex == resultsPage - 1)
+        #expect(!textResult.isEmpty, "no text was extracted for generated ToC PDF:\n\(textResult)")
+        #expect(textResult.contains("Table of Contents"))
         #expect(
             inspector.canonicalStructureIssues().isEmpty,
             "Canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
@@ -2038,7 +2044,7 @@ struct MarkdownPDFRendererTests {
         """)
         let inspector = PDFInspector(data)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "mermaid-flowchart")
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-flowchart")
 
         #expect(streamText.contains("(Markdown )"))
         #expect(streamText.contains("(source)"))
@@ -2046,9 +2052,9 @@ struct MarkdownPDFRendererTests {
         #expect(streamText.contains("(parser)"))
         #expect(streamText.contains(" re f"))
         #expect(!streamText.contains("(flowchart TD)"))
-        #expect(textResult.exitCode == 0, "pdftotext failed for Mermaid PDF:\n\(textResult.output)")
-        #expect(textResult.output.contains("Markdown source"))
-        #expect(textResult.output.contains("PDF bytes"))
+        #expect(!textResult.isEmpty, "no text was extracted for Mermaid PDF:\n\(textResult)")
+        #expect(textResult.contains("Markdown source"))
+        #expect(textResult.contains("PDF bytes"))
         #expect(
             inspector.canonicalStructureIssues().isEmpty,
             "Canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
@@ -2063,11 +2069,11 @@ struct MarkdownPDFRendererTests {
             Alice->>Bob: Hello
         ```
         """)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "unsupported-mermaid")
+        let textResult = try PDFValidation.text(data, artifact: "unsupported-mermaid")
 
-        #expect(textResult.exitCode == 0, "pdftotext failed for unsupported Mermaid fallback:\n\(textResult.output)")
-        #expect(textResult.output.contains("Unsupported Mermaid diagram"))
-        #expect(textResult.output.contains("sequenceDiagram"))
+        #expect(!textResult.isEmpty, "no text was extracted for unsupported Mermaid fallback:\n\(textResult)")
+        #expect(textResult.contains("Unsupported Mermaid diagram"))
+        #expect(textResult.contains("sequenceDiagram"))
     }
 
     @Test("Renders Mermaid pie charts through native PDF path operators")
@@ -2082,16 +2088,16 @@ struct MarkdownPDFRendererTests {
         """)
         let inspector = PDFInspector(data)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "mermaid-pie-chart")
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-pie-chart")
 
         #expect(streamText.contains(" c"))
         #expect(streamText.contains(" f"))
         #expect(!streamText.contains("(pie title Browser Share)"))
-        #expect(textResult.exitCode == 0, "pdftotext failed for Mermaid pie chart:\n\(textResult.output)")
-        #expect(textResult.output.contains("Browser Share"))
-        #expect(textResult.output.contains("Desktop 62"))
-        #expect(textResult.output.contains("Mobile 31"))
-        #expect(!textResult.output.contains("Unsupported Mermaid diagram"))
+        #expect(!textResult.isEmpty, "no text was extracted for Mermaid pie chart:\n\(textResult)")
+        #expect(textResult.contains("Browser Share"))
+        #expect(textResult.contains("Desktop 62"))
+        #expect(textResult.contains("Mobile 31"))
+        #expect(!textResult.contains("Unsupported Mermaid diagram"))
         #expect(
             inspector.canonicalStructureIssues().isEmpty,
             "Canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
@@ -2129,20 +2135,20 @@ struct MarkdownPDFRendererTests {
         """)
         let inspector = PDFInspector(data)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "native-chart-blocks")
+        let textResult = try PDFValidation.text(data, artifact: "native-chart-blocks")
 
         #expect(streamText.contains(" re f"))
         #expect(streamText.contains(" l"))
         #expect(streamText.contains(" c"))
-        #expect(textResult.exitCode == 0, "pdftotext failed for native charts:\n\(textResult.output)")
-        #expect(textResult.output.contains("Quarterly Revenue"))
-        #expect(textResult.output.contains("Actual"))
-        #expect(textResult.output.contains("Forecast"))
-        #expect(textResult.output.contains("Adoption Trend"))
-        #expect(textResult.output.contains("Accounts"))
-        #expect(textResult.output.contains("Impact Map"))
-        #expect(textResult.output.contains("Trials"))
-        #expect(!textResult.output.contains("Unsupported chart"))
+        #expect(!textResult.isEmpty, "no text was extracted for native charts:\n\(textResult)")
+        #expect(textResult.contains("Quarterly Revenue"))
+        #expect(textResult.contains("Actual"))
+        #expect(textResult.contains("Forecast"))
+        #expect(textResult.contains("Adoption Trend"))
+        #expect(textResult.contains("Accounts"))
+        #expect(textResult.contains("Impact Map"))
+        #expect(textResult.contains("Trials"))
+        #expect(!textResult.contains("Unsupported chart"))
         #expect(
             inspector.canonicalStructureIssues().isEmpty,
             "Canonical PDF structure failed:\n\(inspector.canonicalStructureReport())",
@@ -2158,12 +2164,12 @@ struct MarkdownPDFRendererTests {
         series: Values = 1, 2, 3
         ```
         """)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "unsupported-chart-block")
+        let textResult = try PDFValidation.text(data, artifact: "unsupported-chart-block")
 
-        #expect(textResult.exitCode == 0, "pdftotext failed for unsupported chart fallback:\n\(textResult.output)")
-        #expect(textResult.output.contains("Unsupported chart"))
-        #expect(textResult.output.contains("heatmap"))
-        #expect(textResult.output.contains("Unsupported Density"))
+        #expect(!textResult.isEmpty, "no text was extracted for unsupported chart fallback:\n\(textResult)")
+        #expect(textResult.contains("Unsupported chart"))
+        #expect(textResult.contains("heatmap"))
+        #expect(textResult.contains("Unsupported Density"))
     }
 
     @Test("Renders Mermaid edge labels into extractable PDF text")
@@ -2174,13 +2180,13 @@ struct MarkdownPDFRendererTests {
             A["Markdown"] -->|parse| B["PDF"]
         ```
         """)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "mermaid-edge-label")
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label")
 
-        #expect(textResult.exitCode == 0, "pdftotext failed for Mermaid edge label PDF:\n\(textResult.output)")
-        #expect(textResult.output.contains("Markdown"))
-        #expect(textResult.output.contains("parse"))
-        #expect(textResult.output.contains("PDF"))
-        #expect(!textResult.output.contains("graph LR"))
+        #expect(!textResult.isEmpty, "no text was extracted for Mermaid edge label PDF:\n\(textResult)")
+        #expect(textResult.contains("Markdown"))
+        #expect(textResult.contains("parse"))
+        #expect(textResult.contains("PDF"))
+        #expect(!textResult.contains("graph LR"))
     }
 
     @Test("Falls back visibly when Mermaid edge labels collide with nodes")
@@ -2191,13 +2197,13 @@ struct MarkdownPDFRendererTests {
             A["Markdown"] -->|this label is intentionally too long to fit in the edge gap| B["PDF"]
         ```
         """)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "mermaid-edge-label-collision")
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label-collision")
 
-        #expect(textResult.exitCode == 0, "pdftotext failed for Mermaid edge label fallback:\n\(textResult.output)")
-        #expect(textResult.output.contains("Unsupported Mermaid diagram"))
-        #expect(textResult.output.contains("collides with a diagram node"))
-        #expect(textResult.output.contains("this label is intentionally too long"))
-        #expect(textResult.output.contains("graph LR"))
+        #expect(!textResult.isEmpty, "no text was extracted for Mermaid edge label fallback:\n\(textResult)")
+        #expect(textResult.contains("Unsupported Mermaid diagram"))
+        #expect(textResult.contains("collides with a diagram node"))
+        #expect(textResult.contains("this label is intentionally too long"))
+        #expect(textResult.contains("graph LR"))
     }
 
     @Test("Falls back visibly when Mermaid edge labels collide with intermediate nodes")
@@ -2210,14 +2216,14 @@ struct MarkdownPDFRendererTests {
             Middle --> End
         ```
         """)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "mermaid-edge-label-intermediate-collision")
-        let normalizedOutput = textResult.output.replacingOccurrences(of: "\n", with: " ")
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label-intermediate-collision")
+        let normalizedOutput = textResult.replacingOccurrences(of: "\n", with: " ")
 
-        #expect(textResult.exitCode == 0, "pdftotext failed for Mermaid intermediate label fallback:\n\(textResult.output)")
-        #expect(textResult.output.contains("Unsupported Mermaid diagram"))
+        #expect(!textResult.isEmpty, "no text was extracted for Mermaid intermediate label fallback:\n\(textResult)")
+        #expect(textResult.contains("Unsupported Mermaid diagram"))
         #expect(normalizedOutput.contains("collides with a diagram node"))
-        #expect(textResult.output.contains("crosses the middle node"))
-        #expect(textResult.output.contains("flowchart TD"))
+        #expect(textResult.contains("crosses the middle node"))
+        #expect(textResult.contains("flowchart TD"))
     }
 
     @Test("Keeps unknown fragment links as URI annotations")
@@ -2317,15 +2323,20 @@ struct MarkdownPDFRendererTests {
         #expect(text.contains("/FlateDecode"))
         #expect(text.contains("/DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns 1 >>"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "png-image")
-        #expect(qpdf.exitCode == 0, "qpdf --check failed for PNG image PDF:\n\(qpdf.output)")
+        let structureIssues = PDFValidation.structureIssues(data, name: "png-image")
+        #expect(structureIssues.isEmpty, "the PDF structure is not sound for PNG image PDF:\n\(structureIssues.joined(separator: "\n"))")
 
-        let render = try PDFValidation.pdftoppmPNG(data: data, name: "png-image")
-        let pngData = try? Data(contentsOf: render.pngURL)
-        let dimensions = PDFValidation.pngDimensions(in: pngData)
-        #expect(render.result.exitCode == 0, "pdftoppm failed for PNG image PDF:\n\(render.result.output)")
-        #expect((dimensions?.width ?? 0) > 0)
-        #expect((dimensions?.height ?? 0) > 0)
+        // The image is drawn once, with a size, inside the page: the matrix before
+        // its Do operator maps the unit square onto the box the image fills.
+        let page = try #require(PDFDocumentReader(data: data).pages.first)
+        let pattern = try Regex(#"([0-9.]+) 0 0 ([0-9.]+) ([0-9.]+) ([0-9.]+) cm\s+/Im[0-9]+ Do"#)
+        let matches = PDFInspector(data).streams.flatMap { $0.body.matches(of: pattern) }
+        try #require(matches.count == 1, "the image is not drawn exactly once")
+        let box = (1 ... 4).compactMap { matches[0][$0].substring.flatMap { Double($0) } }
+        try #require(box.count == 4)
+        #expect(box[0] > 0 && box[1] > 0, "the image box has no size: \(box)")
+        #expect(box[2] >= 0 && box[2] + box[0] <= page.size.width, "the image leaves the page sideways: \(box)")
+        #expect(box[3] >= 0 && box[3] + box[1] <= page.size.height, "the image leaves the page upward or downward: \(box)")
     }
 
     @Test("Reuses local image XObjects by source")
