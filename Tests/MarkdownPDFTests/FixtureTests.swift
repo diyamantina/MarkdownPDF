@@ -91,39 +91,35 @@ struct FixtureTests {
                 "Canonical PDF structure failed for \(fixtureName):\n\(inspector.canonicalStructureReport())",
             )
 
-            let qpdf = try PDFValidation.qpdfCheck(data: data, name: fixtureName)
-            #expect(qpdf.exitCode == 0, "qpdf --check failed for \(fixtureName):\n\(qpdf.output)")
+            PDFValidation.expectSoundStructure(data, name: fixtureName)
 
-            let infoResult = try PDFValidation.pdfinfo(data: data, name: fixtureName)
-            let info = PDFValidation.parsedInfo(from: infoResult)
-            #expect(infoResult.exitCode == 0, "pdfinfo failed for \(fixtureName):\n\(infoResult.output)")
-            #expect(info["PDF version"] == "1.4", "Unexpected pdfinfo output for \(fixtureName):\n\(infoResult.output)")
-            #expect(info["Pages"] == "\(inspector.pageCount)", "Unexpected pdfinfo output for \(fixtureName):\n\(infoResult.output)")
-
-            let textResult = try PDFValidation.pdftotext(data: data, name: fixtureName)
-            #expect(textResult.exitCode == 0, "pdftotext failed for \(fixtureName):\n\(textResult.output)")
+            let document = try PDFDocumentReader(data: data)
+            #expect(document.version == "1.4", "Unexpected PDF version for \(fixtureName): \(document.version)")
+            #expect(document.pageCount == inspector.pageCount, "The reader and the inspector count different pages for \(fixtureName)")
             #expect(
-                textResult.output.contains(expectedTextFragment(for: fixtureName)),
-                "Unexpected pdftotext output for \(fixtureName):\n\(textResult.output)",
+                document.text.contains(expectedTextFragment(for: fixtureName)),
+                "Unexpected text for \(fixtureName):\n\(document.text)",
             )
-
-            let render = try PDFValidation.pdftoppmPNG(data: data, name: fixtureName)
-            let pngData = try? Data(contentsOf: render.pngURL)
-            let dimensions = PDFValidation.pngDimensions(in: pngData)
-            #expect(render.result.exitCode == 0, "pdftoppm failed for \(fixtureName):\n\(render.result.output)")
-            #expect(dimensions != nil)
-            #expect((dimensions?.width ?? 0) > 0)
-            #expect((dimensions?.height ?? 0) > 0)
+            PDFValidation.expectFirstPageHasContent(document, name: fixtureName)
         }
+    }
+
+    /// The last step of four fixture tests: an outside rasterizer drew the first
+    /// page to a PNG, and the image had to have a size.
+    @Test(
+        "The first page of a fixture rasterizes to an image",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+        arguments: ["article-grade fixtures", "WWDC large stress fixture", "external fixtures", "manuscript fixtures"],
+    )
+    func firstPageRasterizes(_ group: String) {
+        PDFValidation.notVerified("the raster of the first page of the \(group)")
     }
 
     @Test("Article stress fixture covers ToC, images, fallback, raw HTML, and Mermaid")
     func articleStressFixtureCoversPortableArticleFeatures() throws {
         let data = try renderArticleFixture(named: "article-grade-stress.md")
         let inspector = PDFInspector(data)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "article-grade-stress-features")
-        try #require(textResult.exitCode == 0, "pdftotext failed for article-grade stress fixture:\n\(textResult.output)")
-        let extractedText = textResult.output
+        let extractedText = try PDFValidation.text(data)
 
         #expect(inspector.pageCount >= 6)
         #expect(inspector.linkAnnotationCount >= 2)
@@ -147,9 +143,7 @@ struct FixtureTests {
     func hardMarkdownFixtureCoversDensePortableMarkdownFeatures() throws {
         let data = try renderArticleFixture(named: "hard-markdown-corpus.md")
         let inspector = PDFInspector(data)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "hard-markdown-corpus-features")
-        try #require(textResult.exitCode == 0, "pdftotext failed for hard Markdown fixture:\n\(textResult.output)")
-        let extractedText = textResult.output
+        let extractedText = try PDFValidation.text(data)
         let normalizedText = normalizedExtractedText(extractedText)
 
         #expect(inspector.pageCount >= 8)
@@ -177,9 +171,7 @@ struct FixtureTests {
     func crazyMarkdownFixtureCoversAdversarialManuscriptFeatures() throws {
         let data = try renderArticleFixture(named: "crazy-markdown-torture.md")
         let inspector = PDFInspector(data)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "crazy-markdown-torture-features")
-        try #require(textResult.exitCode == 0, "pdftotext failed for crazy Markdown fixture:\n\(textResult.output)")
-        let extractedText = textResult.output
+        let extractedText = try PDFValidation.text(data)
         let normalizedText = normalizedExtractedText(extractedText)
 
         #expect(inspector.pageCount >= 6)
@@ -214,16 +206,12 @@ struct FixtureTests {
     func a4ManuscriptFixtureCoversManuscriptScalePortableMarkdown() throws {
         let data = try renderArticleFixture(named: "a4-manuscript.md")
         let inspector = PDFInspector(data)
-        let infoResult = try PDFValidation.pdfinfo(data: data, name: "a4-manuscript-features")
-        try #require(infoResult.exitCode == 0, "pdfinfo failed for A4 manuscript fixture:\n\(infoResult.output)")
-        let info = PDFValidation.parsedInfo(from: infoResult)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "a4-manuscript-features")
-        try #require(textResult.exitCode == 0, "pdftotext failed for A4 manuscript fixture:\n\(textResult.output)")
-        let extractedText = textResult.output
+        let document = try PDFDocumentReader(data: data)
+        let extractedText = document.text
         let normalizedText = normalizedExtractedText(extractedText)
 
         #expect(inspector.pageCount >= 5)
-        #expect(info["Page size"]?.contains("595.28 x 841.89 pts") == true)
+        #expect(PDFValidation.pagesAreA4(document))
         #expect(inspector.linkAnnotationCount >= 3)
         #expect(inspector.text.contains("/Names << /Dests"))
         #expect(inspector.text.contains("/Subtype /Image"))
@@ -307,35 +295,22 @@ struct FixtureTests {
             markdown: markdown,
             assetsBaseURL: externalFixtureAssetsBaseURL(directory: wwdcFixtureDirectory),
         )
-        let url = try PDFValidation.temporaryPDF(name: artifactName, data: data)
 
         try PDFValidation.writeArtifact(data, name: "\(artifactName).pdf")
         #expect(data.count > 35_000_000)
         #expect(localImageReferenceCount(in: markdown) == wwdcLargeStressAssetNames.count)
 
-        let qpdf = try PDFValidation.qpdfCheck(url: url)
-        #expect(qpdf.exitCode == 0, "qpdf --check failed for \(artifactName):\n\(qpdf.output)")
+        PDFValidation.expectSoundStructure(data, name: artifactName)
 
-        let infoResult = try PDFValidation.pdfinfo(url: url)
-        let info = PDFValidation.parsedInfo(from: infoResult)
-        #expect(infoResult.exitCode == 0, "pdfinfo failed for \(artifactName):\n\(infoResult.output)")
-        #expect((Int(info["Pages"] ?? "") ?? 0) >= 25, "Unexpected pdfinfo output for \(artifactName):\n\(infoResult.output)")
-        #expect(info["Page size"]?.contains("595.28 x 841.89 pts") == true)
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.pageCount >= 25, "Only \(document.pageCount) pages for \(artifactName)")
+        #expect(PDFValidation.pagesAreA4(document))
 
-        let textResult = try PDFValidation.pdftotext(url: url)
-        #expect(textResult.exitCode == 0, "pdftotext failed for \(artifactName):\n\(textResult.output)")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let normalizedText = normalizedExtractedText(document.text)
         #expect(normalizedText.contains("WWDC 2019 Session 613: Ray Tracing with Metal"))
         #expect(normalizedText.contains("MPSRayIntersector"))
         #expect(normalizedText.contains("WWDC Ray Tracing Large Fixture Stress Marker"))
-
-        let render = try PDFValidation.pdftoppmPNG(url: url)
-        let pngData = try? Data(contentsOf: render.pngURL)
-        let dimensions = PDFValidation.pngDimensions(in: pngData)
-        #expect(render.result.exitCode == 0, "pdftoppm failed for \(artifactName):\n\(render.result.output)")
-        #expect(dimensions != nil)
-        #expect((dimensions?.width ?? 0) > 0)
-        #expect((dimensions?.height ?? 0) > 0)
+        PDFValidation.expectFirstPageHasContent(document, name: artifactName)
     }
 
     @Test("Manuscript fixture image references are audited")
@@ -392,8 +367,8 @@ struct FixtureTests {
             let second = try MarkdownPDFRenderer().render(markdown: markdown, assetsBaseURL: directory)
             #expect(!first.isEmpty)
             #expect(Array(first) == Array(second), "render of \(label) image is non-deterministic")
-            let text = try PDFValidation.pdftotext(data: first, name: "image-degrade-\(label)")
-            #expect(text.output.contains("[Image: \(label)]"), "expected placeholder for \(label):\n\(text.output)")
+            let text = try PDFValidation.text(first)
+            #expect(text.contains("[Image: \(label)]"), "expected placeholder for \(label):\n\(text)")
         }
     }
 
@@ -469,19 +444,16 @@ struct FixtureTests {
         ).render(markdown: fixture(named: "math-formulas.md"))
         try PDFValidation.writeArtifact(data, name: "math-formulas.pdf")
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "math-formulas")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "math-formulas-text")
-        let mupdf = try PDFValidation.mutoolStructuredText(data: data, name: "math-formulas-mupdf")
-        let extracted = normalizedExtractedText(textResult.output)
+        PDFValidation.expectSoundStructure(data, name: "math-formulas")
+        let document = try PDFDocumentReader(data: data)
+        let extractedText = document.text
+        let extracted = normalizedExtractedText(extractedText)
         let streamText = inspector.streams.map(\.body).joined(separator: "\n")
+        // The characters of the words the reader finds on the pages, the
+        // /ActualText of a formula standing in for the glyphs that draw it.
+        let visibleGlyphCount = ReaderTextLayout(document).visibleCharacterCount
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        try #require(mupdf.exitCode == 0, "mutool structured text failed:\n\(mupdf.output)")
-        let structuredText = try MuPDFStructuredText(xml: mupdf.output)
-        let visibleGlyphCount = structuredText.glyphs.count(where: { !$0.isWhitespace })
-
-        // Per-glyph quad geometry is witnessed on controlled formulas in
+        // Per-glyph geometry is witnessed on controlled formulas in
         // rendersOptInTeXMathSubset. This corpus witnesses breadth: structural
         // validity, readable extraction, the visible-source fallback, typeset
         // rules, and nonblank output across the supported subset.
@@ -489,9 +461,9 @@ struct FixtureTests {
         // Prose around the formulas survives extraction.
         #expect(extracted.contains("golden ratio"))
         // Supported constructs emit a readable linearization for extraction.
-        #expect(extracted.contains("frac("), "Unexpected extraction:\n\(textResult.output)")
-        #expect(extracted.contains("sqrt("), "Unexpected extraction:\n\(textResult.output)")
-        #expect(extracted.contains("sum_"), "Unexpected extraction:\n\(textResult.output)")
+        #expect(extracted.contains("frac("), "Unexpected extraction:\n\(extractedText)")
+        #expect(extracted.contains("sqrt("), "Unexpected extraction:\n\(extractedText)")
+        #expect(extracted.contains("sum_"), "Unexpected extraction:\n\(extractedText)")
         // Unsupported constructs render as visible source rather than being dropped.
         #expect(
             streamText.contains("textcolor") || extracted.contains("textcolor"),
@@ -509,12 +481,9 @@ struct FixtureTests {
         let data = try MarkdownPDFRenderer().render(markdown: fixture(named: "cjk-corpus.md"))
         try PDFValidation.writeArtifact(data, name: "cjk-corpus.pdf")
         let inspector = PDFInspector(data)
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "cjk-corpus")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "cjk-corpus-text")
-        let extracted = normalizedExtractedText(textResult.output)
+        PDFValidation.expectSoundStructure(data, name: "cjk-corpus")
+        let extracted = try normalizedExtractedText(PDFValidation.text(data))
 
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        #expect(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
         // ASCII headings and romaji survive extraction.
         #expect(extracted.contains("CJK corpus"))
         #expect(extracted.contains("Hiragana"))
@@ -584,30 +553,18 @@ struct FixtureTests {
         #expect(imageXObjectCount(in: inspector.text) == expectedImageReferences)
         #expect(imageDrawOperatorCount(in: inspector.text) == expectedImageReferences)
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: artifactName)
-        #expect(qpdf.exitCode == 0, "qpdf --check failed for \(directory):\n\(qpdf.output)")
+        PDFValidation.expectSoundStructure(data, name: artifactName)
 
-        let infoResult = try PDFValidation.pdfinfo(data: data, name: artifactName)
-        let info = PDFValidation.parsedInfo(from: infoResult)
-        #expect(infoResult.exitCode == 0, "pdfinfo failed for \(directory):\n\(infoResult.output)")
-        #expect(info["Page size"]?.contains("595.28 x 841.89 pts") == true)
-        #expect(info["Pages"] == "\(inspector.pageCount)", "Unexpected pdfinfo output for \(directory):\n\(infoResult.output)")
+        let document = try PDFDocumentReader(data: data)
+        #expect(PDFValidation.pagesAreA4(document))
+        #expect(document.pageCount == inspector.pageCount, "The reader and the inspector count different pages for \(directory)")
 
-        let textResult = try PDFValidation.pdftotext(data: data, name: artifactName)
-        #expect(textResult.exitCode == 0, "pdftotext failed for \(directory):\n\(textResult.output)")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let normalizedText = normalizedExtractedText(document.text)
         #expect(normalizedText.contains(expectedTitle))
         for fragment in expectedFragments {
             #expect(normalizedText.contains(fragment))
         }
-
-        let render = try PDFValidation.pdftoppmPNG(data: data, name: artifactName)
-        let pngData = try? Data(contentsOf: render.pngURL)
-        let dimensions = PDFValidation.pngDimensions(in: pngData)
-        #expect(render.result.exitCode == 0, "pdftoppm failed for \(directory):\n\(render.result.output)")
-        #expect(dimensions != nil)
-        #expect((dimensions?.width ?? 0) > 0)
-        #expect((dimensions?.height ?? 0) > 0)
+        PDFValidation.expectFirstPageHasContent(document, name: artifactName)
     }
 
     private func assertExternalMarkdownFixtureRenders(
@@ -632,29 +589,17 @@ struct FixtureTests {
             "Canonical PDF structure failed for \(fixtureName):\n\(inspector.canonicalStructureReport())",
         )
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: artifactName)
-        #expect(qpdf.exitCode == 0, "qpdf --check failed for \(fixtureName):\n\(qpdf.output)")
+        PDFValidation.expectSoundStructure(data, name: artifactName)
 
-        let infoResult = try PDFValidation.pdfinfo(data: data, name: artifactName)
-        let info = PDFValidation.parsedInfo(from: infoResult)
-        #expect(infoResult.exitCode == 0, "pdfinfo failed for \(fixtureName):\n\(infoResult.output)")
-        #expect(info["Page size"]?.contains("595.28 x 841.89 pts") == true)
-        #expect(info["Pages"] == "\(inspector.pageCount)", "Unexpected pdfinfo output for \(fixtureName):\n\(infoResult.output)")
+        let document = try PDFDocumentReader(data: data)
+        #expect(PDFValidation.pagesAreA4(document))
+        #expect(document.pageCount == inspector.pageCount, "The reader and the inspector count different pages for \(fixtureName)")
 
-        let textResult = try PDFValidation.pdftotext(data: data, name: artifactName)
-        #expect(textResult.exitCode == 0, "pdftotext failed for \(fixtureName):\n\(textResult.output)")
-        let normalizedText = normalizedExtractedText(textResult.output)
+        let normalizedText = normalizedExtractedText(document.text)
         for fragment in expectedFragments {
             #expect(normalizedText.contains(fragment))
         }
-
-        let render = try PDFValidation.pdftoppmPNG(data: data, name: artifactName)
-        let pngData = try? Data(contentsOf: render.pngURL)
-        let dimensions = PDFValidation.pngDimensions(in: pngData)
-        #expect(render.result.exitCode == 0, "pdftoppm failed for \(fixtureName):\n\(render.result.output)")
-        #expect(dimensions != nil)
-        #expect((dimensions?.width ?? 0) > 0)
-        #expect((dimensions?.height ?? 0) > 0)
+        PDFValidation.expectFirstPageHasContent(document, name: artifactName)
     }
 
     private func articleFixtureOptions(for fixtureName: String) -> PDFOptions {
