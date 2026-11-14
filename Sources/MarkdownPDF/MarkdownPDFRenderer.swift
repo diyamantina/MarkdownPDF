@@ -2700,7 +2700,7 @@ private struct Layout {
             let run = PDFTextRun(text: node.label, font: .helvetica, size: fontSize)
             let labelLines = try wrappedLines([run], maxWidth: labelWidthLimit)
             let lineWidths = try labelLines.map { line in
-                try textWidth(line)
+                try inkWidth(ofLine: line)
             }
             let widestLine = lineWidths.max() ?? 0
             guard widestLine <= labelWidthLimit + 0.1 else {
@@ -3041,7 +3041,7 @@ private struct Layout {
 
         var textY = frame.top - box.verticalPadding - box.fontSize
         for line in box.labelLines {
-            let lineWidth = try textWidth(line)
+            let lineWidth = try inkWidth(ofLine: line)
             try drawRuns(line, x: frame.left + (box.width - lineWidth) / 2, y: textY)
             textY -= box.lineHeight
         }
@@ -3871,7 +3871,7 @@ private struct Layout {
                 for entry in hits[lineIndex] ?? [] {
                     indexRegistry.record(entry, page: currentPageIndex)
                 }
-                let width = try textWidth(Array(line))
+                let width = try inkWidth(ofLine: Array(line))
                 let alignment = column < alignments.count ? alignments[column] : .leading
                 let textX = switch alignment {
                 case .leading:
@@ -3916,7 +3916,10 @@ private struct Layout {
             }
 
             let width = try textWidth(token)
-            if currentWidth + width > maxWidth, !current.isEmpty {
+            // The space that ends a word takes no room at the end of a line: it hangs
+            // past the measure, where nothing is drawn. So a word wraps only when it
+            // does not fit without that space, and spaces alone never start a line.
+            if currentWidth + width > maxWidth, !current.isEmpty, try !hangs(token, after: currentWidth, maxWidth: maxWidth) {
                 lines.append(current)
                 current = [token]
                 currentWidth = width
@@ -3940,7 +3943,8 @@ private struct Layout {
         guard token.text != "\n",
               token.inlineMathBox == nil,
               maxWidth > 0,
-              try textWidth(token) > maxWidth
+              try textWidth(token) > maxWidth,
+              try inkWidth(token) > maxWidth
         else {
             return [token]
         }
@@ -4372,6 +4376,46 @@ private struct Layout {
             let width = try textWidth(run)
             return partial + width
         }
+    }
+
+    /// The width of a run without the spaces that end it. At the end of a line those
+    /// spaces draw nothing, so they count neither against the measure nor toward the
+    /// width a line is aligned by.
+    private func inkWidth(_ run: PDFTextRun) throws -> Double {
+        guard run.inlineMathBox == nil, run.text.last == " " else {
+            return try textWidth(run)
+        }
+        var text = Substring(run.text)
+        while text.last == " " {
+            text.removeLast()
+        }
+        return text.isEmpty ? 0 : try textWidth(run.withText(String(text)))
+    }
+
+    /// Whether a token that passes the measure may stay on the line all the same:
+    /// its ink ends inside the measure and only its spaces pass it, or it is spaces
+    /// alone.
+    private func hangs(_ token: PDFTextRun, after lineWidth: Double, maxWidth: Double) throws -> Bool {
+        let ink = try inkWidth(token)
+        return ink == 0 || lineWidth + ink <= maxWidth
+    }
+
+    /// The width of a drawn line: every run in full but the last, which is measured
+    /// without the spaces that end it. Runs of nothing but spaces at the end of the
+    /// line are left out the same way.
+    private func inkWidth(ofLine runs: [PDFTextRun]) throws -> Double {
+        var end = runs.endIndex
+        while end > runs.startIndex {
+            let run = runs[end - 1]
+            guard run.inlineMathBox == nil, run.indexTerm == nil, run.text.allSatisfy({ $0 == " " }) else {
+                break
+            }
+            end -= 1
+        }
+        guard end > runs.startIndex else {
+            return 0
+        }
+        return try textWidth(Array(runs[..<(end - 1)])) + inkWidth(runs[end - 1])
     }
 
     private func mathLayout(for style: PDFOptions.ElementStyle) throws -> MathLayout {

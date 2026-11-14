@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Mihaljević` no longer reaches the outline and the title bar as `Mihaljevi?`. A string
   of ASCII only is written the same way in both modes.
 
+### Fixed
+- **Output change: lines fill the measure.** A line was broken early whenever its next
+  word fit but the space after that word did not, so some lines ended one word short and
+  the right edge was more ragged than the text called for. The space that ends a line
+  takes no room now: a word moves down only when the word itself does not fit, and spaces
+  alone never start a line. Paragraphs, headings, list items, block quotes, table cells,
+  code blocks, footnotes, contents and index entries and diagram labels all wrap this
+  way, so a document whose lines reach the measure can reflow, and its page count can
+  drop. A line that did not reach the measure is drawn exactly as before.
+- **Output change: aligned table cells.** A wrapped line in a centered or right aligned
+  table cell was placed by a width that counted the space at its end, so it sat up to a
+  space left of where it belonged. It is placed by its ink now. A diagram label that
+  wraps is centered the same way.
+
 ## [0.13.0] - 2026-10-28
 
 ### Added
