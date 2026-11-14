@@ -128,8 +128,7 @@ struct BoxDrawingTransliterationTests {
     func rendersTree() throws {
         let tree = "```\nCV\n\u{251C}\u{2500}\u{2500} ContactInfo\n\u{251C}\u{2500}\u{2500} WorkExperience\n\u{2502}   \u{2514}\u{2500}\u{2500} Company\n\u{2514}\u{2500}\u{2500} Period\n```"
         let pdf = try MarkdownPDFRenderer(options: PDFOptions()).render(markdown: tree)
-        let url = try PDFValidation.temporaryPDF(name: "box-drawing-tree", data: pdf)
-        let text = try PDFValidation.pdftotext(url: url).output
+        let text = try PDFValidation.text(pdf)
         #expect(text.contains("├── ContactInfo"))
         #expect(text.contains("│"))
         #expect(!text.contains("?"), "box-drawing must not render as '?':\n\(text)")

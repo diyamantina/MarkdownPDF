@@ -72,14 +72,11 @@ struct LargeDocumentFixtureTests {
         #expect(inspector.hasValidXrefOffsets())
         #expect(inspector.streamLengthsMatch())
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: artifact)
-        #expect(qpdf.exitCode == 0, "qpdf --check failed for \(fixture):\n\(qpdf.output)")
-        let infoResult = try PDFValidation.pdfinfo(data: data, name: artifact)
-        let info = PDFValidation.parsedInfo(from: infoResult)
-        #expect(info["Pages"] == "\(inspector.pageCount)", "pdfinfo page count mismatch for \(fixture)")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "\(artifact)-text")
-        #expect(textResult.exitCode == 0, "pdftotext failed for \(fixture):\n\(textResult.output)")
-        #expect(textResult.output.contains(distinctiveText), "Missing \(distinctiveText) in \(fixture) extraction")
+        PDFValidation.expectSoundStructure(data, name: fixture)
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.pageCount == inspector.pageCount, "the reader and the inspector count different pages for \(fixture)")
+        #expect(document.pages.allSatisfy { $0.size == pageSize }, "a page of \(fixture) is not \(pageSize)")
+        #expect(document.text.contains(distinctiveText), "Missing \(distinctiveText) in \(fixture) extraction")
     }
 
     private func loadFixture(_ name: String) throws -> String {

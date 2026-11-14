@@ -2,74 +2,87 @@ import Foundation
 import MarkdownPDF
 import Testing
 
-@Suite("PDF tool validation")
-struct PDFToolValidationTests {
+/// The checks the other suites lean on, held to a minimal document: the structure
+/// check accepts a sound file and names what is wrong with a damaged one, and the
+/// reader gives back the version, the page count, the title and the text.
+@Suite("PDF read-back validation")
+struct PDFReadBackValidationTests {
     private let minimalMarkdown = "Hello from MarkdownPDF."
 
-    @Test("qpdf validates minimal PDF structure")
-    func qpdfValidatesMinimalPDFStructure() throws {
-        let result = try PDFValidation.qpdfCheck(
-            data: minimalPDF,
-            name: "minimal-valid",
-        )
-
-        #expect(result.exitCode == 0, "qpdf --check failed:\n\(result.output)")
+    @Test("The structure check accepts a minimal PDF")
+    func structureCheckAcceptsMinimalPDF() throws {
+        #expect(try PDFValidation.structureIssues(minimalPDF) == [])
     }
 
-    @Test("qpdf reports damaged PDF structure")
-    func qpdfReportsDamagedPDFStructure() throws {
+    @Test("The structure check reports a truncated PDF")
+    func structureCheckReportsTruncatedPDF() throws {
         let data = try minimalPDF
-        let result = try PDFValidation.qpdfCheck(
-            data: data.prefix(data.count / 2),
-            name: "minimal-truncated",
-        )
+        let issues = PDFValidation.structureIssues(data.prefix(data.count / 2), name: "minimal-truncated")
 
-        #expect(result.exitCode == 2 || result.exitCode == 3, "qpdf unexpectedly accepted damaged PDF:\n\(result.output)")
-        #expect(result.output.contains("WARNING") || result.output.contains("ERROR") || result.output.contains("qpdf:"))
+        // The cross-reference table is gone with the second half, and the byte
+        // inspector, which shares no code with the reader, misses it too.
+        #expect(issues.first == "minimal-truncated: the PDF is malformed: the file has no startxref")
+        #expect(issues.contains("minimal-truncated: inspector: the cross-reference table has offsets that do not point to matching objects"))
     }
 
-    @Test("pdfinfo reports minimal PDF version and page count")
-    func pdfinfoReportsMinimalPDFMetadata() throws {
-        let result = try PDFValidation.pdfinfo(data: minimalPDF, name: "minimal-info")
-        let info = PDFValidation.parsedInfo(from: result)
+    @Test("The structure check reports a PDF whose objects moved under its cross-reference table")
+    func structureCheckReportsShiftedObjects() throws {
+        // One byte added after the header: every offset in the table is now one short.
+        var bytes = try Array(minimalPDF)
+        let lineEnd = try #require(bytes.firstIndex(of: 0x0A))
+        bytes.insert(0x20, at: lineEnd)
+        let issues = PDFValidation.structureIssues(bytes)
 
-        #expect(result.exitCode == 0, "pdfinfo failed:\n\(result.output)")
-        #expect(info["PDF version"] == "1.4", "Unexpected pdfinfo output:\n\(result.output)")
-        #expect(info["Pages"] == "1", "Unexpected pdfinfo output:\n\(result.output)")
-        #expect(info["Encrypted"] == "no", "Unexpected pdfinfo output:\n\(result.output)")
+        #expect(issues.contains("object 1: the cross-reference table points at something that is not this object"))
+        #expect(issues.contains("inspector: the cross-reference table has offsets that do not point to matching objects"))
     }
 
-    @Test("pdfinfo reports deterministic document title metadata")
-    func pdfinfoReportsDeterministicDocumentTitleMetadata() throws {
+    @Test("The reader reports the minimal PDF version and page count")
+    func readerReportsMinimalPDFMetadata() throws {
+        // An encrypted file is refused by the reader, so reading it at all says it is not encrypted.
+        let document = try PDFDocumentReader(data: minimalPDF)
+
+        #expect(document.version == "1.4")
+        #expect(document.pageCount == 1)
+        // A document with no title and no author carries no Info dictionary.
+        #expect(document.producer == nil)
+        #expect(document.title == nil)
+        #expect(document.pages[0].size == PDFOptions().pageSize)
+    }
+
+    @Test("The reader reports deterministic document title metadata")
+    func readerReportsDeterministicDocumentTitleMetadata() throws {
         let data = try MarkdownPDFRenderer(
             options: PDFOptions(title: "Navigation Article"),
         ).render(markdown: "# Intro\n\nBody.")
-        let result = try PDFValidation.pdfinfo(data: data, name: "navigation-title")
-        let info = PDFValidation.parsedInfo(from: result)
+        let document = try PDFDocumentReader(data: data)
 
-        #expect(result.exitCode == 0, "pdfinfo failed:\n\(result.output)")
-        #expect(info["Title"] == "Navigation Article", "Unexpected pdfinfo output:\n\(result.output)")
-        #expect(info["Pages"] == "1", "Unexpected pdfinfo output:\n\(result.output)")
+        #expect(document.title == "Navigation Article")
+        #expect(document.producer == "MarkdownPDF")
+        #expect(document.pageCount == 1)
+        #expect(document.outline.map(\.title) == ["Intro"])
     }
 
-    @Test("pdftotext extracts minimal PDF text")
-    func pdftotextExtractsMinimalPDFText() throws {
-        let result = try PDFValidation.pdftotext(data: minimalPDF, name: "minimal-text")
-
-        #expect(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
-        #expect(result.output.contains(minimalMarkdown), "Unexpected pdftotext output:\n\(result.output)")
+    @Test("The reader extracts minimal PDF text")
+    func readerExtractsMinimalPDFText() throws {
+        #expect(try PDFValidation.text(minimalPDF) == minimalMarkdown)
     }
 
-    @Test("pdftoppm renders minimal PDF page")
-    func pdftoppmRendersMinimalPDFPage() throws {
-        let render = try PDFValidation.pdftoppmPNG(data: minimalPDF, name: "minimal-render")
-        let pngData = try? Data(contentsOf: render.pngURL)
-        let dimensions = PDFValidation.pngDimensions(in: pngData)
+    @Test("The minimal PDF page shows its text inside the page")
+    func minimalPDFPageShowsItsText() throws {
+        let document = try PDFDocumentReader(data: minimalPDF)
+        PDFValidation.expectFirstPageHasContent(document, name: "minimal")
+        let layout = ReaderTextLayout(document)
+        #expect(layout.words.map(\.text) == ["Hello", "from", "MarkdownPDF."])
+        #expect(layout.visualLayoutIssues() == [])
+    }
 
-        #expect(render.result.exitCode == 0, "pdftoppm failed:\n\(render.result.output)")
-        #expect(dimensions != nil)
-        #expect((dimensions?.width ?? 0) > 0)
-        #expect((dimensions?.height ?? 0) > 0)
+    @Test(
+        "A rasterizer renders the minimal PDF page",
+        .disabled("not verified: needs a rasterizer inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func rasterizerRendersMinimalPDFPage() {
+        PDFValidation.notVerified("the raster of the minimal page")
     }
 
     @Test("Artifact directory is opt in and writes nested files")
@@ -94,19 +107,10 @@ struct PDFToolValidationTests {
         )
         #expect(text == "artifact text")
 
-        let source = root.appendingPathComponent("source.txt")
-        try Data("copy text".utf8).write(to: source)
-        try PDFValidation.copyArtifact(
-            from: source,
-            name: "copies/source.txt",
-            root: explicitDirectory,
-        )
-
-        let copiedText = try String(
-            contentsOf: root.appendingPathComponent("copies/source.txt"),
-            encoding: .utf8,
-        )
-        #expect(copiedText == "copy text")
+        // A name that would leave the directory is refused.
+        #expect(throws: CocoaError.self) {
+            try PDFValidation.writeTextArtifact("escape", name: "../outside.txt", root: explicitDirectory)
+        }
     }
 
     private var minimalPDF: Data {

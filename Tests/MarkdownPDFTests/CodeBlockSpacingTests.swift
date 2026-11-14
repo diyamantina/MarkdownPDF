@@ -127,24 +127,19 @@ struct CodeBlockSpacingTests {
         #expect(box.bottom - after.top > 0)
     }
 
-    @Test("Poppler reports the next paragraph below the code box")
-    func popplerWitnessesClearance() throws {
+    /// The word box comes from the package's reader, which parses the file on its
+    /// own; the code box comes from the content stream text. Both count from the
+    /// top of the page here.
+    @Test("The reader finds the next paragraph below the code box")
+    func readerWitnessesClearance() throws {
         let data = try MarkdownPDFRenderer().render(markdown: "Intro.\n\n```\nbox\n```\n\nNext.\n")
         let page = try #require(ContentStreamGeometry(pdf: data).pages.first)
         let box = try #require(codeBoxes(page).first)
-        let result = try PDFValidation.pdftotextTSV(data: data, name: "code-block-spacing")
-        try #require(result.exitCode == 0, "pdftotext failed:\n\(result.output)")
+        let layout = try ReaderTextLayout(data: data)
+        let word = try #require(layout.words.first { $0.text == "Next." })
 
         let pageHeight = PDFOptions().pageSize.height
-        var wordTop: Double?
-        for line in result.output.split(separator: "\n") {
-            let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
-            if fields.count == 12, fields[11] == "Next." {
-                wordTop = Double(fields[7])
-            }
-        }
-        let top = try #require(wordTop)
         let boxBottomFromTop = pageHeight - box.bottom
-        #expect(top > boxBottomFromTop, "Poppler word top \(top) is not below the box bottom \(boxBottomFromTop)")
+        #expect(word.top > boxBottomFromTop, "the word top \(word.top) is not below the box bottom \(boxBottomFromTop)")
     }
 }

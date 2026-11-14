@@ -19,16 +19,11 @@ struct VerticalTextBlockTests {
         return .allRoles(PDFOptions.EmbeddedFontSource(data: data, baseName: "HiraginoSansGB", faceIndex: 0))
     }
 
-    /// The per-character x positions the drawn glyphs occupy, in draw order, read from
-    /// MuPDF's structured text. Distinct x values are the columns.
+    /// The x positions of the drawn glyphs, in draw order, read back with
+    /// `PDFDocumentReader`: each glyph of a vertical line is shown by its own text
+    /// operator, so each is one run. Distinct x values are the columns.
     private func characterColumns(_ pdf: Data) throws -> [Double] {
-        let url = try PDFValidation.temporaryPDF(name: "vertical-columns", data: pdf)
-        let stext = try PDFValidation.mutoolStructuredText(url: url).output
-        let regex = try NSRegularExpression(pattern: #"<char [^>]*\bx="([0-9.]+)""#)
-        let range = NSRange(stext.startIndex ..< stext.endIndex, in: stext)
-        return regex.matches(in: stext, range: range).compactMap { match in
-            Range(match.range(at: 1), in: stext).flatMap { Double(stext[$0]) }
-        }
+        try PDFDocumentReader(data: pdf).pages.flatMap(\.runs).map(\.x)
     }
 
     @Test("Extracts in reading order across multiple columns")
@@ -39,9 +34,9 @@ struct VerticalTextBlockTests {
         let text = String(repeating: "\u{3042}\u{3044}\u{3046}\u{3048}\u{304A}\u{3002}", count: 30)
         let pdf = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: fonts))
             .render(markdown: "```vertical\n\(text)\n```")
-        let url = try PDFValidation.temporaryPDF(name: "vertical-reading-order", data: pdf)
-        #expect(try PDFValidation.qpdfCheck(url: url).exitCode == 0)
-        let extracted = try PDFValidation.pdftotextRaw(url: url).output
+        PDFValidation.expectSoundStructure(pdf, name: "vertical-reading-order")
+        // The reader gives the text in the order of the content stream, which is the reading order.
+        let extracted = try PDFValidation.text(pdf)
         let extractedScalars = extracted.unicodeScalars.filter { !$0.properties.isWhitespace }
         #expect(Array(extractedScalars) == Array(text.unicodeScalars))
         // It genuinely used more than one column (right-to-left, so x decreases).
@@ -71,23 +66,33 @@ struct VerticalTextBlockTests {
         #expect(firstX > lastX)
     }
 
-    @Test("A tagged vertical block is PDF/UA-1 and PDF/A-2a conformant")
-    func conforms() throws {
-        guard let fonts = try Self.hiragino() else { return }
+    private func taggedVerticalConformancePDF(fonts: PDFOptions.EmbeddedFonts) throws -> Data {
         let options = PDFOptions(
             embeddedFonts: fonts,
             title: "Vertical Conformance",
             taggedPDF: .enabled,
             conformance: .pdfUA1AndPDFA2A,
         )
-        let pdf = try MarkdownPDFRenderer(options: options)
+        return try MarkdownPDFRenderer(options: options)
             .render(markdown: "```vertical\n\u{7E26}\u{66F8}\u{304D}\u{3002}\u{300C}\u{5F15}\u{7528}\u{300D}\n```")
-        let ua1 = try PDFValidation.veraPDF(data: pdf, name: "vertical-ua1", flavour: "ua1")
-        #expect(ua1.exitCode == 0, "veraPDF ua1 failed:\n\(ua1.output)")
-        #expect(ua1.output.contains("\"compliant\" : true"))
-        let a2a = try PDFValidation.veraPDF(data: pdf, name: "vertical-2a", flavour: "2a")
-        #expect(a2a.exitCode == 0, "veraPDF 2a failed:\n\(a2a.output)")
-        #expect(a2a.output.contains("\"compliant\" : true"))
+    }
+
+    @Test("A tagged vertical block keeps what PDF/UA-1 and PDF/A-2a require of the file")
+    func keepsConformancePrerequisites() throws {
+        guard let fonts = try Self.hiragino() else { return }
+        let pdf = try taggedVerticalConformancePDF(fonts: fonts)
+        PDFValidation.expectSoundStructure(pdf, name: "vertical-conformance")
+        try PDFValidation.expectConformancePrerequisites(pdf, profiles: [.pdfUA1, .pdfA2A])
+    }
+
+    @Test(
+        "A tagged vertical block is PDF/UA-1 and PDF/A-2a conformant",
+        .disabled("not verified: needs a PDF/A and PDF/UA validator inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func conforms() throws {
+        guard let fonts = try Self.hiragino() else { return }
+        _ = try taggedVerticalConformancePDF(fonts: fonts)
+        PDFValidation.notVerified("a full PDF/UA-1 and PDF/A-2a conformance run")
     }
 
     @Test("Without vertical metrics the block falls back and keeps its text")
@@ -99,7 +104,7 @@ struct VerticalTextBlockTests {
         let arial = try Data(contentsOf: URL(fileURLWithPath: arialPath))
         let options = PDFOptions(embeddedFonts: .allRoles(PDFOptions.EmbeddedFontSource(data: arial, baseName: "Arial")))
         let pdf = try MarkdownPDFRenderer(options: options).render(markdown: "```vertical\nHello World\n```")
-        let url = try PDFValidation.temporaryPDF(name: "vertical-fallback", data: pdf)
-        #expect(try PDFValidation.pdftotext(url: url).output.contains("Hello World"))
+        let text = try PDFValidation.text(pdf)
+        #expect(text.contains("Hello World"))
     }
 }

@@ -84,20 +84,13 @@ struct PDFToUnicodeCMapTests {
         let expectedText = "ABC\u{017D}\u{1F600}"
         try PDFValidation.writeArtifact(pdf, name: "tounicode-cmap-witness.pdf")
 
-        let qpdf = try PDFValidation.qpdfCheck(data: pdf, name: "tounicode-cmap-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed for ToUnicode witness PDF:\n\(qpdf.output)")
+        try PDFValidation.requireSoundStructure(pdf, name: "tounicode-cmap-witness")
 
-        let popplerText = try PDFValidation.pdftotext(data: pdf, name: "tounicode-cmap-poppler")
-        try #require(popplerText.exitCode == 0, "pdftotext failed for ToUnicode witness PDF:\n\(popplerText.output)")
-        #expect(popplerText.output.contains(expectedText), "Unexpected pdftotext output:\n\(popplerText.output)")
-
-        let mupdfText = try PDFValidation.mutoolStructuredText(data: pdf, name: "tounicode-cmap-mupdf")
-        try #require(mupdfText.exitCode == 0, "mutool structured text failed:\n\(mupdfText.output)")
-        #expect(mupdfText.output.contains(#"c="A""#))
-        #expect(mupdfText.output.contains(#"c="B""#))
-        #expect(mupdfText.output.contains(#"c="C""#))
-        #expect(mupdfText.output.contains(#"c="&#x17d;""#))
-        #expect(mupdfText.output.contains(#"c="&#x1f600;""#))
+        let document = try PDFDocumentReader(data: pdf)
+        #expect(document.text.contains(expectedText), "Unexpected text:\n\(document.text)")
+        // Each code maps to its own character, the one outside the basic plane included.
+        let words = document.pages.flatMap(\.words).map(\.text).joined()
+        #expect(Array(words.unicodeScalars) == Array(expectedText.unicodeScalars))
     }
 
     @Test("Rejects conflicting glyph mapping output")

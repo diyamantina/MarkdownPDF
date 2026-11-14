@@ -136,20 +136,17 @@ struct DocumentStringsTests {
         #expect(inspector.text.components(separatedBy: "/Title \(nameAsUTF16)").count == 3, "the Info title and one outline entry")
         #expect(!inspector.text.contains("Mihaljevi?"))
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "document-strings-unicode-qpdf")
-        #expect(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
+        PDFValidation.expectSoundStructure(data, name: "document-strings-unicode")
     }
 
-    @Test("pdfinfo reads the Unicode title and author back")
-    func pdfinfoReadsUnicodeTitle() throws {
+    @Test("The reader reads the Unicode title and author back")
+    func readerReadsUnicodeTitle() throws {
         let data = try MarkdownPDFRenderer(
             options: PDFOptions(title: name, author: name, documentStrings: .unicode),
         ).render(markdown: "# \(name)\n\nBody.")
-        let result = try PDFValidation.pdfinfo(data: data, name: "document-strings-unicode-info")
-        let info = PDFValidation.parsedInfo(from: result)
+        let document = try PDFDocumentReader(data: data)
 
-        #expect(result.exitCode == 0, "pdfinfo failed:\n\(result.output)")
-        #expect(info["Title"] == name, "Unexpected pdfinfo output:\n\(result.output)")
-        #expect(info["Author"] == name, "Unexpected pdfinfo output:\n\(result.output)")
+        #expect(document.title == name)
+        #expect(document.author == name)
     }
 }

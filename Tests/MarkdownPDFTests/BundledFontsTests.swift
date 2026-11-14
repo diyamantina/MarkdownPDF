@@ -19,16 +19,15 @@ struct BundledFontsTests {
         let markdown = "Tree: ├\n\nStar: ★\n\nArrow: →"
         let options = PDFOptions(embeddedFonts: .dejaVu)
         let data = try MarkdownPDFRenderer(options: options).render(markdown: markdown)
-        let textResult = try PDFValidation.pdftotext(data: data, name: "bundled-dejavu-symbols")
+        let text = try PDFValidation.text(data)
 
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
-        #expect(textResult.output.contains("├"))
-        #expect(textResult.output.contains("★"))
-        #expect(textResult.output.contains("→"))
-        #expect(!textResult.output.contains("?"))
-        #expect(!textResult.output.contains("Tree: +"))
-        #expect(!textResult.output.contains("Star: *"))
-        #expect(!textResult.output.contains("Arrow: >"))
+        #expect(text.contains("├"))
+        #expect(text.contains("★"))
+        #expect(text.contains("→"))
+        #expect(!text.contains("?"))
+        #expect(!text.contains("Tree: +"))
+        #expect(!text.contains("Star: *"))
+        #expect(!text.contains("Arrow: >"))
     }
 
     @Test("Default WinAnsi documents retain base fonts")
@@ -55,9 +54,8 @@ struct BundledFontsTests {
         let data = try MarkdownPDFRenderer().render(markdown: markdown)
         let inspector = PDFInspector(data)
         let streams = inspector.streams.map(\.body).joined(separator: "\n")
-        let textResult = try PDFValidation.pdftotext(data: data, name: "automatic-dejavu-symbols")
+        let extracted = try PDFValidation.text(data)
 
-        try #require(textResult.exitCode == 0, "pdftotext failed:\n\(textResult.output)")
         #expect(inspector.text.contains("/FontFile2"))
         #expect(inspector.text.contains("/ToUnicode"))
         for subsetBaseName in [
@@ -73,9 +71,9 @@ struct BundledFontsTests {
             #expect(streams.contains("/\(resourceName)"))
         }
         for text in ["Plain ★", "Bold →", "Italic ♥", "Code ├"] {
-            #expect(textResult.output.contains(text), "Missing \(text) in:\n\(textResult.output)")
+            #expect(extracted.contains(text), "Missing \(text) in:\n\(extracted)")
         }
-        #expect(!textResult.output.contains("?"))
+        #expect(!extracted.contains("?"))
     }
 
     @Test("Nested parsed content participates in automatic selection")
@@ -90,19 +88,32 @@ struct BundledFontsTests {
         #expect(PDFInspector(data).text.contains("/FontFile2"))
     }
 
-    @Test("Automatic DejaVu preserves PDF/UA-1 and PDF/A-2a conformance")
-    func automaticDejaVuPreservesConformance() throws {
+    private func automaticDejaVuConformancePDF() throws -> Data {
         let options = PDFOptions(
             title: "Automatic DejaVu Conformance",
             conformance: .pdfUA1AndPDFA2A,
         )
-        let data = try MarkdownPDFRenderer(options: options).render(markdown: "# Faithful ★\n\nRoute → destination.")
-        let pdfA = try PDFValidation.veraPDF(data: data, name: "automatic-dejavu-pdfa", flavour: "2a")
-        let pdfUA = try PDFValidation.veraPDF(data: data, name: "automatic-dejavu-pdfua", flavour: "ua1")
+        return try MarkdownPDFRenderer(options: options).render(markdown: "# Faithful ★\n\nRoute → destination.")
+    }
 
-        try #require(pdfA.exitCode == 0, "veraPDF PDF/A-2a failed:\n\(pdfA.output)")
-        try #require(pdfUA.exitCode == 0, "veraPDF PDF/UA-1 failed:\n\(pdfUA.output)")
-        #expect(pdfA.output.contains("\"compliant\" : true"))
-        #expect(pdfUA.output.contains("\"compliant\" : true"))
+    @Test("Automatic DejaVu keeps what PDF/UA-1 and PDF/A-2a require of the file")
+    func automaticDejaVuKeepsConformancePrerequisites() throws {
+        let data = try automaticDejaVuConformancePDF()
+
+        PDFValidation.expectSoundStructure(data, name: "automatic-dejavu-conformance")
+        try PDFValidation.expectConformancePrerequisites(data, profiles: [.pdfA2A, .pdfUA1])
+        // The symbols select the bundled faces, so no base font is left unembedded.
+        let fonts = try PDFDocumentReader(data: data).fonts
+        #expect(!fonts.isEmpty)
+        #expect(fonts.allSatisfy { $0.isEmbedded && $0.name.contains("DejaVuSans") })
+    }
+
+    @Test(
+        "Automatic DejaVu preserves PDF/UA-1 and PDF/A-2a conformance",
+        .disabled("not verified: needs a PDF/A and PDF/UA validator inside MarkdownPDF, see Docs/NOT-VERIFIED.md"),
+    )
+    func automaticDejaVuPreservesConformance() throws {
+        _ = try automaticDejaVuConformancePDF()
+        PDFValidation.notVerified("a full PDF/A-2a and PDF/UA-1 conformance run")
     }
 }

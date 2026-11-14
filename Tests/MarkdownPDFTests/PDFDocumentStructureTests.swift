@@ -624,11 +624,9 @@ struct PDFDocumentStructureTests {
         #expect(text.contains("<0006> <00660069>"))
 
         try PDFValidation.writeArtifact(data, name: "shaped-ligature-writer-witness.pdf")
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "shaped-ligature-writer-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let extractedText = try PDFValidation.pdftotext(data: data, name: "shaped-ligature-writer-text")
-        try #require(extractedText.exitCode == 0, "pdftotext failed:\n\(extractedText.output)")
-        #expect(extractedText.output.contains("file"))
+        try PDFValidation.requireSoundStructure(data, name: "shaped-ligature-writer")
+        let extractedText = try PDFValidation.text(data)
+        #expect(extractedText.contains("file"))
     }
 
     @Test("Writer serializes shaped ligature plus mark clusters with source ToUnicode")
@@ -664,11 +662,9 @@ struct PDFDocumentStructureTests {
         #expect(text.contains("<0006> <00660069>"))
 
         try PDFValidation.writeArtifact(data, name: "shaped-ligature-mark-writer-witness.pdf")
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "shaped-ligature-mark-writer-qpdf")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let extractedText = try PDFValidation.pdftotext(data: data, name: "shaped-ligature-mark-writer-text")
-        try #require(extractedText.exitCode == 0, "pdftotext failed:\n\(extractedText.output)")
-        #expect(extractedText.output.contains(source))
+        try PDFValidation.requireSoundStructure(data, name: "shaped-ligature-mark-writer")
+        let extractedText = try PDFValidation.text(data)
+        #expect(extractedText.contains(source))
     }
 
     @Test("Writer serializes subset FontFile2 length and CIDToGIDMap stream")

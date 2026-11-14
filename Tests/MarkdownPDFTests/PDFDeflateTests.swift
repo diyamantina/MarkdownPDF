@@ -67,14 +67,13 @@ struct PDFDeflateTests {
             "Compressed PDF structure failed:\n\(compressedInspector.canonicalStructureReport())",
         )
 
-        let qpdf = try PDFValidation.qpdfCheck(data: compressed, name: "compressed-content-stream")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let plainText = try PDFValidation.pdftotext(data: plain, name: "plain-content-stream")
-        let compressedText = try PDFValidation.pdftotext(data: compressed, name: "compressed-content-stream")
+        try PDFValidation.requireSoundStructure(compressed, name: "compressed-content-stream")
+        let plainText = try PDFValidation.text(plain)
+        let compressedText = try PDFValidation.text(compressed)
 
-        try #require(plainText.exitCode == 0, "pdftotext failed:\n\(plainText.output)")
-        try #require(compressedText.exitCode == 0, "pdftotext failed:\n\(compressedText.output)")
-        #expect(compressedText.output == plainText.output)
+        // The comparison below means something only if the text is there to compare.
+        #expect(plainText.contains("Repeated PDF content makes stream compression"))
+        #expect(compressedText == plainText)
     }
 
     @Test("FontFile2 compression preserves Length1 and encoded length")
@@ -115,11 +114,9 @@ struct PDFDeflateTests {
             "Compressed embedded-font PDF structure failed:\n\(inspector.canonicalStructureReport())",
         )
 
-        let qpdf = try PDFValidation.qpdfCheck(data: data, name: "compressed-fontfile2")
-        try #require(qpdf.exitCode == 0, "qpdf --check failed:\n\(qpdf.output)")
-        let extractedText = try PDFValidation.pdftotext(data: data, name: "compressed-fontfile2")
-        try #require(extractedText.exitCode == 0, "pdftotext failed:\n\(extractedText.output)")
-        #expect(extractedText.output.contains("WAVE"))
+        try PDFValidation.requireSoundStructure(data, name: "compressed-fontfile2")
+        let extractedText = try PDFValidation.text(data)
+        #expect(extractedText.contains("WAVE"))
     }
 
     @Test("Stream encoder skips compression without savings")
