@@ -9,6 +9,22 @@ enum HandWrittenPDF {
         "<< /Length \(length ?? body.utf8.count)\(entries.isEmpty ? "" : " " + entries) >>\nstream\n\(body)\nendstream"
     }
 
+    /// A file of one page that shows `content`. The page font `/F1` is object 5,
+    /// the first of `fontObjects`; by default it is Helvetica.
+    static func onePage(
+        content: String,
+        width: Int = 200,
+        height: Int = 100,
+        fontObjects: [String] = ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"],
+    ) -> Data {
+        file(objects: [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 \(width) \(height)] /Resources << /Font << /F1 5 0 R >> >> >>",
+            "<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>",
+            stream(content),
+        ] + fontObjects)
+    }
+
     /// The file: object `n` is `objects[n - 1]`, the catalog is object 1, and
     /// `trailer` adds entries to the trailer dictionary. `size` overrides `/Size`.
     static func file(objects: [String], trailer: String = "", size: Int? = nil) -> Data {

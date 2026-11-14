@@ -35,11 +35,55 @@ struct ContentStreamGeometry {
         var bottom: Double {
             y - size * 0.25
         }
+
+        /// The string with the escapes of a PDF literal string resolved. An octal
+        /// escape is read as Latin-1, which agrees with WinAnsi from code 160 up,
+        /// so accented Western letters come back as themselves.
+        var unescaped: String {
+            let characters = Array(string)
+            var result = ""
+            var index = 0
+            while index < characters.count {
+                let character = characters[index]
+                index += 1
+                guard character == "\\", index < characters.count else {
+                    result.append(character)
+                    continue
+                }
+                var digits = ""
+                while digits.count < 3, index < characters.count, ("0" ... "7").contains(characters[index]) {
+                    digits.append(characters[index])
+                    index += 1
+                }
+                if !digits.isEmpty {
+                    // Three octal digits can exceed a byte; the high bits are dropped, as the format says.
+                    let code = UInt8(truncatingIfNeeded: Int(digits, radix: 8) ?? 0)
+                    result.unicodeScalars.append(Unicode.Scalar(code))
+                } else {
+                    let escaped = characters[index]
+                    index += 1
+                    result.append(["n": "\n", "r": "\r", "t": "\t", "b": "\u{8}", "f": "\u{C}"][escaped] ?? escaped)
+                }
+            }
+            return result
+        }
     }
 
     struct Page: Equatable {
         var rects: [Rect] = []
         var texts: [Text] = []
+
+        /// The text of the page: fragments that share a baseline joined from left to
+        /// right, baselines from the top of the page down, one line each.
+        var text: String {
+            var byBaseline: [Double: [Text]] = [:]
+            for text in texts {
+                byBaseline[text.y, default: []].append(text)
+            }
+            return byBaseline.keys.sorted(by: >).map { y in
+                byBaseline[y, default: []].sorted { $0.x < $1.x }.map(\.unescaped).joined()
+            }.joined(separator: "\n")
+        }
     }
 
     var pages: [Page]
