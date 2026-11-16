@@ -336,6 +336,27 @@ struct MermaidRenderTests {
         #expect(inspector.hasValidXrefOffsets())
     }
 
+    @Test("A diagram a little taller than the page is shrunk to fit instead of falling back")
+    func tallDiagramScalesToFit() throws {
+        // Twelve rows are taller than the page body at full size and fit once shrunk by the
+        // same steps as a too-wide diagram.
+        let chain = (1 ... 12).map { "n\($0)" }.joined(separator: " --> ")
+        let inspector = try rendered("flowchart TB\n  \(chain)\n")
+
+        #expect(!inspector.text.contains("Unsupported"))
+        #expect(!inspector.text.contains("flowchart"))
+        #expect(inspector.hasValidXrefOffsets())
+    }
+
+    @Test("A diagram too tall even when shrunk still falls back to its source")
+    func hopelesslyTallDiagramFallsBack() throws {
+        let chain = (1 ... 40).map { "n\($0)" }.joined(separator: " --> ")
+        let inspector = try rendered("flowchart TB\n  \(chain)\n")
+
+        #expect(inspector.text.contains("(Unsupported"))
+        #expect(inspector.text.contains("(taller"))
+    }
+
     @Test("A long group title wraps inside its frame")
     func longGroupTitleWraps() throws {
         let title = String(repeating: "a very long group title ", count: 12)

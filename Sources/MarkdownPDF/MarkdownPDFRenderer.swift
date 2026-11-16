@@ -2727,11 +2727,11 @@ private struct Layout {
                 )
             }
 
-            // A diagram that overflows the page width is uniformly shrunk (smaller
-            // font and boxes) and re-planned until it fits, rather than falling back
-            // to source. Only width overflow retries; other fallbacks pass through.
+            // A diagram that overflows the page width or height is uniformly shrunk
+            // (smaller font and boxes) and re-planned until it fits, rather than falling
+            // back to source. Only overflow retries; other fallbacks pass through.
             if case let .fallback(reason) = result,
-               reason.contains("wider than the content area"),
+               reason.contains("wider than the content area") || reason.contains("taller than one page"),
                scale > minimumScale
             {
                 scale = max(minimumScale, scale * 0.85)

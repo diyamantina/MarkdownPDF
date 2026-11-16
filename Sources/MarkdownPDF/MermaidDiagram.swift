@@ -376,6 +376,18 @@ struct MermaidDiagram: Equatable {
                 }
             }
 
+            // A link between a group and itself or its own node has no frame to join at.
+            for (index, group) in groups.enumerated() {
+                let members = Set(group.members)
+                for edge in edges {
+                    let touchesGroup = edge.source == group.id || edge.target == group.id
+                    let inside = { (id: String) in id == group.id || members.contains(id) }
+                    if touchesGroup, inside(edge.source), inside(edge.target) {
+                        return "line \(groupLines[index]): a link between subgraph `\(group.id)` and itself or its own node is not supported"
+                    }
+                }
+            }
+
             let groupIDs = Set(groups.map(\.id))
             nodes.removeAll { groupIDs.contains($0.id) }
             return nil
