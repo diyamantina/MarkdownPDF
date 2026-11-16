@@ -44,6 +44,14 @@ Supported edge syntax:
 
 - Solid directed edge: `A --> B`
 - Solid directed edge with label: `A -->|label| B`
+- Dashed directed edge, with or without a label: `A -.-> B`, `A -.->|label| B`
+- A chain on one line, one edge for each neighbouring pair, each with its own label
+  and line style: `A --> B -.->|x| C --> D`. An arrow inside a quoted label or inside
+  brackets is label text, not an edge.
+
+Labels may hold the HTML line break `<br>`, `<br/>` or `<br />` (any case). In a node
+label it starts a new line, and each line is wrapped to the node width on its own. In
+an edge label it is a space.
 
 Node identifiers may contain letters, numbers, underscores, and hyphens. The
 renderer records nodes in first-seen order, assigns deterministic graph layers,
@@ -61,8 +69,8 @@ Examples of unsupported syntax in the first subset:
 - `sequenceDiagram`
 - class diagrams, state diagrams, ER diagrams, Gantt charts, and mind maps
 - Styled nodes, classes, themes, subgraphs, shapes other than rectangles, and
-  HTML labels
-- Dashed or thick arrows such as `-.->`, `---`, or `==>`
+  HTML labels other than the line break
+- Plain or thick links such as `---` or `==>`
 - Cyclic flowcharts, because the first layout pass is a deterministic DAG layer
   layout
 - Mermaid chart syntax outside the supported pie profile

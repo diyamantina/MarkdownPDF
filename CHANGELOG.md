@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A Mermaid flowchart that chains arrows on one line, `A --> B --> C`, was read at the
+  first arrow only, so the rest of the line became the label of the second node: the
+  PDF showed a box holding `B"] --> C["...` and no third node. A chain now gives one edge
+  for each neighbouring pair, each keeping its own `|label|` and its solid or dashed
+  line. An arrow inside a quoted label or inside brackets stays label text.
+- The HTML line break in a Mermaid label, `<br>`, `<br/>` or `<br />`, was printed as
+  text. In a node label it now starts a new line, and each line is wrapped to the node
+  width on its own. In an edge label it is a space.
+
 ## [0.14.0] - 2026-11-14
 
 This release changes the output of existing documents in two places, both listed under

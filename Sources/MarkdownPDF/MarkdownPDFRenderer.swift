@@ -2745,8 +2745,11 @@ private struct Layout {
         var measurements: [String: MermaidNodeMeasurement] = [:]
 
         for node in nodes {
-            let run = PDFTextRun(text: node.label, font: .helvetica, size: fontSize)
-            let labelLines = try wrappedLines([run], maxWidth: labelWidthLimit)
+            // A newline in a label is a line break the author wrote (`<br/>`); each line is
+            // then wrapped to the node width on its own.
+            let labelLines = try node.label.split(separator: "\n", omittingEmptySubsequences: false).flatMap { segment in
+                try wrappedLines([PDFTextRun(text: String(segment), font: .helvetica, size: fontSize)], maxWidth: labelWidthLimit)
+            }
             let lineWidths = try labelLines.map { line in
                 try inkWidth(ofLine: line)
             }

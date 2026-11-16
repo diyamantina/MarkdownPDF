@@ -98,6 +98,48 @@ struct MermaidRenderTests {
         #expect(inspector.hasValidXrefOffsets())
     }
 
+    @Test("A chained flowchart with line breaks draws every label on its own lines")
+    func chainedFlowchartWithLineBreaksRenders() throws {
+        let markdown = """
+        ```mermaid
+        flowchart LR
+          g["runAnimationGroup<br/>duration 0.5"] --> a["view.animator()<br/>.alphaValue = 0.2"] --> r["the view animates<br/>instead of popping"]
+        ```
+        """
+
+        let data = try MarkdownPDFRenderer().render(markdown: markdown)
+        let inspector = PDFInspector(data)
+        let lines = inspector.text.split(separator: "\n").map(String.init)
+
+        // No tag, no arrow and no source is left on the page.
+        #expect(!inspector.text.contains("<br"))
+        #expect(!inspector.text.contains("-->"))
+        #expect(!inspector.text.contains("Unsupported"))
+        #expect(!inspector.text.contains("flowchart LR"))
+
+        // The text operators put each word at a baseline: `BT /F1 9.680 Tf x y Td (word) Tj ET`.
+        func baseline(ofWordStartingWith word: String) throws -> Double {
+            let line = try #require(lines.first { $0.contains("(\(word)") }, "no text starting with \(word)")
+            let parts = line.split(separator: " ")
+            return try #require(parts.count > 6 ? Double(parts[5]) : nil, "no baseline in \(line)")
+        }
+
+        // A line break puts the second half of a label on a lower baseline, and the words of
+        // one half share a baseline.
+        for (upper, lower) in [
+            ("runAnimationGroup", "duration"),
+            ("view.animator", ".alphaValue"),
+            ("animates", "instead"),
+        ] {
+            let upperBaseline = try baseline(ofWordStartingWith: upper)
+            let lowerBaseline = try baseline(ofWordStartingWith: lower)
+            #expect(upperBaseline > lowerBaseline + 5, "\(lower) is not below \(upper)")
+        }
+        #expect(try baseline(ofWordStartingWith: "duration") == baseline(ofWordStartingWith: "0.5"))
+        #expect(try baseline(ofWordStartingWith: "instead") == baseline(ofWordStartingWith: "popping"))
+        #expect(inspector.hasValidXrefOffsets())
+    }
+
     @Test("A wide horizontal flowchart is scaled to fit instead of falling back")
     func wideHorizontalFlowchartScalesToFit() throws {
         let markdown = """
