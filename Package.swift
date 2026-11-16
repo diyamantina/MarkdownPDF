@@ -45,7 +45,7 @@ let package = Package(
     ] + macProducts,
     dependencies: [
         .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3"),
-        .package(url: "https://codeberg.org/MarkdownPdfHQ/MathTypeset.git", from: "0.7.0"),
+        .package(url: "https://codeberg.org/MarkdownPdfHQ/MathTypeset.git", branch: "main"),
     ],
     targets: [
         .target(
