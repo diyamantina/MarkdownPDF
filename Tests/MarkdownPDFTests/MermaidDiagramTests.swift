@@ -175,7 +175,6 @@ struct MermaidDiagramTests {
             D[x - y] --> E[p --> q]
             F["a --- b"] --> G["c ==> d"]
             H[p --> q] --> I
-            a---b --> c
         """)
 
         guard case let .diagram(diagram) = result else {
@@ -183,9 +182,9 @@ struct MermaidDiagramTests {
             return
         }
 
-        #expect(diagram.nodes.map(\.id) == ["A-B", "C", "D", "E", "F", "G", "H", "I", "a---b", "c"])
+        #expect(diagram.nodes.map(\.id) == ["A-B", "C", "D", "E", "F", "G", "H", "I"])
         #expect(diagram.nodes.map(\.label)[6] == "p --> q")
-        #expect(diagram.edges.count == 5)
+        #expect(diagram.edges.count == 4)
     }
 
     @Test("Only a real line break tag is replaced")
@@ -253,15 +252,240 @@ struct MermaidDiagramTests {
         #expect(diagram.edges == [MermaidDiagram.Edge(source: "A", target: "B", label: "one two")])
     }
 
-    @Test("Solid and dashed edges still reject the thick and plain link forms")
+    @Test("Thick links are still rejected, and the reason names the supported ones")
     func unsupportedLinkFormsAreStillRejected() {
-        for line in ["A === B", "A ==> B", "A --- B"] {
+        for line in ["A === B", "A ==> B"] {
             let result = MermaidDiagram.parse("flowchart TD\n    \(line)\n")
-            guard case .unsupported = result else {
+            guard case let .unsupported(reason) = result else {
                 Issue.record("Expected `\(line)` to be unsupported")
                 continue
             }
+            #expect(reason.contains("`---`"))
+            #expect(reason.contains("`~~~`"))
         }
+    }
+
+    @Test("A plain link joins two nodes without an arrowhead, dashed or not, and can carry a label")
+    func parsesPlainLinks() {
+        let result = MermaidDiagram.parse("""
+        flowchart LR
+            A --- B
+            B ---|same| C -.- D
+            D ----- E
+            E ---> F
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        #expect(diagram.edges == [
+            MermaidDiagram.Edge(source: "A", target: "B", label: nil, style: .line),
+            MermaidDiagram.Edge(source: "B", target: "C", label: "same", style: .line),
+            MermaidDiagram.Edge(source: "C", target: "D", label: nil, style: .dashedLine),
+            MermaidDiagram.Edge(source: "D", target: "E", label: nil, style: .line),
+            MermaidDiagram.Edge(source: "E", target: "F", label: nil, style: .arrow),
+        ])
+    }
+
+    @Test("A plain link between ids written without spaces is still a link")
+    func plainLinkWithoutSpaces() {
+        let result = MermaidDiagram.parse("flowchart TD\n    a---b --> c\n")
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        #expect(diagram.nodes.map(\.id) == ["a", "b", "c"])
+        #expect(diagram.edges.map(\.style) == [.line, .arrow])
+    }
+
+    @Test("An invisible link joins two nodes for layout only and has no label")
+    func parsesInvisibleLinks() {
+        let result = MermaidDiagram.parse("flowchart TD\n    A ~~~ B\n    B ~~~~ C\n")
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        #expect(diagram.edges.map(\.style) == [.hidden, .hidden])
+        #expect(!MermaidDiagram.Edge(source: "A", target: "B", label: nil, style: .hidden).isDrawn)
+
+        guard case let .unsupported(reason) = MermaidDiagram.parse("flowchart TD\n    A ~~~|x| B\n") else {
+            Issue.record("Expected a labelled invisible link to be unsupported")
+            return
+        }
+        #expect(reason.contains("invisible"))
+    }
+
+    @Test("A subgraph groups the nodes written inside it, with its title and direction")
+    func parsesSubgraphs() {
+        let result = MermaidDiagram.parse("""
+        flowchart TB
+            tick["ticks"] --> evaluate
+            subgraph T["SwiftUI's thread"]
+                direction LR
+                evaluate["evaluates"] --> queue
+            end
+            subgraph R[The server]
+                swap
+            end
+            subgraph Bare
+                solo
+            end
+            T ~~~ R
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        #expect(diagram.nodes.map(\.id) == ["tick", "evaluate", "queue", "swap", "solo"])
+        #expect(diagram.groups == [
+            MermaidDiagram.Group(id: "T", title: "SwiftUI's thread", direction: .leftRight, members: ["evaluate", "queue"]),
+            MermaidDiagram.Group(id: "R", title: "The server", direction: nil, members: ["swap"]),
+            MermaidDiagram.Group(id: "Bare", title: "Bare", direction: nil, members: ["solo"]),
+        ])
+        // The group ids in the `~~~` line name groups, not nodes.
+        #expect(diagram.edges == [
+            MermaidDiagram.Edge(source: "tick", target: "evaluate", label: nil),
+            MermaidDiagram.Edge(source: "evaluate", target: "queue", label: nil),
+            MermaidDiagram.Edge(source: "T", target: "R", label: nil, style: .hidden),
+        ])
+    }
+
+    @Test("A group can be named in a link before it is written")
+    func groupNamedBeforeItIsWritten() {
+        let result = MermaidDiagram.parse("""
+        flowchart TB
+            A ~~~ G
+            subgraph G
+                x
+            end
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        #expect(diagram.nodes.map(\.id) == ["A", "x"])
+        #expect(diagram.groups.map(\.id) == ["G"])
+        #expect(diagram.edges == [MermaidDiagram.Edge(source: "A", target: "G", label: nil, style: .hidden)])
+    }
+
+    @Test("A title takes line breaks like a node label")
+    func subgraphTitleLineBreaks() {
+        let result = MermaidDiagram.parse("flowchart TD\n    subgraph S[\"one<br/>two\"]\n        a\n    end\n")
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+        #expect(diagram.groups.first?.title == "one\ntwo")
+    }
+
+    @Test(
+        "Subgraph misuse is reported with its line",
+        arguments: [
+            ("subgraph A\n subgraph B\n x\n end\n end", "nested"),
+            ("subgraph A\n x", "not closed"),
+            ("x\nend", "`end` without"),
+            ("direction LR\nx", "inside a subgraph"),
+            ("subgraph A\n direction XX\n x\n end", "direction"),
+            ("subgraph A\n x\n end\nsubgraph B\n x\n end", "`x` is in more than one"),
+            ("subgraph A\n end", "has no nodes"),
+            ("subgraph A\n x\n end\nsubgraph A\n y\n end", "`A` is declared twice"),
+            ("A[Label] --> x\nsubgraph A\n x\n end", "`A` is both"),
+            ("subgraph A\n x --> A\n end", "`A` is both"),
+            ("subgraph\n x\n end", "needs an id"),
+            ("subgraph A B\n x\n end", "subgraph"),
+        ],
+    )
+    func subgraphMisuseIsReported(_ body: String, _ expected: String) {
+        guard case let .unsupported(reason) = MermaidDiagram.parse("flowchart TD\n\(body)\n") else {
+            Issue.record("Expected `\(body)` to be unsupported")
+            return
+        }
+        #expect(reason.contains("line "), "\(reason)")
+        #expect(reason.contains(expected), "\(reason)")
+    }
+
+    @Test("A node named like a keyword is still a node")
+    func keywordLikeNodesAreNodes() {
+        let result = MermaidDiagram.parse("""
+        flowchart TD
+            direction --> endpoint
+            subgraphs --> End
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+        #expect(diagram.nodes.map(\.id) == ["direction", "endpoint", "subgraphs", "End"])
+        #expect(diagram.groups.isEmpty)
+    }
+
+    @Test("Collapsing groups for layout maps each member to its group and drops inner edges")
+    func collapsedDiagramForLayout() {
+        let result = MermaidDiagram.parse("""
+        flowchart TB
+            subgraph U[UIKit]
+                u1 --> u2
+            end
+            subgraph S[SwiftUI]
+                s1 --> s2
+            end
+            u2 --> out
+            out --> s1
+            U ~~~ S
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        let collapsed = diagram.collapsedForLayout()
+        #expect(collapsed.groups.isEmpty)
+        #expect(collapsed.nodes.map(\.id) == ["U", "S", "out"])
+        #expect(collapsed.nodes.map(\.label) == ["UIKit", "SwiftUI", "out"])
+        #expect(collapsed.edges.map { "\($0.source)>\($0.target)" } == ["U>out", "out>S", "U>S"])
+        #expect(collapsed.layers().map { $0.map(\.id) } == [["U"], ["out"], ["S"]])
+    }
+
+    @Test("The inside of a group is its own diagram with its own direction")
+    func innerDiagramOfAGroup() {
+        let result = MermaidDiagram.parse("""
+        flowchart TB
+            subgraph G
+                direction LR
+                a --> b --> c
+            end
+            subgraph H
+                d --> e
+            end
+            c --> d
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        let inner = diagram.innerDiagram(of: diagram.groups[0])
+        #expect(inner.direction == .leftRight)
+        #expect(inner.nodes.map(\.id) == ["a", "b", "c"])
+        #expect(inner.edges.count == 2)
+        #expect(inner.layers().map { $0.map(\.id) } == [["a"], ["b"], ["c"]])
+
+        // A group with no direction of its own takes the diagram's.
+        #expect(diagram.innerDiagram(of: diagram.groups[1]).direction == .topBottom)
     }
 
     @Test("Lays out cyclic flowcharts by breaking back-edges instead of failing")

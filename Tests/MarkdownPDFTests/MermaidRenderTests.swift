@@ -140,6 +140,186 @@ struct MermaidRenderTests {
         #expect(inspector.hasValidXrefOffsets())
     }
 
+    /// A filled rectangle of the page content, `x y width height re f`.
+    private struct FilledRectangle {
+        var left: Double
+        var bottom: Double
+        var width: Double
+        var height: Double
+
+        var right: Double {
+            left + width
+        }
+
+        var top: Double {
+            bottom + height
+        }
+
+        var area: Double {
+            width * height
+        }
+
+        func contains(_ other: FilledRectangle) -> Bool {
+            other.left >= left && other.right <= right && other.bottom >= bottom && other.top <= top
+        }
+
+        func overlaps(_ other: FilledRectangle) -> Bool {
+            left < other.right && right > other.left && bottom < other.top && top > other.bottom
+        }
+    }
+
+    private func filledRectangles(in text: String) -> [FilledRectangle] {
+        text.split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: " ")
+            guard parts.count == 6, parts[4] == "re", parts[5] == "f",
+                  let left = Double(parts[0]), let bottom = Double(parts[1]),
+                  let width = Double(parts[2]), let height = Double(parts[3])
+            else { return nil }
+            return FilledRectangle(left: left, bottom: bottom, width: width, height: height)
+        }
+    }
+
+    /// The strokes of arrows and links, one `m ... l S` line each: an arrow is a shaft and two
+    /// head strokes, a link without a head is the shaft alone.
+    private func strokeCount(in text: String) -> Int {
+        text.split(separator: "\n").filter { $0.contains(" m ") && $0.contains(" l S") }.count
+    }
+
+    private func rendered(_ diagram: String) throws -> PDFInspector {
+        try PDFInspector(MarkdownPDFRenderer().render(markdown: "```mermaid\n\(diagram)\n```\n"))
+    }
+
+    @Test("A subgraph is a titled frame around its nodes, laid out in its own direction")
+    func subgraphsDrawAsFramesAroundTheirNodes() throws {
+        let inspector = try rendered("""
+        flowchart TB
+          subgraph A["Group A"]
+            direction TB
+            a1["one"] --> a2["two"]
+          end
+          subgraph B["Group B"]
+            direction LR
+            b1["three"] --> b2["four"]
+          end
+          A ~~~ B
+        """)
+
+        for leftover in ["Unsupported", "subgraph", "direction", "~~~", "flowchart"] {
+            #expect(!inspector.text.contains(leftover), "\(leftover) is left on the page")
+        }
+        #expect(inspector.text.contains("(Group"))
+
+        // The page frame, two group frames and four nodes.
+        let rectangles = filledRectangles(in: inspector.text).sorted { $0.area > $1.area }
+        #expect(rectangles.count == 7)
+        let groups = Array(rectangles[1 ... 2])
+        let nodes = Array(rectangles[3...])
+        #expect(!groups[0].overlaps(groups[1]))
+        for group in groups {
+            #expect(nodes.filter { group.contains($0) }.count == 2, "a group does not hold exactly its two nodes")
+        }
+        #expect(nodes.allSatisfy { node in groups.contains { $0.contains(node) } })
+
+        // `A ~~~ B` puts group A above group B, and the two links inside draw as arrows;
+        // the invisible link draws nothing.
+        let above = groups.max { $0.bottom < $1.bottom }
+        let below = groups.min { $0.bottom < $1.bottom }
+        let aNodes = try nodes.filter { try #require(above).contains($0) }
+        let bNodes = try nodes.filter { try #require(below).contains($0) }
+        #expect(try #require(above).bottom >= #require(below).top)
+        #expect(strokeCount(in: inspector.text) == 6)
+
+        // Group A is top to bottom: its nodes share a column. Group B is left to right: its
+        // nodes share a row.
+        #expect(aNodes.count == 2 && abs(aNodes[0].left - aNodes[1].left) < 0.01)
+        #expect(aNodes[0].bottom != aNodes[1].bottom)
+        #expect(bNodes.count == 2 && abs(bNodes[0].bottom - bNodes[1].bottom) < 0.01)
+        #expect(bNodes[0].left != bNodes[1].left)
+        #expect(inspector.hasValidXrefOffsets())
+    }
+
+    @Test("A link from a node outside a group to one inside, and between groups, is drawn")
+    func linksCrossGroupFrames() throws {
+        let inspector = try rendered("""
+        flowchart TB
+          tick["ticks"] --> evaluate
+          subgraph T["thread"]
+            evaluate --> queue
+          end
+          subgraph R["server"]
+            swap
+          end
+          queue --> swap
+        """)
+
+        #expect(!inspector.text.contains("Unsupported"))
+        // Three arrows: tick to evaluate, evaluate to queue, queue to swap.
+        #expect(strokeCount(in: inspector.text) == 9)
+        // Page frame, two groups, four nodes.
+        #expect(filledRectangles(in: inspector.text).count == 7)
+    }
+
+    @Test("A link to a group is drawn to the group's frame")
+    func linkToAGroupEndsAtItsFrame() throws {
+        let inspector = try rendered("""
+        flowchart TB
+          start --> G
+          subgraph G["the group"]
+            inside
+          end
+        """)
+
+        #expect(!inspector.text.contains("Unsupported"))
+        #expect(strokeCount(in: inspector.text) == 3)
+    }
+
+    @Test("A plain link has no arrowhead and a dotted plain link is dashed")
+    func plainLinksDrawWithoutHeads() throws {
+        let plain = try rendered("flowchart LR\n  A --- B\n")
+        let arrow = try rendered("flowchart LR\n  A --> B\n")
+        let dotted = try rendered("flowchart LR\n  A -.- B\n")
+
+        #expect(strokeCount(in: arrow.text) == 3)
+        #expect(strokeCount(in: plain.text) == 1)
+        #expect(strokeCount(in: dotted.text) == 1)
+        #expect(dotted.text.contains("[2.400 1.800] 0 d"))
+        #expect(!plain.text.contains("[2.400 1.800] 0 d"))
+        #expect(!plain.text.contains("Unsupported"))
+    }
+
+    @Test("A group too wide for the page is shrunk to fit instead of falling back")
+    func wideGroupIsScaledToFit() throws {
+        let inspector = try rendered("""
+        flowchart TB
+          subgraph G["a left to right group"]
+            direction LR
+            a["first long label here"] --> b["second long label here"] --> c["third long label here"] --> d["fourth long label here"]
+          end
+        """)
+
+        #expect(!inspector.text.contains("Unsupported"))
+        #expect(!inspector.text.contains("subgraph"))
+        #expect(inspector.hasValidXrefOffsets())
+    }
+
+    @Test("A long group title wraps inside its frame")
+    func longGroupTitleWraps() throws {
+        let title = String(repeating: "a very long group title ", count: 12)
+        let inspector = try rendered("""
+        flowchart TB
+          subgraph G["\(title)"]
+            n["node"]
+          end
+        """)
+
+        #expect(!inspector.text.contains("Unsupported"))
+        let rectangles = filledRectangles(in: inspector.text).sorted { $0.area > $1.area }
+        #expect(rectangles.count == 3)
+        // The frame is inside the page frame and holds the node.
+        #expect(rectangles[0].contains(rectangles[1]))
+        #expect(rectangles[1].contains(rectangles[2]))
+    }
+
     @Test("A wide horizontal flowchart is scaled to fit instead of falling back")
     func wideHorizontalFlowchartScalesToFit() throws {
         let markdown = """

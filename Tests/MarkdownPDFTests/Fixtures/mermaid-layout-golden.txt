@@ -1,0 +1,578 @@
+=== topDown
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 2095 >>
+stream
+0.970 0.980 0.990 rg
+50 527.890 495.280 260 re f
+0.720 0.780 0.840 RG
+0.500 w 50 527.890 495.280 260 re S
+0.250 0.310 0.380 RG
+0.800 w 297.640 745.890 m 297.640 709.890 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 709.890 m 300.411 715.212 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 709.890 m 294.869 715.212 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 675.890 m 237.640 639.890 l S
+0.250 0.310 0.380 RG
+0.800 w 237.640 639.890 m 243.629 640.252 l S
+0.250 0.310 0.380 RG
+0.800 w 237.640 639.890 m 240.778 645.004 l S
+0.250 0.310 0.380 RG
+0.800 w 237.640 605.890 m 297.640 569.890 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 569.890 m 294.502 575.004 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 569.890 m 291.651 570.252 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 675.890 m 357.640 639.890 l S
+0.250 0.310 0.380 RG
+0.800 w 357.640 639.890 m 354.502 645.004 l S
+0.250 0.310 0.380 RG
+0.800 w 357.640 639.890 m 351.651 640.252 l S
+0.970 0.980 0.990 rg
+317.377 651.930 20.525 11.920 re f
+0.350 0.350 0.350 rg
+BT /F3 7.920 Tf 320.377 654.930 Td (side) Tj ET
+0.900 0.940 0.980 rg
+249.448 745.890 96.385 34 re f
+0.180 0.310 0.480 RG
+0.500 w 249.448 745.890 96.385 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 259.448 763.210 Td (Markdown ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 306.783 763.210 Td (source) Tj ET
+0.900 0.940 0.980 rg
+249.640 675.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 249.640 675.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 270.744 693.210 Td (Block ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 297.103 693.210 Td (parser) Tj ET
+0.900 0.940 0.980 rg
+189.640 605.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 189.640 605.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 209.936 623.210 Td (Article ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 239.518 623.210 Td (layout) Tj ET
+0.900 0.940 0.980 rg
+309.640 605.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 309.640 605.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 345.801 623.210 Td (Index) Tj ET
+0.900 0.940 0.980 rg
+249.640 535.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 249.640 535.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 275.047 553.210 Td (PDF ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 297.098 553.210 Td (bytes) Tj ET
+
+endstream
+endobj
+6 0 obj
+<< /Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 595.280 841.890]
+/Resources << /Font << /F1 3 0 R /F3 4 0 R >> >>
+/Contents 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000019 00000 n 
+0000000068 00000 n 
+0000000125 00000 n 
+0000000222 00000 n 
+0000000327 00000 n 
+0000002474 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2618
+%%EOF
+=== leftRight
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Length 2238 >>
+stream
+0.950 0.950 0.950 rg
+54 692.730 487.280 95.160 re f
+0 0 0 rg
+BT /F4 9.900 Tf 60 771.990 Td (Unsupported ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 131.280 771.990 Td (Mermaid ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 178.800 771.990 Td (diagram: ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 232.260 771.990 Td (edge ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 261.960 771.990 Td (label ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 297.600 771.990 Td (`skip` ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 339.180 771.990 Td (collides ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 392.640 771.990 Td (with ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 422.340 771.990 Td (a ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 434.220 771.990 Td (diagram ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 481.740 771.990 Td (node) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 60 758.130 Td (flowchart ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 119.400 758.130 Td (LR) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 60 744.270 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 65.940 744.270 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 71.880 744.270 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 77.820 744.270 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 83.760 744.270 Td (A[Apps] ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 131.280 744.270 Td (--> ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 155.040 744.270 Td (B[Features]) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 60 730.410 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 65.940 730.410 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 71.880 730.410 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 77.820 730.410 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 83.760 730.410 Td (B ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 95.640 730.410 Td (--> ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 119.400 730.410 Td (C[Foundation]) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 60 716.550 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 65.940 716.550 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 71.880 716.550 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 77.820 716.550 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 83.760 716.550 Td (A ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 95.640 716.550 Td (-.->|skip| ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 160.980 716.550 Td (C) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 60 702.690 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 65.940 702.690 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 71.880 702.690 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 77.820 702.690 Td ( ) Tj ET
+0 0 0 rg
+BT /F4 9.900 Tf 83.760 702.690 Td (D[Alone]) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 595.280 841.890]
+/Resources << /Font << /F4 3 0 R >> >>
+/Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000019 00000 n 
+0000000068 00000 n 
+0000000125 00000 n 
+0000000220 00000 n 
+0000002510 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2644
+%%EOF
+=== cycle
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 987 >>
+stream
+0.970 0.980 0.990 rg
+50 667.890 495.280 120 re f
+0.720 0.780 0.840 RG
+0.500 w 50 667.890 495.280 120 re S
+0.250 0.310 0.380 RG
+0.800 w 297.640 745.890 m 297.640 709.890 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 709.890 m 300.411 715.212 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 709.890 m 294.869 715.212 l S
+0.250 0.310 0.380 RG
+0.800 w [2.400 1.800] 0 d 297.640 709.890 m 297.640 745.890 l S [] 0 d
+0.250 0.310 0.380 RG
+0.800 w 297.640 745.890 m 294.869 740.568 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 745.890 m 300.411 740.568 l S
+0.970 0.980 0.990 rg
+278.570 721.930 38.139 11.920 re f
+0.350 0.350 0.350 rg
+BT /F3 7.920 Tf 281.570 724.930 Td (feedback) Tj ET
+0.900 0.940 0.980 rg
+249.640 745.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 249.640 745.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 288.231 763.210 Td (First) Tj ET
+0.900 0.940 0.980 rg
+249.640 675.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 249.640 675.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 281.228 693.210 Td (Second) Tj ET
+
+endstream
+endobj
+6 0 obj
+<< /Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 595.280 841.890]
+/Resources << /Font << /F1 3 0 R /F3 4 0 R >> >>
+/Contents 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000019 00000 n 
+0000000068 00000 n 
+0000000125 00000 n 
+0000000222 00000 n 
+0000000327 00000 n 
+0000001365 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1509
+%%EOF
+=== wide
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Length 1854 >>
+stream
+0.970 0.980 0.990 rg
+50 742.990 495.280 44.900 re f
+0.720 0.780 0.840 RG
+0.500 w 50 742.990 495.280 44.900 re S
+0.250 0.310 0.380 RG
+0.800 w 189.957 765.440 m 207.957 765.440 l S
+0.250 0.310 0.380 RG
+0.800 w 207.957 765.440 m 202.635 768.211 l S
+0.250 0.310 0.380 RG
+0.800 w 207.957 765.440 m 202.635 762.669 l S
+0.250 0.310 0.380 RG
+0.800 w 289.557 765.440 m 307.557 765.440 l S
+0.250 0.310 0.380 RG
+0.800 w 307.557 765.440 m 302.235 768.211 l S
+0.250 0.310 0.380 RG
+0.800 w 307.557 765.440 m 302.235 762.669 l S
+0.250 0.310 0.380 RG
+0.800 w 422.882 765.440 m 440.882 765.440 l S
+0.250 0.310 0.380 RG
+0.800 w 440.882 765.440 m 435.560 768.211 l S
+0.250 0.310 0.380 RG
+0.800 w 440.882 765.440 m 435.560 762.669 l S
+0.900 0.940 0.980 rg
+72.798 750.990 117.159 28.900 re f
+0.180 0.310 0.480 RG
+0.500 w 72.798 750.990 117.159 28.900 re S
+0 0 0 rg
+BT /F1 8.228 Tf 81.298 765.712 Td (Destination ) Tj ET
+0 0 0 rg
+BT /F1 8.228 Tf 124.742 765.712 Td (state, ) Tj ET
+0 0 0 rg
+BT /F1 8.228 Tf 147.155 765.712 Td (your ) Tj ET
+0 0 0 rg
+BT /F1 8.228 Tf 165.446 765.712 Td (data) Tj ET
+0.900 0.940 0.980 rg
+207.957 750.990 81.600 28.900 re f
+0.180 0.310 0.480 RG
+0.500 w 207.957 750.990 81.600 28.900 re S
+0 0 0 rg
+BT /F1 8.228 Tf 239.155 765.712 Td (Copy) Tj ET
+0.900 0.940 0.980 rg
+307.557 750.990 115.325 28.900 re f
+0.180 0.310 0.480 RG
+0.500 w 307.557 750.990 115.325 28.900 re S
+0 0 0 rg
+BT /F1 8.228 Tf 316.057 765.712 Td (Intermediate ) Tj ET
+0 0 0 rg
+BT /F1 8.228 Tf 364.076 765.712 Td (value ) Tj ET
+0 0 0 rg
+BT /F1 8.228 Tf 386.028 765.712 Td (injected) Tj ET
+0.900 0.940 0.980 rg
+440.882 750.990 81.600 28.900 re f
+0.180 0.310 0.480 RG
+0.500 w 440.882 750.990 81.600 28.900 re S
+0 0 0 rg
+BT /F1 8.228 Tf 450.358 765.712 Td (Copy ) Tj ET
+0 0 0 rg
+BT /F1 8.228 Tf 471.850 765.712 Td (is ) Tj ET
+0 0 0 rg
+BT /F1 8.228 Tf 480.078 765.712 Td (rendered) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 595.280 841.890]
+/Resources << /Font << /F1 3 0 R >> >>
+/Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000019 00000 n 
+0000000068 00000 n 
+0000000125 00000 n 
+0000000222 00000 n 
+0000002128 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2262
+%%EOF
+=== breaks
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Length 1655 >>
+stream
+0.970 0.980 0.990 rg
+50 735.045 495.280 52.845 re f
+0.720 0.780 0.840 RG
+0.500 w 50 735.045 495.280 52.845 re S
+0.250 0.310 0.380 RG
+0.800 w 218.050 761.468 m 252.050 761.468 l S
+0.250 0.310 0.380 RG
+0.800 w 252.050 761.468 m 246.728 764.238 l S
+0.250 0.310 0.380 RG
+0.800 w 252.050 761.468 m 246.728 758.697 l S
+0.250 0.310 0.380 RG
+0.800 w 348.050 761.468 m 382.050 761.468 l S
+0.250 0.310 0.380 RG
+0.800 w 382.050 761.468 m 376.728 764.238 l S
+0.250 0.310 0.380 RG
+0.800 w 382.050 761.468 m 376.728 758.697 l S
+0.900 0.940 0.980 rg
+114.125 743.045 103.926 36.845 re f
+0.180 0.310 0.480 RG
+0.500 w 114.125 743.045 103.926 36.845 re S
+0 0 0 rg
+BT /F1 9.680 Tf 124.125 763.210 Td (runAnimationGroup) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 140.527 751.788 Td (duration ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 178.192 751.788 Td (0.5) Tj ET
+0.900 0.940 0.980 rg
+252.050 743.045 96 36.845 re f
+0.180 0.310 0.480 RG
+0.500 w 252.050 743.045 96 36.845 re S
+0 0 0 rg
+BT /F1 9.680 Tf 266.974 763.210 Td (view.animator\(\)) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 262.245 751.788 Td (.alphaValue ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 316.056 751.788 Td (= ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 324.400 751.788 Td (0.2) Tj ET
+0.900 0.940 0.980 rg
+382.050 743.045 99.105 36.845 re f
+0.180 0.310 0.480 RG
+0.500 w 382.050 743.045 99.105 36.845 re S
+0 0 0 rg
+BT /F1 9.680 Tf 392.868 763.210 Td (the ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 409.015 763.210 Td (view ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 431.066 763.210 Td (animates) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 392.050 751.788 Td (instead ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 425.950 751.788 Td (of ) Tj ET
+0 0 0 rg
+BT /F1 9.680 Tf 436.714 751.788 Td (popping) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 595.280 841.890]
+/Resources << /Font << /F1 3 0 R >> >>
+/Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000019 00000 n 
+0000000068 00000 n 
+0000000125 00000 n 
+0000000222 00000 n 
+0000001929 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2063
+%%EOF
+=== bottomTop
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Length 1354 >>
+stream
+0.970 0.980 0.990 rg
+50 597.890 495.280 190 re f
+0.720 0.780 0.840 RG
+0.500 w 50 597.890 495.280 190 re S
+0.250 0.310 0.380 RG
+0.800 w 297.640 639.890 m 237.640 675.890 l S
+0.250 0.310 0.380 RG
+0.800 w 237.640 675.890 m 240.778 670.776 l S
+0.250 0.310 0.380 RG
+0.800 w 237.640 675.890 m 243.629 675.528 l S
+0.250 0.310 0.380 RG
+0.800 w 237.640 709.890 m 297.640 745.890 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 745.890 m 291.651 745.528 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 745.890 m 294.502 740.776 l S
+0.250 0.310 0.380 RG
+0.800 w 297.640 639.890 m 357.640 675.890 l S
+0.250 0.310 0.380 RG
+0.800 w 357.640 675.890 m 351.651 675.528 l S
+0.250 0.310 0.380 RG
+0.800 w 357.640 675.890 m 354.502 670.776 l S
+0.900 0.940 0.980 rg
+249.640 745.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 249.640 745.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 289.301 763.210 Td (Top) Tj ET
+0.900 0.940 0.980 rg
+189.640 675.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 189.640 675.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 223.386 693.210 Td (Middle) Tj ET
+0.900 0.940 0.980 rg
+309.640 675.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 309.640 675.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 347.955 693.210 Td (Side) Tj ET
+0.900 0.940 0.980 rg
+249.640 605.890 96 34 re f
+0.180 0.310 0.480 RG
+0.500 w 249.640 605.890 96 34 re S
+0 0 0 rg
+BT /F1 9.680 Tf 286.610 623.210 Td (Base) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 595.280 841.890]
+/Resources << /Font << /F1 3 0 R >> >>
+/Contents 4 0 R >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000019 00000 n 
+0000000068 00000 n 
+0000000125 00000 n 
+0000000222 00000 n 
+0000001628 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1762
+%%EOF

@@ -2705,7 +2705,10 @@ private struct Layout {
     }
 
     private func mermaidRenderPlan(for diagram: MermaidDiagram) throws -> MermaidRenderPlanResult {
-        let layers = diagram.layers()
+        // With groups, the diagram is laid out as its groups and the nodes outside them; each
+        // group is then laid out inside its own frame.
+        let outerDiagram = diagram.groups.isEmpty ? diagram : diagram.collapsedForLayout()
+        let layers = outerDiagram.layers()
         let minimumScale = 0.55
         var scale = 1.0
 
@@ -2715,9 +2718,13 @@ private struct Layout {
             case let .fallback(reason):
                 return .fallback(reason)
             case let .measurements(measurements):
-                result = diagram.direction.isVertical
-                    ? try verticalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
-                    : try horizontalMermaidRenderPlan(layers: layers, measurements: measurements, edges: diagram.edges)
+                result = try mermaidRenderPlan(
+                    diagram: diagram,
+                    outerDirection: outerDiagram.direction,
+                    layers: layers,
+                    measurements: measurements,
+                    scale: scale,
+                )
             }
 
             // A diagram that overflows the page width is uniformly shrunk (smaller
@@ -2772,119 +2779,249 @@ private struct Layout {
         return .measurements(measurements)
     }
 
-    private func verticalMermaidRenderPlan(
+    /// Plans a diagram whose layers are already known: the nodes and groups of its outer level.
+    /// A group is laid out inside its own frame first, and its frame then takes part in the
+    /// outer layout as one item.
+    private func mermaidRenderPlan(
+        diagram: MermaidDiagram,
+        outerDirection: MermaidDiagram.Direction,
         layers: [[MermaidDiagram.Node]],
         measurements: [String: MermaidNodeMeasurement],
-        edges: [MermaidDiagram.Edge],
+        scale: Double,
     ) throws -> MermaidRenderPlanResult {
         let outerPadding = 8.0
-        let rowSpacing = 36.0
-        let preferredColumnSpacing = 24.0
-        let minimumColumnSpacing = 12.0
-        var boxes: [MermaidNodeBox] = []
-        var offset = outerPadding
-
-        for layer in layers {
-            let layerMeasurements = layer.compactMap { measurements[$0.id] }
-            let rowHeight = layerMeasurements.map(\.height).max() ?? 0
-            var spacing = layerMeasurements.count > 1 ? preferredColumnSpacing : 0
-            var rowWidth = layerMeasurements.reduce(0) { $0 + $1.width } + Double(max(0, layerMeasurements.count - 1)) * spacing
-            if rowWidth > contentWidth {
-                spacing = layerMeasurements.count > 1 ? minimumColumnSpacing : 0
-                rowWidth = layerMeasurements.reduce(0) { $0 + $1.width } + Double(max(0, layerMeasurements.count - 1)) * spacing
+        var items = measurements.mapValues { MermaidLayoutItem(id: $0.id, width: $0.width, height: $0.height) }
+        var groupLayouts: [String: MermaidGroupLayout] = [:]
+        for group in diagram.groups {
+            switch try mermaidGroupLayout(group, in: diagram, measurements: measurements, scale: scale) {
+            case let .fallback(reason):
+                return .fallback(reason)
+            case let .layout(groupLayout):
+                groupLayouts[group.id] = groupLayout
+                items[group.id] = MermaidLayoutItem(id: group.id, width: groupLayout.width, height: groupLayout.height)
             }
-            guard rowWidth <= contentWidth + 0.1 else {
-                return .fallback("diagram row is wider than the content area")
-            }
-
-            var x = options.margins.left + (contentWidth - rowWidth) / 2
-            for measurement in layerMeasurements {
-                boxes.append(MermaidNodeBox(
-                    measurement: measurement,
-                    x: x,
-                    topOffset: offset + (rowHeight - measurement.height) / 2,
-                ))
-                x += measurement.width + spacing
-            }
-            offset += rowHeight + rowSpacing
         }
 
-        let height = max(outerPadding * 2, offset - rowSpacing + outerPadding)
+        let vertical = outerDirection.isVertical
+        let outcome = vertical
+            ? verticalMermaidLayout(
+                layers: layers, items: items, originX: options.margins.left,
+                frameWidth: contentWidth, fillsFrame: true, startOffset: outerPadding,
+            )
+            : horizontalMermaidLayout(
+                layers: layers, items: items, originX: options.margins.left,
+                frameWidth: contentWidth, fillsFrame: true, startOffset: outerPadding,
+            )
+        let layout: MermaidLayout
+        switch outcome {
+        case let .fallback(reason):
+            return .fallback(reason)
+        case let .layout(found):
+            layout = found
+        }
+
+        let height = vertical
+            ? max(outerPadding * 2, layout.bottom + outerPadding)
+            : layout.contentHeight + outerPadding * 2
         guard height <= contentHeight else {
             return .fallback("diagram is taller than one page")
         }
+
+        var boxes: [MermaidNodeBox] = []
+        var groupBoxes: [MermaidGroupBox] = []
+        for placement in layout.placements {
+            if let groupLayout = groupLayouts[placement.id] {
+                groupBoxes.append(MermaidGroupBox(layout: groupLayout, id: placement.id, x: placement.x, topOffset: placement.topOffset))
+                let insideX = placement.x + (groupLayout.width - groupLayout.inner.width) / 2
+                let insideTop = placement.topOffset + groupLayout.contentTop
+                for inner in groupLayout.inner.placements {
+                    if let measurement = measurements[inner.id] {
+                        boxes.append(MermaidNodeBox(measurement: measurement, x: insideX + inner.x, topOffset: insideTop + inner.topOffset))
+                    }
+                }
+            } else if let measurement = measurements[placement.id] {
+                boxes.append(MermaidNodeBox(measurement: measurement, x: placement.x, topOffset: placement.topOffset))
+            }
+        }
+
         if let reason = try mermaidEdgeLabelFallbackReason(
             boxes: boxes,
-            edges: edges,
+            groups: groupBoxes,
+            edges: diagram.edges,
             planHeight: height,
         ) {
             return .fallback(reason)
         }
 
-        return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: edges))
+        return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: diagram.edges, groups: groupBoxes))
     }
 
-    private func horizontalMermaidRenderPlan(
-        layers: [[MermaidDiagram.Node]],
+    /// Lays one group out: its title, then its members in the group's own direction.
+    private func mermaidGroupLayout(
+        _ group: MermaidDiagram.Group,
+        in diagram: MermaidDiagram,
         measurements: [String: MermaidNodeMeasurement],
-        edges: [MermaidDiagram.Edge],
-    ) throws -> MermaidRenderPlanResult {
+        scale: Double,
+    ) throws -> MermaidGroupLayoutResult {
         let outerPadding = 8.0
+        let padding = 8.0 * scale
+        let titleGap = 4.0 * scale
+        let fontSize = options.baseFontSize * 0.8 * scale
+        let lineHeight = fontSize * 1.18
+        let availableWidth = contentWidth - outerPadding * 2 - padding * 2
+
+        let titleLines = try group.title.split(separator: "\n", omittingEmptySubsequences: false).flatMap { segment in
+            try wrappedLines([PDFTextRun(text: String(segment), font: .helveticaBold, size: fontSize)], maxWidth: availableWidth)
+        }
+        let titleWidth = try titleLines.map { try inkWidth(ofLine: $0) }.max() ?? 0
+
+        let inner = diagram.innerDiagram(of: group)
+        let items = Dictionary(uniqueKeysWithValues: inner.nodes.compactMap { node in
+            measurements[node.id].map { (node.id, MermaidLayoutItem(id: $0.id, width: $0.width, height: $0.height)) }
+        })
+        let outcome = inner.direction.isVertical
+            ? verticalMermaidLayout(
+                layers: inner.layers(), items: items, originX: 0,
+                frameWidth: availableWidth, fillsFrame: false, startOffset: 0,
+            )
+            : horizontalMermaidLayout(
+                layers: inner.layers(), items: items, originX: 0,
+                frameWidth: availableWidth, fillsFrame: false, startOffset: 0,
+            )
+        switch outcome {
+        case let .fallback(reason):
+            return .fallback(reason)
+        case let .layout(innerLayout):
+            let titleBlock = titleLines.isEmpty ? 0 : Double(titleLines.count) * lineHeight + titleGap
+            return .layout(MermaidGroupLayout(
+                title: titleLines,
+                fontSize: fontSize,
+                lineHeight: lineHeight,
+                padding: padding,
+                width: max(innerLayout.width, titleWidth) + padding * 2,
+                height: padding + titleBlock + innerLayout.bottom + padding,
+                contentTop: padding + titleBlock,
+                inner: innerLayout,
+            ))
+        }
+    }
+
+    /// Lays layers out as rows of items. A row may use `frameWidth`; a layout that `fillsFrame`
+    /// is that wide and centres its rows, otherwise it is as wide as its widest row. `originX`
+    /// is its left edge and `startOffset` the distance of the first row from the top.
+    private func verticalMermaidLayout(
+        layers: [[MermaidDiagram.Node]],
+        items: [String: MermaidLayoutItem],
+        originX: Double,
+        frameWidth: Double,
+        fillsFrame: Bool,
+        startOffset: Double,
+    ) -> MermaidLayoutResult {
+        let rowSpacing = 36.0
+        let preferredColumnSpacing = 24.0
+        let minimumColumnSpacing = 12.0
+
+        struct Row {
+            var items: [MermaidLayoutItem]
+            var height: Double
+            var spacing: Double
+            var width: Double
+        }
+
+        var rows: [Row] = []
+        for layer in layers {
+            let rowItems = layer.compactMap { items[$0.id] }
+            let rowHeight = rowItems.map(\.height).max() ?? 0
+            var spacing = rowItems.count > 1 ? preferredColumnSpacing : 0
+            var rowWidth = rowItems.reduce(0) { $0 + $1.width } + Double(max(0, rowItems.count - 1)) * spacing
+            if rowWidth > frameWidth {
+                spacing = rowItems.count > 1 ? minimumColumnSpacing : 0
+                rowWidth = rowItems.reduce(0) { $0 + $1.width } + Double(max(0, rowItems.count - 1)) * spacing
+            }
+            guard rowWidth <= frameWidth + 0.1 else {
+                return .fallback("diagram row is wider than the content area")
+            }
+            rows.append(Row(items: rowItems, height: rowHeight, spacing: spacing, width: rowWidth))
+        }
+
+        let width = fillsFrame ? frameWidth : (rows.map(\.width).max() ?? 0)
+        var placements: [MermaidPlacement] = []
+        var offset = startOffset
+        for row in rows {
+            var x = originX + (width - row.width) / 2
+            for item in row.items {
+                placements.append(MermaidPlacement(id: item.id, x: x, topOffset: offset + (row.height - item.height) / 2))
+                x += item.width + row.spacing
+            }
+            offset += row.height + rowSpacing
+        }
+
+        return .layout(MermaidLayout(
+            width: width,
+            bottom: offset - rowSpacing,
+            contentHeight: offset - rowSpacing - startOffset,
+            placements: placements,
+        ))
+    }
+
+    /// Lays layers out as columns of items, with the same frame rules as the vertical layout.
+    private func horizontalMermaidLayout(
+        layers: [[MermaidDiagram.Node]],
+        items: [String: MermaidLayoutItem],
+        originX: Double,
+        frameWidth: Double,
+        fillsFrame: Bool,
+        startOffset: Double,
+    ) -> MermaidLayoutResult {
         let columnSpacing = 34.0
         let compactColumnSpacing = 18.0
         let nodeSpacing = 20.0
-        let layerMeasurements = layers.map { layer in
-            layer.compactMap { measurements[$0.id] }
+        let columns = layers.map { layer in
+            layer.compactMap { items[$0.id] }
         }
-        let columnWidths = layerMeasurements.map { $0.map(\.width).max() ?? 0 }
-        let columnHeights = layerMeasurements.map { column in
+        let columnWidths = columns.map { $0.map(\.width).max() ?? 0 }
+        let columnHeights = columns.map { column in
             column.reduce(0) { $0 + $1.height } + Double(max(0, column.count - 1)) * nodeSpacing
         }
 
         var spacing = columnSpacing
         var totalWidth = columnWidths.reduce(0, +) + Double(max(0, columnWidths.count - 1)) * spacing
-        if totalWidth > contentWidth {
+        if totalWidth > frameWidth {
             spacing = compactColumnSpacing
             totalWidth = columnWidths.reduce(0, +) + Double(max(0, columnWidths.count - 1)) * spacing
         }
-        guard totalWidth <= contentWidth + 0.1 else {
+        guard totalWidth <= frameWidth + 0.1 else {
             return .fallback("diagram columns are wider than the content area")
         }
 
         let innerHeight = columnHeights.max() ?? 0
-        let height = innerHeight + outerPadding * 2
-        guard height <= contentHeight else {
-            return .fallback("diagram is taller than one page")
-        }
-
-        var boxes: [MermaidNodeBox] = []
-        var x = options.margins.left + (contentWidth - totalWidth) / 2
-        for columnIndex in layerMeasurements.indices {
-            var topOffset = outerPadding + (innerHeight - columnHeights[columnIndex]) / 2
-            for measurement in layerMeasurements[columnIndex] {
-                boxes.append(MermaidNodeBox(
-                    measurement: measurement,
-                    x: x + (columnWidths[columnIndex] - measurement.width) / 2,
+        let width = fillsFrame ? frameWidth : totalWidth
+        var placements: [MermaidPlacement] = []
+        var x = originX + (width - totalWidth) / 2
+        for columnIndex in columns.indices {
+            var topOffset = startOffset + (innerHeight - columnHeights[columnIndex]) / 2
+            for item in columns[columnIndex] {
+                placements.append(MermaidPlacement(
+                    id: item.id,
+                    x: x + (columnWidths[columnIndex] - item.width) / 2,
                     topOffset: topOffset,
                 ))
-                topOffset += measurement.height + nodeSpacing
+                topOffset += item.height + nodeSpacing
             }
             x += columnWidths[columnIndex] + spacing
         }
 
-        if let reason = try mermaidEdgeLabelFallbackReason(
-            boxes: boxes,
-            edges: edges,
-            planHeight: height,
-        ) {
-            return .fallback(reason)
-        }
-
-        return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: edges))
+        return .layout(MermaidLayout(
+            width: width,
+            bottom: startOffset + innerHeight,
+            contentHeight: innerHeight,
+            placements: placements,
+        ))
     }
 
     private func mermaidEdgeLabelFallbackReason(
         boxes: [MermaidNodeBox],
+        groups: [MermaidGroupBox],
         edges: [MermaidDiagram.Edge],
         planHeight: Double,
     ) throws -> String? {
@@ -2894,19 +3031,20 @@ private struct Layout {
             width: contentWidth,
             height: planHeight,
         )
-        let boxesByID = Dictionary(uniqueKeysWithValues: boxes.map { ($0.id, $0) })
+        var framesByID = Dictionary(uniqueKeysWithValues: boxes.map { ($0.id, $0.frame(topY: 0)) })
+        for group in groups {
+            framesByID[group.id] = group.frame(topY: 0)
+        }
         let nodeFrames = boxes.map { $0.frame(topY: 0).expanded(by: 2) }
 
-        for edge in edges {
+        for edge in edges where edge.isDrawn {
             guard let label = edge.label,
-                  let source = boxesByID[edge.source],
-                  let target = boxesByID[edge.target]
+                  let sourceFrame = framesByID[edge.source],
+                  let targetFrame = framesByID[edge.target]
             else {
                 continue
             }
 
-            let sourceFrame = source.frame(topY: 0)
-            let targetFrame = target.frame(topY: 0)
             let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
             let labelFrame = try mermaidEdgeLabelFrame(label, start: endpoints.start, end: endpoints.end)
 
@@ -2933,14 +3071,21 @@ private struct Layout {
             fill: PDFColor(red: 0.97, green: 0.98, blue: 0.99),
         )
 
-        let boxesByID = Dictionary(uniqueKeysWithValues: plan.boxes.map { ($0.id, $0) })
-        for edge in plan.edges {
-            guard let source = boxesByID[edge.source],
-                  let target = boxesByID[edge.target]
+        for group in plan.groups {
+            try drawMermaidGroup(group, topY: topY)
+        }
+
+        var framesByID = Dictionary(uniqueKeysWithValues: plan.boxes.map { ($0.id, $0.frame(topY: topY)) })
+        for group in plan.groups {
+            framesByID[group.id] = group.frame(topY: topY)
+        }
+        for edge in plan.edges where edge.isDrawn {
+            guard let sourceFrame = framesByID[edge.source],
+                  let targetFrame = framesByID[edge.target]
             else {
                 continue
             }
-            try drawMermaidEdge(edge, source: source, target: target, topY: topY)
+            try drawMermaidEdge(edge, sourceFrame: sourceFrame, targetFrame: targetFrame)
         }
 
         for box in plan.boxes {
@@ -2948,17 +3093,34 @@ private struct Layout {
         }
     }
 
+    /// A group's frame, drawn behind its nodes, with its title centred at the top.
+    private mutating func drawMermaidGroup(_ group: MermaidGroupBox, topY: Double) throws {
+        let frame = group.frame(topY: topY)
+        currentPage.drawRectangle(
+            x: frame.left,
+            y: frame.bottom,
+            width: group.width,
+            height: group.height,
+            stroke: PDFColor(red: 0.62, green: 0.69, blue: 0.77),
+            fill: PDFColor(red: 0.93, green: 0.95, blue: 0.97),
+        )
+
+        var textY = frame.top - group.padding - group.fontSize
+        for line in group.titleLines {
+            let lineWidth = try inkWidth(ofLine: line)
+            try drawRuns(line, x: frame.left + (group.width - lineWidth) / 2, y: textY)
+            textY -= group.lineHeight
+        }
+    }
+
     private mutating func drawMermaidEdge(
         _ edge: MermaidDiagram.Edge,
-        source: MermaidNodeBox,
-        target: MermaidNodeBox,
-        topY: Double,
+        sourceFrame: MermaidFrame,
+        targetFrame: MermaidFrame,
     ) throws {
-        let sourceFrame = source.frame(topY: topY)
-        let targetFrame = target.frame(topY: topY)
         let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
 
-        drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed)
+        drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed, arrowhead: edge.hasArrowhead)
         if let label = edge.label {
             try drawMermaidEdgeLabel(label, start: endpoints.start, end: endpoints.end)
         }
@@ -2996,7 +3158,7 @@ private struct Layout {
         )
     }
 
-    private mutating func drawArrow(from start: MermaidPoint, to end: MermaidPoint, dashed: Bool = false) {
+    private mutating func drawArrow(from start: MermaidPoint, to end: MermaidPoint, dashed: Bool = false, arrowhead: Bool = true) {
         currentPage.drawLine(
             x1: start.x,
             y1: start.y,
@@ -3006,6 +3168,10 @@ private struct Layout {
             color: PDFColor(red: 0.25, green: 0.31, blue: 0.38),
             dashed: dashed,
         )
+
+        guard arrowhead else {
+            return
+        }
 
         let dx = end.x - start.x
         let dy = end.y - start.y
@@ -5016,6 +5182,79 @@ private struct Layout {
         var height: Double
         var boxes: [MermaidNodeBox]
         var edges: [MermaidDiagram.Edge]
+        var groups: [MermaidGroupBox] = []
+    }
+
+    /// A node or a group, measured, before it is placed.
+    private struct MermaidLayoutItem {
+        var id: String
+        var width: Double
+        var height: Double
+    }
+
+    private struct MermaidPlacement {
+        var id: String
+        var x: Double
+        var topOffset: Double
+    }
+
+    private struct MermaidLayout {
+        var width: Double
+        /// The offset of the bottom edge of the last row or the tallest column.
+        var bottom: Double
+        var contentHeight: Double
+        var placements: [MermaidPlacement]
+    }
+
+    private enum MermaidLayoutResult {
+        case layout(MermaidLayout)
+        case fallback(String)
+    }
+
+    /// A group laid out in its own frame: its title, then its members in relative positions.
+    private struct MermaidGroupLayout {
+        var title: [[PDFTextRun]]
+        var fontSize: Double
+        var lineHeight: Double
+        var padding: Double
+        var width: Double
+        var height: Double
+        /// The distance from the top of the frame to the top of its members.
+        var contentTop: Double
+        var inner: MermaidLayout
+    }
+
+    private enum MermaidGroupLayoutResult {
+        case layout(MermaidGroupLayout)
+        case fallback(String)
+    }
+
+    private struct MermaidGroupBox {
+        var id: String
+        var titleLines: [[PDFTextRun]]
+        var x: Double
+        var topOffset: Double
+        var width: Double
+        var height: Double
+        var fontSize: Double
+        var lineHeight: Double
+        var padding: Double
+
+        init(layout: MermaidGroupLayout, id: String, x: Double, topOffset: Double) {
+            self.id = id
+            titleLines = layout.title
+            self.x = x
+            self.topOffset = topOffset
+            width = layout.width
+            height = layout.height
+            fontSize = layout.fontSize
+            lineHeight = layout.lineHeight
+            padding = layout.padding
+        }
+
+        func frame(topY: Double) -> MermaidFrame {
+            MermaidFrame(left: x, top: topY - topOffset, width: width, height: height)
+        }
     }
 
     private struct MermaidNodeMeasurement {

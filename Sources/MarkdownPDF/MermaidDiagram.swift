@@ -4,6 +4,7 @@ struct MermaidDiagram: Equatable {
     var direction: Direction
     var nodes: [Node]
     var edges: [Edge]
+    var groups: [Group] = []
 
     static func parse(_ source: String) -> ParseResult {
         var parser = Parser(source: source)
@@ -114,11 +115,103 @@ struct MermaidDiagram: Equatable {
         var hasExplicitLabel: Bool
     }
 
+    /// A link between two nodes, or between a node and a group, or between two groups.
     struct Edge: Equatable {
+        /// How a link is drawn. `hidden` (`~~~`) takes part in the layout and draws nothing.
+        enum Style: Equatable {
+            case arrow
+            case dashedArrow
+            case line
+            case dashedLine
+            case hidden
+        }
+
         var source: String
         var target: String
         var label: String?
-        var dashed: Bool = false
+        var style: Style
+
+        init(source: String, target: String, label: String?, style: Style = .arrow) {
+            self.source = source
+            self.target = target
+            self.label = label
+            self.style = style
+        }
+
+        init(source: String, target: String, label: String?, dashed: Bool) {
+            self.init(source: source, target: target, label: label, style: dashed ? .dashedArrow : .arrow)
+        }
+
+        var dashed: Bool {
+            style == .dashedArrow || style == .dashedLine
+        }
+
+        var hasArrowhead: Bool {
+            style == .arrow || style == .dashedArrow
+        }
+
+        var isDrawn: Bool {
+            style != .hidden
+        }
+    }
+
+    /// A `subgraph ... end` block: a titled frame around the nodes written inside it.
+    struct Group: Equatable {
+        var id: String
+        var title: String
+        /// The group's own `direction`; `nil` takes the diagram's.
+        var direction: Direction?
+        var members: [String]
+    }
+
+    /// The diagram with every group collapsed into one node of the group's id and title, each
+    /// member's links moved to that node and the links inside a group dropped. Its layers place
+    /// the groups and the nodes outside them.
+    func collapsedForLayout() -> MermaidDiagram {
+        var groupOfMember: [String: String] = [:]
+        for group in groups {
+            for member in group.members {
+                groupOfMember[member] = group.id
+            }
+        }
+        func representative(_ id: String) -> String {
+            groupOfMember[id] ?? id
+        }
+
+        var collapsedNodes: [Node] = []
+        var placedGroups = Set<String>()
+        for node in nodes {
+            guard let groupID = groupOfMember[node.id] else {
+                collapsedNodes.append(node)
+                continue
+            }
+            if placedGroups.insert(groupID).inserted, let group = groups.first(where: { $0.id == groupID }) {
+                collapsedNodes.append(Node(id: group.id, label: group.title, hasExplicitLabel: true))
+            }
+        }
+
+        var collapsedEdges: [Edge] = []
+        for edge in edges {
+            var mapped = edge
+            mapped.source = representative(edge.source)
+            mapped.target = representative(edge.target)
+            if mapped.source != mapped.target {
+                collapsedEdges.append(mapped)
+            }
+        }
+
+        return MermaidDiagram(direction: direction, nodes: collapsedNodes, edges: collapsedEdges)
+    }
+
+    /// The nodes of one group, the links between them, and the group's direction, or the
+    /// diagram's when the group has none.
+    func innerDiagram(of group: Group) -> MermaidDiagram {
+        let members = Set(group.members)
+        return MermaidDiagram(
+            direction: group.direction ?? direction,
+            nodes: nodes.filter { members.contains($0.id) },
+            edges: edges.filter { members.contains($0.source) && members.contains($0.target) },
+        )
     }
 
     private struct SourceLine {
@@ -141,6 +234,11 @@ struct MermaidDiagram: Equatable {
         private var nodes: [Node] = []
         private var nodeIndexes: [String: Int] = [:]
         private var edges: [Edge] = []
+        private var groups: [Group] = []
+        private var groupLines: [Int] = []
+        private var groupOfNode: [String: Int] = [:]
+        private var openGroup: Int?
+        private var currentLine = 0
 
         init(source: String) {
             lines = source
@@ -166,8 +264,13 @@ struct MermaidDiagram: Equatable {
             }
 
             for line in lines.dropFirst() {
+                currentLine = line.number
                 let text = stripTrailingSemicolon(line.text)
-                if let chain = parseChain(text) {
+                if let keyword = parseKeywordStatement(text) {
+                    if case let .failure(reason) = keyword {
+                        return .unsupported("line \(line.number): \(reason)")
+                    }
+                } else if let chain = parseChain(text) {
                     switch chain {
                     case let .success(chainEdges):
                         edges.append(contentsOf: chainEdges)
@@ -184,11 +287,96 @@ struct MermaidDiagram: Equatable {
                 }
             }
 
+            if let open = openGroup {
+                return .unsupported("line \(groupLines[open]): subgraph `\(groups[open].id)` is not closed with `end`")
+            }
+            if let reason = settleGroups() {
+                return .unsupported(reason)
+            }
+
             guard !nodes.isEmpty else {
                 return .unsupported("flowchart has no nodes")
             }
 
-            return .diagram(MermaidDiagram(direction: direction, nodes: nodes, edges: edges))
+            return .diagram(MermaidDiagram(direction: direction, nodes: nodes, edges: edges, groups: groups))
+        }
+
+        /// Reads `subgraph`, `direction` and `end`. Returns `nil` for any other line. A node
+        /// that merely starts with one of these words, as `direction --> x` does, is not one.
+        private mutating func parseKeywordStatement(_ text: String) -> Outcome<Void>? {
+            let words = text.split(whereSeparator: \.isWhitespace)
+            guard let first = words.first else {
+                return nil
+            }
+
+            if text == "end" {
+                guard openGroup != nil else {
+                    return .failure("`end` without a matching `subgraph`")
+                }
+                openGroup = nil
+                return .success(())
+            }
+
+            if first == "direction", words.count == 2 {
+                guard let open = openGroup else {
+                    return .failure("`direction` is only supported inside a subgraph")
+                }
+                guard let direction = Direction(token: String(words[1])) else {
+                    return .failure("direction `\(words[1])` is not one of TD, TB, BT, LR, RL")
+                }
+                groups[open].direction = direction
+                return .success(())
+            }
+
+            guard first == "subgraph" else {
+                return nil
+            }
+            return openSubgraph(header: text.dropFirst("subgraph".count).trimmingCharacters(in: .whitespaces))
+        }
+
+        private mutating func openSubgraph(header: String) -> Outcome<Void> {
+            guard openGroup == nil else {
+                return .failure("nested subgraphs are not supported")
+            }
+            guard !header.isEmpty else {
+                return .failure("`subgraph` needs an id, as in `subgraph id[\"Title\"]`")
+            }
+            let endpoint: Endpoint
+            switch parseEndpoint(header) {
+            case let .success(parsed):
+                endpoint = parsed
+            case let .failure(reason):
+                return .failure("invalid subgraph header: \(reason)")
+            }
+            guard !groups.contains(where: { $0.id == endpoint.id }) else {
+                return .failure("subgraph `\(endpoint.id)` is declared twice")
+            }
+
+            groups.append(Group(id: endpoint.id, title: endpoint.label ?? endpoint.id, direction: nil, members: []))
+            groupLines.append(currentLine)
+            openGroup = groups.count - 1
+            return .success(())
+        }
+
+        /// Checks every group once all lines are read. A group has at least one node. An id
+        /// written as a node before its `subgraph` line, as in `A ~~~ G`, names the group, so
+        /// that placeholder node is removed; an id that is also a labelled node or a member of
+        /// a group is a clash.
+        private mutating func settleGroups() -> String? {
+            for (index, group) in groups.enumerated() {
+                if group.members.isEmpty {
+                    return "line \(groupLines[index]): subgraph `\(group.id)` has no nodes"
+                }
+                if let nodeIndex = nodeIndexes[group.id],
+                   nodes[nodeIndex].hasExplicitLabel || groupOfNode[group.id] != nil
+                {
+                    return "line \(groupLines[index]): `\(group.id)` is both a node and a subgraph"
+                }
+            }
+
+            let groupIDs = Set(groups.map(\.id))
+            nodes.removeAll { groupIDs.contains($0.id) }
+            return nil
         }
 
         private func parseHeader(_ line: String) -> Direction? {
@@ -209,7 +397,35 @@ struct MermaidDiagram: Equatable {
         /// One arrow between two endpoint texts of a chain, with its own label and line style.
         private struct Link {
             var label: String?
-            var dashed: Bool
+            var style: Edge.Style
+        }
+
+        /// The link that starts `rest`, with its length in characters, or `nil` when none does.
+        /// `-->` and longer `--->`, `-.->`, plain `---` and longer, dotted `-.-`, and invisible
+        /// `~~~` and longer. Two dashes alone, as in `a--b`, are text.
+        private static func link(startingAt rest: Substring) -> (length: Int, style: Edge.Style)? {
+            if rest.hasPrefix("-.->") {
+                return (4, .dashedArrow)
+            }
+            if rest.hasPrefix("-.-") {
+                return (3, .dashedLine)
+            }
+            if rest.hasPrefix("~~~") {
+                return (rest.prefix { $0 == "~" }.count, .hidden)
+            }
+            let dashes = rest.prefix { $0 == "-" }.count
+            let afterDashes = rest.dropFirst(dashes).first
+            if dashes >= 2, afterDashes == ">" {
+                return (dashes + 1, .arrow)
+            }
+            if dashes >= 3 {
+                return (dashes, .line)
+            }
+            return nil
+        }
+
+        private static func mentionsLink(_ line: String) -> Bool {
+            ["-->", "-.->", "-.-", "---", "~~~"].contains { line.contains($0) }
         }
 
         /// A line cut at its arrows: `endpoints.count == links.count + 1`.
@@ -252,14 +468,14 @@ struct MermaidDiagram: Equatable {
             }
 
             return .success(zip(zip(endpoints, endpoints.dropFirst()), chain.links).map { pair, link in
-                Edge(source: pair.0.id, target: pair.1.id, label: link.label, dashed: link.dashed)
+                Edge(source: pair.0.id, target: pair.1.id, label: link.label, style: link.style)
             })
         }
 
-        /// Cuts a line at each `-->` and `-.->`, with an optional `|label|` straight after the
-        /// arrow. An arrow inside a quoted label or inside brackets is label text, not an edge.
-        /// A line with no arrow that holds the plain `---` or thick `==>` link is reported as
-        /// unsupported. A quote opens a quoted label only straight after `[`.
+        /// Cuts a line at each link (see `link(startingAt:)`), with an optional `|label|`
+        /// straight after it. A link inside a quoted label or inside brackets is label text,
+        /// not an edge. A line with no link that holds the thick `==>` or `===` link is reported
+        /// as unsupported. A quote opens a quoted label only straight after `[`.
         private func splitChain(_ line: String) -> Outcome<Chain>? {
             var endpoints: [String] = []
             var links: [Link] = []
@@ -284,21 +500,15 @@ struct MermaidDiagram: Equatable {
                     bracketDepth = max(0, bracketDepth - 1)
                 }
 
-                guard !insideQuotes, bracketDepth == 0, character == "-" || character == "=" else {
+                guard !insideQuotes, bracketDepth == 0, character == "-" || character == "~",
+                      let found = Self.link(startingAt: line[index...])
+                else {
                     current.append(character)
                     index = line.index(after: index)
                     continue
                 }
 
-                let rest = line[index...]
-                let dashed = rest.hasPrefix("-.->")
-                guard dashed || rest.hasPrefix("-->") else {
-                    current.append(character)
-                    index = line.index(after: index)
-                    continue
-                }
-
-                index = line.index(index, offsetBy: dashed ? 4 : 3)
+                index = line.index(index, offsetBy: found.length)
                 var label: String?
                 if index < line.endIndex, line[index] == "|" {
                     let labelStart = line.index(after: index)
@@ -311,20 +521,23 @@ struct MermaidDiagram: Equatable {
                     label = text.isEmpty ? nil : text
                     index = line.index(after: labelEnd)
                 }
+                if found.style == .hidden, label != nil {
+                    return .failure("an invisible `~~~` link cannot carry a label")
+                }
 
                 endpoints.append(current)
-                links.append(Link(label: label, dashed: dashed))
+                links.append(Link(label: label, style: found.style))
                 current = ""
             }
 
-            // An unclosed quote or bracket hides every arrow after it. When the line does hold
-            // an arrow, say so instead of reading the rest as one label.
-            if insideQuotes || bracketDepth > 0, line.contains("-->") || line.contains("-.->") {
-                return .failure("unbalanced quote or bracket in a line with an arrow")
+            // An unclosed quote or bracket hides every link after it. When the line does hold
+            // one, say so instead of reading the rest as one label.
+            if insideQuotes || bracketDepth > 0, Self.mentionsLink(line) {
+                return .failure("unbalanced quote or bracket in a line with a link")
             }
             guard !links.isEmpty else {
-                if line.contains("---") || line.contains("==>") {
-                    return .failure("only solid `-->` and dashed `-.->` flowchart edges are supported")
+                if line.contains("==>") || line.contains("===") {
+                    return .failure("only solid `-->`, dashed `-.->`, plain `---` and invisible `~~~` flowchart links are supported")
                 }
                 return nil
             }
@@ -392,7 +605,25 @@ struct MermaidDiagram: Equatable {
             }
         }
 
+        /// Records a node and, inside a `subgraph`, makes it a member of that group. A node
+        /// written outside any group stays where an earlier mention put it; one written inside
+        /// two groups is rejected.
         private mutating func record(_ endpoint: Endpoint) -> Outcome<Void> {
+            if case let .failure(reason) = recordNode(endpoint) {
+                return .failure(reason)
+            }
+            guard let open = openGroup else {
+                return .success(())
+            }
+            if let owner = groupOfNode[endpoint.id] {
+                return owner == open ? .success(()) : .failure("node `\(endpoint.id)` is in more than one subgraph")
+            }
+            groupOfNode[endpoint.id] = open
+            groups[open].members.append(endpoint.id)
+            return .success(())
+        }
+
+        private mutating func recordNode(_ endpoint: Endpoint) -> Outcome<Void> {
             let label = endpoint.label ?? endpoint.id
             let explicit = endpoint.label != nil
             if let index = nodeIndexes[endpoint.id] {
