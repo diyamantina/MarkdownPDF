@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-16
+
 ### Added
 - Mermaid flowcharts support `subgraph id["Title"] ... end`, with `direction` inside
   it. A group is drawn as a titled frame around its nodes, laid out in its own
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which only shapes the layout.
 
 ### Changed
+- A Mermaid diagram taller than the page is shrunk by the same steps as a too-wide one,
+  and falls back to its source only when it does not fit at the smallest size.
 - Ids written without spaces, `a---b`, are read as a plain link, as Mermaid reads them.
   Before, they were one id with hyphens.
 
