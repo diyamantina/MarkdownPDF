@@ -107,7 +107,7 @@ struct MermaidDiagramTests {
         #expect(diagram.edges == [MermaidDiagram.Edge(source: "A", target: "B", label: nil)])
     }
 
-    @Test("A chain with a bad endpoint is reported with its line and the role of the endpoint")
+    @Test("An unclosed bracket in a chain is reported with its line")
     func chainWithBadEndpointIsReported() {
         let result = MermaidDiagram.parse("""
         flowchart TD
