@@ -137,8 +137,10 @@ struct MermaidDiagramTests {
         #expect(reason("A --> B --> C D")?.contains("invalid edge target") == true)
     }
 
-    @Test("An unclosed quote or bracket before an arrow is reported, never read as one label",
-          arguments: ["A[5\" disk] --> B[ok]", "A[item [1] --> B[x]", "A --> B[5\" x] --> C[y]"])
+    @Test(
+        "An unclosed quote or bracket before an arrow is reported, never read as one label",
+        arguments: ["A[5\" disk] --> B[ok]", "A[item [1] --> B[x]", "A --> B[5\" x] --> C[y]"],
+    )
     func unbalancedDelimitersAreReported(_ line: String) {
         guard case let .unsupported(reason) = MermaidDiagram.parse("flowchart TD\n    \(line)\n") else {
             Issue.record("Expected `\(line)` to be unsupported")
