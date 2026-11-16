@@ -139,7 +139,7 @@ struct MermaidDiagramTests {
 
     @Test(
         "An unclosed quote or bracket before an arrow is reported, never read as one label",
-        arguments: ["A[5\" disk] --> B[ok]", "A[item [1] --> B[x]", "A --> B[5\" x] --> C[y]"],
+        arguments: ["A[item [1] --> B[x]", "A[\"open --> B", "A --> B[\"open --> C[y]"],
     )
     func unbalancedDelimitersAreReported(_ line: String) {
         guard case let .unsupported(reason) = MermaidDiagram.parse("flowchart TD\n    \(line)\n") else {
@@ -149,13 +149,12 @@ struct MermaidDiagramTests {
         #expect(reason.contains("unbalanced"))
     }
 
-    @Test("Hyphens in ids and arrows or dashes inside labels are text")
-    func hyphensAndInnerArrowsAreText() {
+    @Test("A stray quote in an unquoted label is a plain character, however many there are")
+    func strayQuotesInUnquotedLabelsArePlain() {
         let result = MermaidDiagram.parse("""
         flowchart TD
-            A-B --> C
-            D[x - y] --> E[p --> q]
-            F["a --- b"] --> G["c ==> d"]
+            A[5" x] --> B[6" y] --> C
+            D --> E[5" disk]
         """)
 
         guard case let .diagram(diagram) = result else {
@@ -163,9 +162,30 @@ struct MermaidDiagramTests {
             return
         }
 
-        #expect(diagram.nodes.map(\.id) == ["A-B", "C", "D", "E", "F", "G"])
-        #expect(diagram.nodes.map(\.label) == ["A-B", "C", "x - y", "p --> q", "a --- b", "c ==> d"])
+        #expect(diagram.nodes.map(\.id) == ["A", "B", "C", "D", "E"])
+        #expect(diagram.nodes.map(\.label) == ["5\" x", "6\" y", "C", "D", "5\" disk"])
         #expect(diagram.edges.count == 3)
+    }
+
+    @Test("Hyphens in ids and arrows or dashes inside labels are text")
+    func hyphensAndInnerArrowsAreText() {
+        let result = MermaidDiagram.parse("""
+        flowchart TD
+            A-B --> C
+            D[x - y] --> E[p --> q]
+            F["a --- b"] --> G["c ==> d"]
+            H[p --> q] --> I
+            a---b --> c
+        """)
+
+        guard case let .diagram(diagram) = result else {
+            Issue.record("Expected supported Mermaid diagram")
+            return
+        }
+
+        #expect(diagram.nodes.map(\.id) == ["A-B", "C", "D", "E", "F", "G", "H", "I", "a---b", "c"])
+        #expect(diagram.nodes.map(\.label)[6] == "p --> q")
+        #expect(diagram.edges.count == 5)
     }
 
     @Test("Only a real line break tag is replaced")

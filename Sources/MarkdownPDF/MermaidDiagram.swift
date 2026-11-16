@@ -258,7 +258,8 @@ struct MermaidDiagram: Equatable {
 
         /// Cuts a line at each `-->` and `-.->`, with an optional `|label|` straight after the
         /// arrow. An arrow inside a quoted label or inside brackets is label text, not an edge.
-        /// The plain `---` and thick `==>` links are not supported and are reported.
+        /// A line with no arrow that holds the plain `---` or thick `==>` link is reported as
+        /// unsupported. A quote opens a quoted label only straight after `[`.
         private func splitChain(_ line: String) -> Outcome<Chain>? {
             var endpoints: [String] = []
             var links: [Link] = []
@@ -269,14 +270,18 @@ struct MermaidDiagram: Equatable {
 
             while index < line.endIndex {
                 let character = line[index]
-                if character == "\"" {
-                    insideQuotes.toggle()
-                } else if !insideQuotes {
-                    if character == "[" {
-                        bracketDepth += 1
-                    } else if character == "]" {
-                        bracketDepth = max(0, bracketDepth - 1)
+                if insideQuotes {
+                    if character == "\"" {
+                        insideQuotes = false
                     }
+                } else if character == "\"" {
+                    // A quote opens a quoted label only straight after `[`. Anywhere else,
+                    // as in `A[5" disk]`, it is a plain character of an unquoted label.
+                    insideQuotes = bracketDepth > 0 && current.last { !$0.isWhitespace } == "["
+                } else if character == "[" {
+                    bracketDepth += 1
+                } else if character == "]" {
+                    bracketDepth = max(0, bracketDepth - 1)
                 }
 
                 guard !insideQuotes, bracketDepth == 0, character == "-" || character == "=" else {
@@ -288,9 +293,6 @@ struct MermaidDiagram: Equatable {
                 let rest = line[index...]
                 let dashed = rest.hasPrefix("-.->")
                 guard dashed || rest.hasPrefix("-->") else {
-                    if rest.hasPrefix("---") || rest.hasPrefix("==>") {
-                        return .failure("only solid `-->` and dashed `-.->` flowchart edges are supported")
-                    }
                     current.append(character)
                     index = line.index(after: index)
                     continue
@@ -321,6 +323,9 @@ struct MermaidDiagram: Equatable {
                 return .failure("unbalanced quote or bracket in a line with an arrow")
             }
             guard !links.isEmpty else {
+                if line.contains("---") || line.contains("==>") {
+                    return .failure("only solid `-->` and dashed `-.->` flowchart edges are supported")
+                }
                 return nil
             }
             endpoints.append(current)

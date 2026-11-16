@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A quote in a Mermaid label opens a quoted label only straight after `[`. A stray
+  quote in an unquoted label, as in `A[5" disk] --> B[6" y]`, is a plain character, so
+  it no longer hides the arrow that follows it. An unclosed quote or bracket on a line
+  that holds an arrow is reported as unsupported.
+
 ## [0.14.2] - 2026-11-16
 
 ### Fixed
