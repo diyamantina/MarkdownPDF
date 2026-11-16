@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-16
+
 ### Fixed
 - A Mermaid flowchart that chains arrows on one line, `A --> B --> C`, was read at the
   first arrow only, so the rest of the line became the label of the second node: the
