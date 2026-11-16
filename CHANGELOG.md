@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-16
+
+### Fixed
+- The dependency on MathTypeset is a version requirement again (`from: "0.7.0"`).
+  Release 0.14.1 declared it as `branch: "main"`, and SwiftPM does not resolve a
+  tagged release that depends on a branch, so no package could use 0.14.1. Use 0.14.2.
+
 ## [0.14.1] - 2026-11-16
 
 ### Fixed
