@@ -271,6 +271,40 @@ struct MermaidRenderTests {
 
         #expect(!inspector.text.contains("Unsupported"))
         #expect(strokeCount(in: inspector.text) == 3)
+
+        // The shaft is the first stroke: `0.800 w x1 y1 m x2 y2 l S`. It ends on the frame's
+        // top edge, not on the node inside.
+        let rectangles = filledRectangles(in: inspector.text).sorted { $0.area > $1.area }
+        let group = rectangles[1]
+        let inside = try #require(rectangles.last)
+        let shaft = try #require(inspector.text.split(separator: "\n").first { $0.contains(" m ") && $0.contains(" l S") })
+        let parts = shaft.split(separator: " ")
+        let endY = try #require(parts.count >= 9 ? Double(parts[6]) : nil)
+        #expect(abs(endY - group.top) < 0.01)
+        #expect(abs(endY - inside.top) > 1)
+    }
+
+    @Test("A label inside a group sits on the group's colour and one that straddles its frame is refused")
+    func edgeLabelsAndGroupFrames() throws {
+        let inside = try rendered("""
+        flowchart TB
+          subgraph G
+            a -->|yes| b
+          end
+        """)
+        #expect(!inside.text.contains("Unsupported"))
+        // The group frame and the label behind `yes` share the group colour.
+        let groupFill = "0.930 0.950 0.970 rg"
+        #expect(inside.text.split(separator: "\n").filter { $0 == groupFill }.count == 2)
+
+        let straddling = try rendered("""
+        flowchart LR
+          x -->|feedback loop| a
+          subgraph G
+            a
+          end
+        """)
+        #expect(straddling.text.contains("Unsupported"))
     }
 
     @Test("A plain link has no arrowhead and a dotted plain link is dashed")

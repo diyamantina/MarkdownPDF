@@ -3054,10 +3054,19 @@ private struct Layout {
             if nodeFrames.contains(where: { labelFrame.intersects($0) }) {
                 return "edge label `\(label)` collides with a diagram node"
             }
+            if groups.contains(where: { group in
+                let frame = group.frame(topY: 0)
+                return labelFrame.intersects(frame) && !frame.contains(labelFrame)
+            }) {
+                return "edge label `\(label)` collides with a group frame"
+            }
         }
 
         return nil
     }
+
+    private static let mermaidPageFill = PDFColor(red: 0.97, green: 0.98, blue: 0.99)
+    private static let mermaidGroupFill = PDFColor(red: 0.93, green: 0.95, blue: 0.97)
 
     private mutating func drawMermaidPlan(_ plan: MermaidRenderPlan) throws {
         markBlockQuoteContentDrawn()
@@ -3085,7 +3094,12 @@ private struct Layout {
             else {
                 continue
             }
-            try drawMermaidEdge(edge, sourceFrame: sourceFrame, targetFrame: targetFrame)
+            try drawMermaidEdge(
+                edge,
+                sourceFrame: sourceFrame,
+                targetFrame: targetFrame,
+                groupFrames: plan.groups.map { $0.frame(topY: topY) },
+            )
         }
 
         for box in plan.boxes {
@@ -3102,7 +3116,7 @@ private struct Layout {
             width: group.width,
             height: group.height,
             stroke: PDFColor(red: 0.62, green: 0.69, blue: 0.77),
-            fill: PDFColor(red: 0.93, green: 0.95, blue: 0.97),
+            fill: Self.mermaidGroupFill,
         )
 
         var textY = frame.top - group.padding - group.fontSize
@@ -3117,12 +3131,21 @@ private struct Layout {
         _ edge: MermaidDiagram.Edge,
         sourceFrame: MermaidFrame,
         targetFrame: MermaidFrame,
+        groupFrames: [MermaidFrame] = [],
     ) throws {
         let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
 
         drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed, arrowhead: edge.hasArrowhead)
         if let label = edge.label {
-            try drawMermaidEdgeLabel(label, start: endpoints.start, end: endpoints.end)
+            // A label inside a group is painted in the group's colour, not the page's.
+            let labelFrame = try mermaidEdgeLabelFrame(label, start: endpoints.start, end: endpoints.end)
+            let insideGroup = groupFrames.contains { $0.contains(labelFrame) }
+            try drawMermaidEdgeLabel(
+                label,
+                start: endpoints.start,
+                end: endpoints.end,
+                fill: insideGroup ? Self.mermaidGroupFill : Self.mermaidPageFill,
+            )
         }
     }
 
@@ -3200,6 +3223,7 @@ private struct Layout {
         _ label: String,
         start: MermaidPoint,
         end: MermaidPoint,
+        fill: PDFColor,
     ) throws {
         let run = mermaidEdgeLabelRun(label)
         let frame = try mermaidEdgeLabelFrame(label, start: start, end: end)
@@ -3209,7 +3233,7 @@ private struct Layout {
             width: frame.width,
             height: frame.height,
             stroke: nil,
-            fill: PDFColor(red: 0.97, green: 0.98, blue: 0.99),
+            fill: fill,
         )
         try currentPage.drawTextRun(
             run,

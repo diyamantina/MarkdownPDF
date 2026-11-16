@@ -421,13 +421,15 @@ struct MermaidDiagramTests {
         flowchart TD
             direction --> endpoint
             subgraphs --> End
+            direction -->x
+            subgraph ---> y
         """)
 
         guard case let .diagram(diagram) = result else {
             Issue.record("Expected supported Mermaid diagram")
             return
         }
-        #expect(diagram.nodes.map(\.id) == ["direction", "endpoint", "subgraphs", "End"])
+        #expect(diagram.nodes.map(\.id) == ["direction", "endpoint", "subgraphs", "End", "x", "subgraph", "y"])
         #expect(diagram.groups.isEmpty)
     }
 

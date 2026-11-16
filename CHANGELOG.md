@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Mermaid flowcharts support `subgraph id["Title"] ... end`, with `direction` inside
+  it. A group is drawn as a titled frame around its nodes, laid out in its own
+  direction, and takes part in the outer layout as one item. A link may join a node
+  inside a group, a node outside, or a group. Subgraphs do not nest.
+- Mermaid flowcharts support the plain link `A --- B` (and longer forms), the dotted
+  plain link `A -.- B`, the longer arrow `A ---> B`, and the invisible link `A ~~~ B`,
+  which only shapes the layout.
+
+### Changed
+- Ids written without spaces, `a---b`, are read as a plain link, as Mermaid reads them.
+  Before, they were one id with hyphens.
+
 ### Fixed
 - A quote in a Mermaid label opens a quoted label only straight after `[`. A stray
   quote in an unquoted label, as in `A[5" disk] --> B[6" y]`, is a plain character, so

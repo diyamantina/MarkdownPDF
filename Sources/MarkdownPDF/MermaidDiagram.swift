@@ -317,7 +317,8 @@ struct MermaidDiagram: Equatable {
                 return .success(())
             }
 
-            if first == "direction", words.count == 2 {
+            // `direction -->x` is an edge from a node named `direction`, not a statement.
+            if first == "direction", words.count == 2, Self.link(startingAt: words[1]) == nil {
                 guard let open = openGroup else {
                     return .failure("`direction` is only supported inside a subgraph")
                 }
@@ -328,10 +329,11 @@ struct MermaidDiagram: Equatable {
                 return .success(())
             }
 
-            guard first == "subgraph" else {
+            let header = text.dropFirst("subgraph".count).trimmingCharacters(in: .whitespaces)
+            guard first == "subgraph", Self.link(startingAt: Substring(header)) == nil else {
                 return nil
             }
-            return openSubgraph(header: text.dropFirst("subgraph".count).trimmingCharacters(in: .whitespaces))
+            return openSubgraph(header: header)
         }
 
         private mutating func openSubgraph(header: String) -> Outcome<Void> {

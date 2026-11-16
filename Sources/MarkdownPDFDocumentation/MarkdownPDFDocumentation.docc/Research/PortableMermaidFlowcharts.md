@@ -48,6 +48,27 @@ Supported edge syntax:
 - A chain on one line, one edge for each neighbouring pair, each with its own label
   and line style: `A --> B -.->|x| C --> D`. An arrow inside a quoted label or inside
   brackets is label text, not an edge.
+- Plain link without an arrowhead, `A --- B` or `A ---|label| B`, longer forms such as
+  `A ----- B`, and its dotted form `A -.- B`. A longer arrow `A ---> B` is an arrow.
+  Two dashes alone, as in `a--b`, are text. Ids written without spaces, `a---b`, are a
+  link, as Mermaid reads them.
+- Invisible link `A ~~~ B`, which only influences the layout and draws nothing. It
+  takes no label.
+
+Supported grouping syntax:
+
+- A `subgraph` block: `subgraph id`, `subgraph id[Title]` or `subgraph id["Title"]`, the
+  nodes written inside it, and `end`. The title takes line breaks like a node label.
+- `direction TD`, `TB`, `BT`, `LR` or `RL` inside a subgraph sets how its own nodes are
+  laid out. Without one the group takes the diagram's direction. The group's direction
+  is always honoured, where Mermaid ignores it for a group whose nodes link to nodes
+  outside it.
+- A node belongs to the group it is first written inside. A link may name a node inside a
+  group, a node outside, or a group, which it then joins at the group's frame. A group
+  id may be named in a link before its `subgraph` line.
+- The groups and the nodes outside them are layered as one diagram, each group as a
+  single item; a group is then laid out inside its own frame. Subgraphs do not nest, a
+  node may not be written inside two groups, and a group needs at least one node.
 
 Labels may hold the HTML line break `<br>`, `<br/>` or `<br />` (any case). In a node
 label it starts a new line, and each line is wrapped to the node width on its own. In
@@ -68,11 +89,11 @@ Examples of unsupported syntax in the first subset:
 
 - `sequenceDiagram`
 - class diagrams, state diagrams, ER diagrams, Gantt charts, and mind maps
-- Styled nodes, classes, themes, subgraphs, shapes other than rectangles, and
-  HTML labels other than the line break
-- Plain or thick links such as `---` or `==>`
-- Cyclic flowcharts, because the first layout pass is a deterministic DAG layer
-  layout
+- Styled nodes, classes, themes, shapes other than rectangles, and HTML labels other
+  than the line break
+- Nested subgraphs
+- Thick links such as `==>` or `===`, and link text written inside the line, as in
+  `A -- text --> B`
 - Mermaid chart syntax outside the supported pie profile
 
 ## Validation
