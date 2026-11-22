@@ -2873,7 +2873,7 @@ private struct Layout {
             layout = found
         }
 
-        let height = vertical
+        var height = vertical
             ? max(outerPadding * 2, layout.bottom + outerPadding)
             : layout.contentHeight + outerPadding * 2
         guard height <= contentHeight else {
@@ -2897,6 +2897,21 @@ private struct Layout {
             }
         }
 
+        // A link that bends around nodes needs room outside the rows: the diagram grows by what the arcs and their labels reach past it.
+        let headroom = try mermaidArcHeadroom(boxes: boxes, groups: groupBoxes, edges: diagram.edges, height: height)
+        if headroom.top > 0 {
+            for index in boxes.indices {
+                boxes[index].topOffset += headroom.top
+            }
+            for index in groupBoxes.indices {
+                groupBoxes[index].topOffset += headroom.top
+            }
+        }
+        height += headroom.top + headroom.bottom
+        guard height <= contentHeight else {
+            return .fallback("diagram is taller than one page")
+        }
+
         if let reason = try mermaidEdgeLabelFallbackReason(
             boxes: boxes,
             groups: groupBoxes,
@@ -2907,6 +2922,58 @@ private struct Layout {
         }
 
         return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: diagram.edges, groups: groupBoxes))
+    }
+
+    /// How far the arcs of the bent links, and their labels, reach above the top of the diagram and below its bottom, so the diagram can be
+    /// made taller by that much. Measured with the diagram's top at 0 and its bottom at `-height`, with a few points to spare.
+    private func mermaidArcHeadroom(
+        boxes: [MermaidNodeBox],
+        groups: [MermaidGroupBox],
+        edges: [MermaidDiagram.Edge],
+        height: Double,
+    ) throws -> (top: Double, bottom: Double) {
+        var framesByID = Dictionary(uniqueKeysWithValues: boxes.map { ($0.id, $0.frame(topY: 0)) })
+        for group in groups {
+            framesByID[group.id] = group.frame(topY: 0)
+        }
+        let unbounded = MermaidFrame(left: -1e6, top: 1e6, width: 2e6, height: 2e6)
+        let spare = 4.0
+        var top = 0.0
+        var bottom = 0.0
+        for edge in edges where edge.isDrawn {
+            guard let sourceFrame = framesByID[edge.source], let targetFrame = framesByID[edge.target] else {
+                continue
+            }
+            let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
+            let route = try mermaidEdgeRoute(
+                label: edge.label,
+                source: sourceFrame,
+                target: targetFrame,
+                boxes: boxes,
+                topY: 0,
+                bounds: unbounded,
+            )
+            guard case let .arc(control1, control2) = route.path else {
+                continue
+            }
+            var reachTop = route.labelPoint.y
+            var reachBottom = route.labelPoint.y
+            if let label = edge.label {
+                let frame = try mermaidEdgeLabelFrame(label, center: MermaidPoint(x: route.labelPoint.x, y: route.labelPoint.y))
+                reachTop = max(reachTop, frame.top)
+                reachBottom = min(reachBottom, frame.bottom)
+            }
+            for step in 0 ... 64 {
+                let t = Double(step) / 64
+                let u = 1 - t
+                let y = u * u * u * endpoints.start.y + 3 * u * u * t * control1.y + 3 * u * t * t * control2.y + t * t * t * endpoints.end.y
+                reachTop = max(reachTop, y)
+                reachBottom = min(reachBottom, y)
+            }
+            top = max(top, reachTop + spare)
+            bottom = max(bottom, -height - reachBottom + spare)
+        }
+        return (top, bottom)
     }
 
     /// Lays one group out: its title, then its members in the group's own direction.
@@ -3099,7 +3166,15 @@ private struct Layout {
             }
 
             let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
-            let labelFrame = try mermaidEdgeLabelFrame(label, start: endpoints.start, end: endpoints.end)
+            let route = try mermaidEdgeRoute(
+                label: label,
+                source: sourceFrame,
+                target: targetFrame,
+                boxes: boxes,
+                topY: 0,
+                bounds: contentFrame,
+            )
+            let labelFrame = try mermaidEdgeLabelFrame(label, center: MermaidPoint(x: route.labelPoint.x, y: route.labelPoint.y))
 
             guard contentFrame.contains(labelFrame) else {
                 return "edge label `\(label)` does not fit inside the diagram content area"
@@ -3152,6 +3227,9 @@ private struct Layout {
                 sourceFrame: sourceFrame,
                 targetFrame: targetFrame,
                 groupFrames: plan.groups.map { $0.frame(topY: topY) },
+                boxes: plan.boxes,
+                topY: topY,
+                bounds: MermaidFrame(left: options.margins.left, top: topY, width: contentWidth, height: plan.height),
             )
         }
 
@@ -3185,20 +3263,130 @@ private struct Layout {
         sourceFrame: MermaidFrame,
         targetFrame: MermaidFrame,
         groupFrames: [MermaidFrame] = [],
+        boxes: [MermaidNodeBox] = [],
+        topY: Double = 0,
+        bounds: MermaidFrame,
     ) throws {
         let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
+        let route = try mermaidEdgeRoute(
+            label: edge.label,
+            source: sourceFrame,
+            target: targetFrame,
+            boxes: boxes,
+            topY: topY,
+            bounds: bounds,
+        )
 
-        drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed, arrowhead: edge.hasArrowhead)
-        if let label = edge.label {
-            // A label inside a group is painted in the group's colour, not the page's.
-            let labelFrame = try mermaidEdgeLabelFrame(label, start: endpoints.start, end: endpoints.end)
-            let insideGroup = groupFrames.contains { $0.contains(labelFrame) }
-            try drawMermaidEdgeLabel(
-                label,
-                start: endpoints.start,
-                end: endpoints.end,
-                fill: insideGroup ? Self.mermaidGroupFill : Self.mermaidPageFill,
+        switch route.path {
+        case .straight:
+            drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed, arrowhead: edge.hasArrowhead)
+        case let .arc(control1, control2):
+            drawArcArrow(
+                from: endpoints.start,
+                control1: MermaidPoint(x: control1.x, y: control1.y),
+                control2: MermaidPoint(x: control2.x, y: control2.y),
+                to: endpoints.end,
+                dashed: edge.dashed,
+                arrowhead: edge.hasArrowhead,
             )
+        }
+        if let label = edge.label {
+            let center = MermaidPoint(x: route.labelPoint.x, y: route.labelPoint.y)
+            // A label inside a group is painted in the group's colour, not the page's.
+            let labelFrame = try mermaidEdgeLabelFrame(label, center: center)
+            let insideGroup = groupFrames.contains { $0.contains(labelFrame) }
+            try drawMermaidEdgeLabel(label, center: center, fill: insideGroup ? Self.mermaidGroupFill : Self.mermaidPageFill)
+        }
+    }
+
+    /// The route of the link between two nodes: the other nodes are in its way, and its label is kept off every node, the two it joins too.
+    private func mermaidEdgeRoute(
+        label: String?,
+        source: MermaidFrame,
+        target: MermaidFrame,
+        boxes: [MermaidNodeBox],
+        topY: Double,
+        bounds: MermaidFrame,
+    ) throws -> MermaidEdgeRoute {
+        func rectangle(_ frame: MermaidFrame) -> MermaidEdgeRoute.Rectangle {
+            MermaidEdgeRoute.Rectangle(left: frame.left, bottom: frame.bottom, right: frame.right, top: frame.top)
+        }
+        let endpoints = mermaidEdgeEndpoints(source: source, target: target)
+        let labelSize: MermaidEdgeRoute.LabelSize?
+        if let label {
+            let run = mermaidEdgeLabelRun(label)
+            labelSize = try MermaidEdgeRoute.LabelSize(width: textWidth(run) + 6, height: run.size + 4)
+        } else {
+            labelSize = nil
+        }
+        return MermaidEdgeRoute.route(
+            from: MermaidEdgeRoute.Point(x: endpoints.start.x, y: endpoints.start.y),
+            to: MermaidEdgeRoute.Point(x: endpoints.end.x, y: endpoints.end.y),
+            avoiding: mermaidRouteObstacles(boxes: boxes, topY: topY, source: source, target: target).map(rectangle),
+            within: rectangle(bounds),
+            label: labelSize,
+            labelObstacles: boxes.map { rectangle($0.frame(topY: topY).expanded(by: 2)) },
+        )
+    }
+
+    /// The frames of the nodes a link has to avoid: every node but the ones it joins (and the ones inside a group it joins), a little enlarged.
+    private func mermaidRouteObstacles(
+        boxes: [MermaidNodeBox],
+        topY: Double,
+        source: MermaidFrame,
+        target: MermaidFrame,
+    ) -> [MermaidFrame] {
+        boxes.map { $0.frame(topY: topY) }
+            .filter { frame in
+                frame != source && frame != target && !source.contains(frame) && !target.contains(frame)
+            }
+            .map { $0.expanded(by: 2) }
+    }
+
+    /// A link drawn as a cubic arc, with its arrowhead along the arc's tangent at the end. A dashed arc is drawn as short runs of the arc.
+    private mutating func drawArcArrow(
+        from start: MermaidPoint,
+        control1: MermaidPoint,
+        control2: MermaidPoint,
+        to end: MermaidPoint,
+        dashed: Bool,
+        arrowhead: Bool,
+    ) {
+        let color = PDFColor(red: 0.25, green: 0.31, blue: 0.38)
+        func point(at t: Double) -> MermaidPoint {
+            let u = 1 - t
+            return MermaidPoint(
+                x: u * u * u * start.x + 3 * u * u * t * control1.x + 3 * u * t * t * control2.x + t * t * t * end.x,
+                y: u * u * u * start.y + 3 * u * u * t * control1.y + 3 * u * t * t * control2.y + t * t * t * end.y,
+            )
+        }
+        if dashed {
+            // Runs of about 3 pt of the arc on and 3 pt off: the arc's length, from a fine polyline, sets the number of runs.
+            var length = 0.0
+            var previous = start
+            for step in 1 ... 128 {
+                let next = point(at: Double(step) / 128)
+                length += hypot(next.x - previous.x, next.y - previous.y)
+                previous = next
+            }
+            let runs = max(2, Int((length / 3).rounded()))
+            for run in 0 ..< runs where run % 2 == 0 {
+                let from = point(at: Double(run) / Double(runs))
+                let to = point(at: Double(run + 1) / Double(runs))
+                currentPage.drawLine(x1: from.x, y1: from.y, x2: to.x, y2: to.y, width: 0.8, color: color)
+            }
+        } else {
+            currentPage.drawCurve(
+                from: PDFPageCanvas.Point(x: start.x, y: start.y),
+                control1: PDFPageCanvas.Point(x: control1.x, y: control1.y),
+                control2: PDFPageCanvas.Point(x: control2.x, y: control2.y),
+                to: PDFPageCanvas.Point(x: end.x, y: end.y),
+                width: 0.8,
+                color: color,
+            )
+        }
+        if arrowhead {
+            drawArrowhead(at: end, from: point(at: 0.97))
         }
     }
 
@@ -3248,7 +3436,11 @@ private struct Layout {
         guard arrowhead else {
             return
         }
+        drawArrowhead(at: end, from: start)
+    }
 
+    /// The two strokes of an arrowhead at `end`, along the direction from `start` to it.
+    private mutating func drawArrowhead(at end: MermaidPoint, from start: MermaidPoint) {
         let dx = end.x - start.x
         let dy = end.y - start.y
         let length = sqrt(dx * dx + dy * dy)
@@ -3274,12 +3466,11 @@ private struct Layout {
 
     private mutating func drawMermaidEdgeLabel(
         _ label: String,
-        start: MermaidPoint,
-        end: MermaidPoint,
+        center: MermaidPoint,
         fill: PDFColor,
     ) throws {
         let run = mermaidEdgeLabelRun(label)
-        let frame = try mermaidEdgeLabelFrame(label, start: start, end: end)
+        let frame = try mermaidEdgeLabelFrame(label, center: center)
         currentPage.drawRectangle(
             x: frame.left,
             y: frame.bottom,
@@ -3299,15 +3490,14 @@ private struct Layout {
 
     private func mermaidEdgeLabelFrame(
         _ label: String,
-        start: MermaidPoint,
-        end: MermaidPoint,
+        center: MermaidPoint,
     ) throws -> MermaidFrame {
         let run = mermaidEdgeLabelRun(label)
         let width = try textWidth(run)
         let height = run.size + 4
         return MermaidFrame(
-            left: (start.x + end.x) / 2 - width / 2 - 3,
-            top: (start.y + end.y) / 2 + height / 2,
+            left: center.x - width / 2 - 3,
+            top: center.y + height / 2,
             width: width + 6,
             height: height,
         )
@@ -5399,7 +5589,7 @@ private struct Layout {
         }
     }
 
-    private struct MermaidFrame {
+    private struct MermaidFrame: Equatable {
         var left: Double
         var top: Double
         var width: Double

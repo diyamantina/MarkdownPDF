@@ -2189,25 +2189,41 @@ struct MarkdownPDFRendererTests {
         #expect(!textResult.contains("graph LR"))
     }
 
-    @Test("Falls back visibly when Mermaid edge labels collide with nodes")
-    func fallsBackVisiblyWhenMermaidEdgeLabelsCollideWithNodes() throws {
+    @Test("Lifts a link into an arc when its edge label is wider than the gap between the nodes")
+    func liftsMermaidLinkWhenEdgeLabelIsWiderThanTheGap() throws {
         let data = try MarkdownPDFRenderer().render(markdown: """
         ```mermaid
         graph LR
             A["Markdown"] -->|this label is intentionally too long to fit in the edge gap| B["PDF"]
         ```
         """)
-        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label-collision")
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label-lifted")
 
-        #expect(!textResult.isEmpty, "no text was extracted for Mermaid edge label fallback:\n\(textResult)")
-        #expect(textResult.contains("Unsupported Mermaid diagram"))
-        #expect(textResult.contains("collides with a diagram node"))
+        #expect(!textResult.isEmpty, "no text was extracted for the Mermaid diagram:\n\(textResult)")
+        #expect(!textResult.contains("Unsupported Mermaid diagram"))
         #expect(textResult.contains("this label is intentionally too long"))
+        #expect(!textResult.contains("graph LR"))
+    }
+
+    @Test("Falls back visibly when a Mermaid edge label cannot fit the page at all")
+    func fallsBackVisiblyWhenMermaidEdgeLabelCannotFitThePage() throws {
+        let longLabel = String(repeating: "wider than the page ", count: 40)
+        let data = try MarkdownPDFRenderer().render(markdown: """
+        ```mermaid
+        graph LR
+            A["Markdown"] -->|\(longLabel)| B["PDF"]
+        ```
+        """)
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label-too-wide")
+        let normalizedOutput = textResult.replacingOccurrences(of: "\n", with: " ")
+
+        #expect(normalizedOutput.contains("Unsupported Mermaid diagram"), Comment(rawValue: normalizedOutput))
+        #expect(normalizedOutput.contains("edge label"))
         #expect(textResult.contains("graph LR"))
     }
 
-    @Test("Falls back visibly when Mermaid edge labels collide with intermediate nodes")
-    func fallsBackVisiblyWhenMermaidEdgeLabelsCollideWithIntermediateNodes() throws {
+    @Test("Bends a Mermaid link around an intermediate node, with its edge label on the arc")
+    func bendsMermaidLinkAroundIntermediateNodes() throws {
         let data = try MarkdownPDFRenderer().render(markdown: """
         ```mermaid
         flowchart TD
@@ -2216,14 +2232,12 @@ struct MarkdownPDFRendererTests {
             Middle --> End
         ```
         """)
-        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label-intermediate-collision")
-        let normalizedOutput = textResult.replacingOccurrences(of: "\n", with: " ")
+        let textResult = try PDFValidation.text(data, artifact: "mermaid-edge-label-intermediate-arc")
 
-        #expect(!textResult.isEmpty, "no text was extracted for Mermaid intermediate label fallback:\n\(textResult)")
-        #expect(textResult.contains("Unsupported Mermaid diagram"))
-        #expect(normalizedOutput.contains("collides with a diagram node"))
+        #expect(!textResult.isEmpty, "no text was extracted for the Mermaid diagram:\n\(textResult)")
+        #expect(!textResult.contains("Unsupported Mermaid diagram"))
         #expect(textResult.contains("crosses the middle node"))
-        #expect(textResult.contains("flowchart TD"))
+        #expect(!textResult.contains("flowchart TD"))
     }
 
     @Test("Keeps unknown fragment links as URI annotations")

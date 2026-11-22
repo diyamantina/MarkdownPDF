@@ -573,15 +573,32 @@ struct MermaidDiagram: Equatable {
                 index = line.index(index, offsetBy: found.length)
                 var label: String?
                 if index < line.endIndex, line[index] == "|" {
-                    let labelStart = line.index(after: index)
-                    guard let labelEnd = line[labelStart...].firstIndex(of: "|") else {
-                        return .failure("edge label is missing its closing `|`")
+                    var labelStart = line.index(after: index)
+                    // A quoted label (`|"text"|`) runs to the closing quote, so it may hold a `|` or a link; the quotes are not its text.
+                    let quoted = labelStart < line.endIndex && line[labelStart] == "\""
+                    if quoted {
+                        labelStart = line.index(after: labelStart)
+                    }
+                    let labelEnd: String.Index
+                    if quoted {
+                        guard let closingQuote = line[labelStart...].firstIndex(of: "\""),
+                              line.index(after: closingQuote) < line.endIndex,
+                              line[line.index(after: closingQuote)] == "|"
+                        else {
+                            return .failure("a quoted edge label is missing its closing quote and `|`")
+                        }
+                        labelEnd = closingQuote
+                    } else {
+                        guard let closing = line[labelStart...].firstIndex(of: "|") else {
+                            return .failure("edge label is missing its closing `|`")
+                        }
+                        labelEnd = closing
                     }
                     let text = Self.replacingLineBreaks(in: String(line[labelStart ..< labelEnd]), with: " ")
                         .split(whereSeparator: \.isWhitespace)
                         .joined(separator: " ")
                     label = text.isEmpty ? nil : text
-                    index = line.index(after: labelEnd)
+                    index = line.index(after: quoted ? line.index(after: labelEnd) : labelEnd)
                 }
                 if found.style == .hidden, label != nil {
                     return .failure("an invisible `~~~` link cannot carry a label")

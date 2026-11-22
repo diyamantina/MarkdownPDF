@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rectangle.
 
 ### Fixed
+- A Mermaid link whose straight line would run through other nodes (a back edge over a row) bends around them as an arc, and its label
+  sits on the arc, with the diagram made taller by what the arc reaches. A label wider than the gap between two neighbouring nodes lifts
+  its link into an arc until the label clears both. Before, such a diagram was given up as source ("edge label ... collides with a diagram
+  node").
+- A quoted link label, `A -->|"text"| B`, is printed without its quotes, and may hold a `|` or a link.
 - A Mermaid loop (`s --> g --> p --> l -.-> s`) is laid out from the node declared first. Layering started at the node with the smallest id, which
   scrambled the order of the steps.
 - A Mermaid diagram whose left-to-right row is still wider than the page at the smallest scale is drawn top to bottom (right to left becomes
