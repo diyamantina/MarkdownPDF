@@ -5465,7 +5465,8 @@ extension Layout {
         let height = size + 2 * padding
         let label = pill.label.map { tileRun($0 + "  ", size: size, color: .black) }
         let word = tileRun(pill.status.rawValue, bold: true, size: size, color: Self.tileInk(pill.status))
-        let labelWidth = try label.map { try inkWidth(ofLine: [$0]) } ?? 0
+        // the label's trailing spaces are part of its advance here: they are the gap to the state word
+        let labelWidth = try label.map { try textWidth([$0]) } ?? 0
         let wordWidth = try inkWidth(ofLine: [word])
         let width = min(contentWidth, labelWidth + wordWidth + 4 * padding)
         ensureSpace(height)
@@ -5562,7 +5563,7 @@ extension Layout {
             y -= cardHeight + gap
         }
         // each row was followed by a gap; the last one is followed by the spacing of a figure instead
-        y += gap - figureTrailingSpacing
+        y += gap - figureTrailingSpacing - 4
     }
 
     private mutating func drawCard(

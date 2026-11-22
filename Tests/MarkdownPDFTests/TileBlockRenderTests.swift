@@ -29,6 +29,15 @@ struct TileBlockRenderTests {
         #expect(try printed(Self.fence("pill", "status: \(status)")) == [status])
     }
 
+    @Test("the label of a pill and its state are apart: the state starts after the label ends, with room for a space")
+    func pillGap() throws {
+        let reader = try PDFDocumentReader(data: pdf(Self.fence("pill", "status: running\nlabel: Release 0.14.1")))
+        let words = reader.pages.flatMap(\.words)
+        let label = try #require(words.first { $0.text == "0.14.1" })
+        let state = try #require(words.first { $0.text == "running" })
+        #expect(state.x - (label.x + label.width) >= 3, Comment(rawValue: "gap \(state.x - (label.x + label.width))"))
+    }
+
     @Test("a progress bar prints its label and the count as the page writes it")
     func progress() throws {
         let words = try printed(Self.fence("progress", "value: 37\nmax: 120\nlabel: Pages written\nstatus: running"))
