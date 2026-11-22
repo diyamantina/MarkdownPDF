@@ -72,9 +72,11 @@ charts of the blog and the site print. No change breaks the API: `PDFOptions.omi
   labels alone, so a long label and its number ran past the box (the doughnut of the cupertino 1.6.5 article, a pie in the site's diagrams page: the
   entry ended 5 to 7 points beyond the margin). The column is now sized from the whole entries, and a label longer than the column (capped as before)
   is shortened with an ellipsis; its number never is.
-- A table column is never narrower than its widest word when the widest words of all the columns fit the page together. A narrow column had been
-  capped at an equal share of the page, so a long identifier such as `CALayer.anchorPoint` in a five-column table broke inside the word
-  (`CALayer.anchorPo` and `int`). Only a word wider than its share when they do not all fit is broken by character, as before.
+- A table column is never narrower than its widest word when the widest words of all the columns fit the page together; when they do not, the
+  widest floors are cut to one common level (water filling), so only the widest words are broken at all. A column had been capped at an equal
+  share of the page, so a long identifier such as `CALayer.anchorPoint` in a five-column table broke inside the word (`CALayer.anchorPo` and
+  `int`). A word that has to be broken is cut after a `.`, `/`, `_`, `-` or `:` or between a lower-case letter or digit and a capital
+  (`CALayer.anchor` and `Point`); only a word with no such place in the part that fits is cut by character, as before.
 - A Mermaid `subgraph` whose header is a bare title of several words (`subgraph After 1.6.5`) is drawn with that title. It was refused
   ("invalid subgraph header"). A header with a shape that is not drawn is still refused by name.
 - A Mermaid link whose straight line would run through other nodes (a back edge over a row) bends around them as an arc, and its label

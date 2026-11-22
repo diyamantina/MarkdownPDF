@@ -3639,11 +3639,11 @@ private struct Layout {
                 fontSize: fontSize,
             )
         }
-        // The least a column may shrink to is the width of its widest word, so no word is broken inside itself. That holds whenever the widest
-        // words of all the columns fit the page together; only when they do not, each column keeps an equal share of the page at most, and
-        // a word wider than that is broken by character.
+        // The least a column may shrink to is the width of its widest word, so no word is broken inside itself. When the widest words of all the
+        // columns do not fit the page together, the widest floors are cut down to one common level `L` until they do (water filling: the floors are
+        // `min(word_i, L)` with `sum = page`), so only a word wider than `L`, the widest of them, is broken by character.
         let wordWidths = metrics.map(\.wordWidth)
-        let minimumWidths = wordWidths.reduce(0, +) < contentWidth ? wordWidths : metrics.map(\.minimumWidth)
+        let minimumWidths = TableColumnFloors.waterFilled(wordWidths, minimum: Array(repeating: minimumColumnWidth, count: columns), total: contentWidth)
         let preferredWidths = zip(metrics, minimumWidths).map { max($0.preferredWidth, $1) }
         let preferredTotal = preferredWidths.reduce(0, +)
 
@@ -3737,6 +3737,7 @@ private struct Layout {
             return try wrappedLines(
                 flatten(cell, font: standardFont(for: style.fontRole), size: fontSize, color: style.color),
                 maxWidth: max(1, width - cellPadding * 2),
+                softBreaks: true,
             )
         }
         return TablePreparedRow(cellLines: cellLines)
@@ -4412,16 +4413,19 @@ private struct Layout {
         max(1, Int(floor((availablePageHeight - cellPadding * 2) / lineHeight)))
     }
 
+    /// `softBreaks` lets a word wider than the line be cut where it reads best (see ``splitOversizedToken(_:maxWidth:softBreaks:)``); a table cell asks for it,
+    /// the other callers keep the cut by character.
     private func wrappedLines(
         _ runs: [PDFTextRun],
         maxWidth: Double,
+        softBreaks: Bool = false,
     ) throws -> [[PDFTextRun]] {
         let tokens = tokenize(runs)
         var lines: [[PDFTextRun]] = []
         var current: [PDFTextRun] = []
         var currentWidth = 0.0
 
-        for token in try tokens.flatMap({ try splitOversizedToken($0, maxWidth: maxWidth) }) {
+        for token in try tokens.flatMap({ try splitOversizedToken($0, maxWidth: maxWidth, softBreaks: softBreaks) }) {
             if token.text == "\n" {
                 lines.append(current)
                 current = []
@@ -4453,6 +4457,7 @@ private struct Layout {
     private func splitOversizedToken(
         _ token: PDFTextRun,
         maxWidth: Double,
+        softBreaks: Bool = false,
     ) throws -> [PDFTextRun] {
         guard token.text != "\n",
               token.inlineMathBox == nil,
@@ -4463,24 +4468,42 @@ private struct Layout {
             return [token]
         }
 
+        // A word wider than the line is cut where it reads best: after the last `.`, `/`, `_`, `-` or `:`, or between a lower-case letter or digit
+        // and a capital (`CALayer.` and `sublayerTransform`), that still fits the line; only a word with no such place in the part that fits is
+        // cut by character, as before.
         var parts: [PDFTextRun] = []
-        var buffer = ""
-        for character in token.text {
-            let candidate = buffer + String(character)
-            if !buffer.isEmpty,
-               try textWidth(token.withText(candidate)) > maxWidth
-            {
-                parts.append(token.withText(buffer))
-                buffer = String(character)
-            } else {
-                buffer = candidate
+        var rest = Array(token.text)
+        while !rest.isEmpty {
+            if try textWidth(token.withText(String(rest))) <= maxWidth {
+                parts.append(token.withText(String(rest)))
+                break
             }
-        }
-
-        if !buffer.isEmpty {
-            parts.append(token.withText(buffer))
+            var fit = 0
+            for count in 1 ... rest.count {
+                if try textWidth(token.withText(String(rest.prefix(count)))) > maxWidth {
+                    break
+                }
+                fit = count
+            }
+            fit = max(fit, 1)
+            let cut = softBreaks ? ((1 ... fit).reversed().first { Self.isSoftBreak(after: $0, in: rest) } ?? fit) : fit
+            parts.append(token.withText(String(rest.prefix(cut))))
+            rest.removeFirst(cut)
         }
         return parts
+    }
+
+    /// Whether a long word may be cut after its first `count` characters: after a separator, or before a capital that follows a lower-case letter or digit.
+    private static func isSoftBreak(after count: Int, in characters: [Character]) -> Bool {
+        guard count > 0, count < characters.count else {
+            return false
+        }
+        let before = characters[count - 1]
+        let after = characters[count]
+        if ".,/_-:".contains(before) {
+            return true
+        }
+        return (before.isLowercase || before.isNumber) && after.isUppercase
     }
 
     private func tokenize(_ runs: [PDFTextRun]) -> [PDFTextRun] {
