@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-22
+
+The PDF of a page now matches the page: the tiles are drawn, formulas use the real math font, emoji are drawn in colour, and the diagrams and
+charts of the blog and the site print. No change breaks the API: `PDFOptions.omitUndrawableEmoji` and `PDFOptions.EmbeddedFonts.emoji` and
+`.math` are additions with defaults.
+
 ### Added
 - Colour emoji. A single emoji code point, or one followed by the emoji variation selector, is drawn in colour: each layer of its glyph in
   the bundled Twemoji.Mozilla face is filled as a vector path in its palette colour, and the emoji is also one invisible glyph with its own
