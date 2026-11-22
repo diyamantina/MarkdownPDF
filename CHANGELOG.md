@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-22
+
+A patch release: one defect, with the test that states the rule for every character of a measured domain. No API change.
+
+What was measured about it. A caller that gives no font at all (the case of a site generator that passes only the math option) already gets the
+bundled faces from 0.16.0 whenever the document holds a character WinAnsi cannot hold, code blocks included, and then draws every character of the
+domain below from a face; the arrow, the check mark and the package of a printed article come out right with 0.16.0. The hole that remained is a
+caller that embeds the text faces and not the monospaced one.
+
 ### Fixed
 - A symbol or an emoji in a code block is drawn, not replaced by a letter. A run whose own font is not embedded (the code of a document that embeds
   the text faces but no monospaced face) is written with the base-14 font, which holds WinAnsi only; every other character used to be folded to an
