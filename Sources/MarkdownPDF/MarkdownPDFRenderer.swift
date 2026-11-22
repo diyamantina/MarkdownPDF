@@ -4494,9 +4494,25 @@ private struct Layout {
             // past the measure, where nothing is drawn. So a word wraps only when it
             // does not fit without that space, and spaces alone never start a line.
             if currentWidth + width > maxWidth, !current.isEmpty, try !hangs(token, after: currentWidth, maxWidth: maxWidth) {
-                lines.append(current)
-                current = [token]
-                currentWidth = width
+                // A closing mark that follows a piece of another run with no space between them (a full stop after an inline code span) is a token
+                // of its own, and would start the next line alone: the piece it follows goes to the next line with it.
+                // When that piece is the only one on the line (a code span wider than the cell, cut by character), its last character goes instead.
+                if Self.isClosingMarkToken(token), let last = current.last, !last.text.hasSuffix(" "), current.count > 1 || last.text.count > 1 {
+                    var carried = last
+                    if current.count > 1 {
+                        current.removeLast()
+                    } else {
+                        current = [last.withText(String(last.text.dropLast()))]
+                        carried = last.withText(String(last.text.suffix(1)))
+                    }
+                    lines.append(current)
+                    current = [carried, token]
+                    currentWidth = try textWidth(carried) + width
+                } else {
+                    lines.append(current)
+                    current = [token]
+                    currentWidth = width
+                }
             } else {
                 current.append(token)
                 currentWidth += width
@@ -4555,6 +4571,14 @@ private struct Layout {
     }
 
     private static let closingMarks: Set<Character> = [".", ",", ";", ":", "!", "?", ")", "]", "}"]
+
+    /// Whether the token is closing marks only, with no leading space (the space that ends a word may follow them), no letter and no inline box.
+    private static func isClosingMarkToken(_ token: PDFTextRun) -> Bool {
+        let body = token.text.prefix { $0 != " " }
+        let rest = token.text.dropFirst(body.count)
+        return token.inlineMathBox == nil && token.indexTerm == nil && !body.isEmpty
+            && body.allSatisfy { closingMarks.contains($0) } && rest.allSatisfy { $0 == " " }
+    }
 
     /// Whether a long word may be cut after its first `count` characters: after a separator, or before a capital that follows a lower-case letter or digit.
     private static func isSoftBreak(after count: Int, in characters: [Character]) -> Bool {

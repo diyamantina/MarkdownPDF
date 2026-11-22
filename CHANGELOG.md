@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-11-23
+
+A patch release: the closing-mark rule of 0.18.0 covered a cut by character only, and the case that was seen in a real table was another path.
+
+### Fixed
+
+- A closing mark (a full stop, a comma, a closing bracket) that touches an inline code span no longer stands alone on the next line when the span ends a
+  line: the span goes to the next line with it (and, when the span is wider than its cell and cut by character, its last character does). The
+  swiftui-3d-is-flat table cell `initializable from CATransform3D.` is the test case; seven marks are swept over every right margin from 54 to 329 points.
+
 ## [0.18.0] - 2026-11-22
 
 A minor release: the bundled colour emoji face is replaced by a newer one and more of Unicode is drawn; nothing is removed and no API changes.
