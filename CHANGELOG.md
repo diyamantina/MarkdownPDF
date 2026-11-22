@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-22
+
+A minor release: a character that no face draws is reported and never replaced silently, and the emoji sequences are drawn. Both are additions with
+defaults that leave existing output unchanged, except that a flag, a keycap, a skin tone pair, a joined emoji and a text-default emoji that no text face
+has, which used to show the missing-glyph box, now show the emoji.
+
+The measured number: of the 7210 entries of the whole set (every emoji sequence of the Unicode Consortium's `emoji-test.txt`, Unicode 18.0, and the
+assigned code points of eleven symbol blocks) 2917 were drawn from a face before (40.5 percent) and 6185 are drawn now (85.8 percent); none is replaced
+by a wrong letter. The 1025 that are left are named in `Tests/MarkdownPDFTests/Unicode/whole-set-report.txt`: 547 emoji newer than the bundled colour face
+and 478 symbols of four blocks that the bundled text faces lack. A face for each is a later change.
+
 ### Added
 - Emoji sequences are drawn. A flag, a keycap, an emoji with a skin tone, a joined emoji (a family, a heart on fire) and a subdivision flag are drawn from
   the bundled colour face as ONE glyph, by the face's own `ccmp` substitutions (2298 ligatures in the face, no new face and no new licence): the glyphs
