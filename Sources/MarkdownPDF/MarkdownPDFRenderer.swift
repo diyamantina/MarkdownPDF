@@ -493,6 +493,8 @@ private func footnoteLabelKey(_ label: String) -> String {
 private struct TableColumnMetrics {
     var minimumWidth: Double
     var preferredWidth: Double
+    /// The width of the column's widest word without a break point, with the padding, up to the widest a column may be: the least that keeps every word whole.
+    var wordWidth: Double = 0
 }
 
 private struct TablePreparedRow {
@@ -3628,8 +3630,12 @@ private struct Layout {
                 fontSize: fontSize,
             )
         }
-        let preferredWidths = metrics.map(\.preferredWidth)
-        let minimumWidths = metrics.map(\.minimumWidth)
+        // The least a column may shrink to is the width of its widest word, so no word is broken inside itself. That holds whenever the widest
+        // words of all the columns fit the page together; only when they do not, each column keeps an equal share of the page at most, and
+        // a word wider than that is broken by character.
+        let wordWidths = metrics.map(\.wordWidth)
+        let minimumWidths = wordWidths.reduce(0, +) < contentWidth ? wordWidths : metrics.map(\.minimumWidth)
+        let preferredWidths = zip(metrics, minimumWidths).map { max($0.preferredWidth, $1) }
         let preferredTotal = preferredWidths.reduce(0, +)
 
         if preferredTotal <= contentWidth {
@@ -3691,6 +3697,7 @@ private struct Layout {
         return TableColumnMetrics(
             minimumWidth: fairFloor,
             preferredWidth: max(preferredWidth, fairFloor),
+            wordWidth: tokenFloor,
         )
     }
 

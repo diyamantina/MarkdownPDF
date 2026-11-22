@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rectangle.
 
 ### Fixed
+- A table column is never narrower than its widest word when the widest words of all the columns fit the page together. A narrow column had been
+  capped at an equal share of the page, so a long identifier such as `CALayer.anchorPoint` in a five-column table broke inside the word
+  (`CALayer.anchorPo` and `int`). Only a word wider than its share when they do not all fit is broken by character, as before.
 - A Mermaid `subgraph` whose header is a bare title of several words (`subgraph After 1.6.5`) is drawn with that title. It was refused
   ("invalid subgraph header"). A header with a shape that is not drawn is still refused by name.
 - A Mermaid link whose straight line would run through other nodes (a back edge over a row) bends around them as an arc, and its label
