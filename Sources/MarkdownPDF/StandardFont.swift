@@ -5,9 +5,14 @@ enum StandardFont: String, CaseIterable {
     case helveticaBold = "F2"
     case helveticaOblique = "F3"
     case courier = "F4"
+    /// The face of typeset formulas. It exists only as an embedded font (the bundled Latin Modern Math, or the
+    /// caller's); with none, a formula is drawn with the other faces, as before.
+    case math = "F5"
 
     func baseName(in fontSet: PDFOptions.FontSet) -> String {
         switch self {
+        case .math:
+            fontSet.regular
         case .helvetica:
             fontSet.regular
         case .helveticaBold:

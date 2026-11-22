@@ -86,12 +86,18 @@ public struct MarkdownPDFRenderer: Sendable {
     }
 
     private func resolvedOptions(for document: MarkdownDocument) -> PDFOptions {
-        guard options.embeddedFonts == .disabled, document.containsNonWinAnsiText else {
-            return options
-        }
-
+        // Text outside WinAnsi needs the bundled faces; so does a typeset formula with a symbol the base fonts lack,
+        // which would otherwise be spelled out ("int", "infinity", "pi").
         var resolvedOptions = options
-        resolvedOptions.embeddedFonts = .dejaVu
+        if options.embeddedFonts.hasNoTextFaces, document.containsNonWinAnsiText {
+            let math = options.embeddedFonts.math
+            resolvedOptions.embeddedFonts = .dejaVu
+            resolvedOptions.embeddedFonts.math = math
+        }
+        // A formula with a symbol the base fonts lack is drawn with the math face, not spelled out ("int", "infinity", "pi").
+        if options.mathTypesetting.isEnabled, resolvedOptions.embeddedFonts.math == nil, document.containsMathNeedingSymbols {
+            resolvedOptions.embeddedFonts.math = BundledFonts.latinModernMath
+        }
         return resolvedOptions
     }
 
@@ -1835,7 +1841,7 @@ private struct Layout {
             switch element {
             case let .text(run, offsetX, offsetY):
                 try currentPage.drawTextRun(
-                    PDFTextRun(run),
+                    PDFTextRun(run, face: mathFace),
                     x: x + offsetX,
                     y: baselineY + offsetY,
                     fontSet: options.fontSet,
@@ -3845,7 +3851,7 @@ private struct Layout {
             // Draw the Unicode glyph when the active font covers it, else the
             // ASCII transliteration (matching `.unicodeWhereCovered` on the box
             // path). The base-14 portable profile covers no math glyphs.
-            let font = standardFont(for: style(for: .inlineMath).fontRole)
+            let font = mathFace ?? standardFont(for: style(for: .inlineMath).fontRole)
             let text = embeddedFonts.covers(display, font: font) ? display : linearized
             return [inlineMathTextRun(
                 text,
@@ -3952,7 +3958,7 @@ private struct Layout {
         let mathStyle = style(for: .inlineMath)
         return PDFTextRun(
             text: text,
-            font: standardFont(for: mathStyle.fontRole),
+            font: mathFace ?? standardFont(for: mathStyle.fontRole),
             size: size * mathStyle.sizeMultiplier,
             color: inheritedColor == style(for: .body).color ? mathStyle.color : inheritedColor,
             underline: underline,
@@ -4666,7 +4672,7 @@ private struct Layout {
         return try MathLayout(
             font: MathFontStyle(font),
             color: MathColor(style.color),
-            measureText: { try textWidth(PDFTextRun($0)) },
+            measureText: { try textWidth(PDFTextRun($0, face: mathFace)) },
             metrics: mathMetrics(for: style),
             // Draw each math symbol with its Unicode glyph when the active font
             // covers it, and fall back to the ASCII transliteration when it does
@@ -4675,12 +4681,17 @@ private struct Layout {
             // font gets glyphs where it can. The radical sign is drawn as vector
             // strokes regardless. See MathTypeset SymbolStyle.
             symbolStyle: .unicodeWhereCovered,
-            symbolCoverage: { embeddedFonts.covers($0, font: font) },
+            symbolCoverage: { embeddedFonts.covers($0, font: mathFace ?? font) },
         )
     }
 
+    /// The face typeset formulas are drawn with: the embedded math font when there is one, else the text faces.
+    private var mathFace: StandardFont? {
+        embeddedFonts.entry(for: .math) == nil ? nil : .math
+    }
+
     private func mathMetrics(for style: PDFOptions.ElementStyle) throws -> MathLayoutMetrics {
-        let font = standardFont(for: style.fontRole)
+        let font = mathFace ?? standardFont(for: style.fontRole)
         if let metrics = embeddedFonts.entry(for: font)?.mathMetrics {
             return metrics
         }

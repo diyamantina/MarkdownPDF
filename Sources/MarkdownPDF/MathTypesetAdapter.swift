@@ -13,6 +13,7 @@ extension MathFontStyle {
         case .helveticaBold: .bold
         case .helveticaOblique: .italic
         case .courier: .monospace
+        case .math: .regular
         }
         self.init(variant: variant)
     }
@@ -38,10 +39,12 @@ extension MathColor {
 }
 
 extension PDFTextRun {
-    init(_ run: MathRun) {
+    /// A run of a typeset formula. With a `face` (the embedded math font) every run of the formula is drawn with it,
+    /// whatever its variant: a math font carries its own italic and bold alphabets.
+    init(_ run: MathRun, face: StandardFont? = nil) {
         self.init(
             text: run.text,
-            font: run.font.standardFont,
+            font: face ?? run.font.standardFont,
             size: run.size,
             color: run.color.pdfColor,
             baselineOffset: run.baselineOffset,

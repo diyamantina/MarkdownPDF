@@ -9,7 +9,7 @@ public extension PDFOptions.EmbeddedFonts {
     static let dejaVu = BundledFonts.dejaVu
 }
 
-private enum BundledFonts {
+enum BundledFonts {
     static let dejaVu: PDFOptions.EmbeddedFonts = {
         guard let bundle = resourceBundle else {
             return .disabled
@@ -24,6 +24,15 @@ private enum BundledFonts {
         } catch {
             return .disabled
         }
+    }()
+
+    /// The Latin Modern Math face bundled with MarkdownPDF, the same math font the TileDown site draws its formulas with
+    /// (GUST Font License). It is used for typeset formulas only, and nil if an installation omits the resource.
+    static let latinModernMath: PDFOptions.EmbeddedFontSource? = {
+        guard let bundle = resourceBundle else {
+            return nil
+        }
+        return try? source(named: "latinmodern-math", extension: "otf", in: bundle)
     }()
 
     /// The synthesized `Bundle.module` accessor terminates when its resource
@@ -79,11 +88,12 @@ private enum BundledFonts {
 
     private static func source(
         named name: String,
+        extension fileExtension: String = "ttf",
         in bundle: Bundle,
     ) throws -> PDFOptions.EmbeddedFontSource {
         guard let url = bundle.url(
             forResource: name,
-            withExtension: "ttf",
+            withExtension: fileExtension,
             subdirectory: "Fonts",
         ) else {
             throw BundledFontError.missingResource

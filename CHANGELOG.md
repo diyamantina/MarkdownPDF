@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A typeset formula with a symbol the base fonts lack (an integral, an infinity, a Greek letter, a relation, a sum) was
+  spelled out in words ("int", "infinity", "pi") in a document that had no other text outside WinAnsi. Formulas are now
+  drawn with the Latin Modern Math face bundled with the package (the math font the TileDown site draws its formulas
+  with, GUST Font License), used for formulas only: the text stays on its own faces. A formula that needs no symbol keeps
+  the base fonts, and a document that does not typeset math is unchanged. A caller can give its own math face with
+  `PDFOptions.EmbeddedFonts.math`.
+- The draft issue file `issues/new-draw-an-svg-picture-...md` committed by mistake with the tile tests is removed.
+
 ### Added
 - ` ```tile callout `, ` ```tile cta `, ` ```tile hero ` and ` ```tile cards ` draw the tiles that are text in a box,
   with the lines of the same tile on a TileDown page. The text of each is inline Markdown (emphasis, code, links

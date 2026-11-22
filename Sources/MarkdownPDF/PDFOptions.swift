@@ -291,17 +291,27 @@ public struct PDFOptions: Equatable, Sendable {
         public var bold: EmbeddedFontSource?
         public var italic: EmbeddedFontSource?
         public var monospaced: EmbeddedFontSource?
+        /// The face of typeset formulas only, with a MATH table. With none, a document whose formulas need symbols the
+        /// base fonts lack (an integral, an infinity, a Greek letter) uses the bundled Latin Modern Math for them.
+        public var math: EmbeddedFontSource?
 
         public init(
             regular: EmbeddedFontSource? = nil,
             bold: EmbeddedFontSource? = nil,
             italic: EmbeddedFontSource? = nil,
             monospaced: EmbeddedFontSource? = nil,
+            math: EmbeddedFontSource? = nil,
         ) {
             self.regular = regular
             self.bold = bold
             self.italic = italic
             self.monospaced = monospaced
+            self.math = math
+        }
+
+        /// True when no face is embedded for any role of text (a math face does not count: it is for formulas only).
+        var hasNoTextFaces: Bool {
+            regular == nil && bold == nil && italic == nil && monospaced == nil
         }
 
         public static let disabled = EmbeddedFonts()

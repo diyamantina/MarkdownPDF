@@ -39,6 +39,7 @@ struct PDFEmbeddedFontCatalog {
             to: &entries,
         )
         try Self.add(fonts.monospaced, for: .courier, resourceName: "EF4", parseMathTables: parseMathTables, to: &entries)
+        try Self.add(fonts.math, for: .math, resourceName: "EF5", parseMathTables: true, to: &entries)
         entriesByFont = entries
     }
 
