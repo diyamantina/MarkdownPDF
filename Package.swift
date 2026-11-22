@@ -72,7 +72,7 @@ let package = Package(
                 "MarkdownPDFLinux",
                 .product(name: "MathTypeset", package: "MathTypeset"),
             ] + macTestDependencies,
-            exclude: ["Fixtures"],
+            exclude: ["Fixtures", "Unicode"],
         ),
         .testTarget(
             name: "MarkdownPDFResumeTests",
