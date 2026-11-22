@@ -6,8 +6,8 @@ import Testing
 /// (`TileDown` `FlowLayout`): a node's layer is the length of the longest path into it, its row is its place among the nodes of its layer in the order
 /// they first appear, x = 12 + layer * 200, y = 12 + row * 64, boxes 140 by 40.
 ///
-/// `fixture` is the shared answer key: the SAME table is in the TileDown repository (`FlowLayoutTests`), so a page's picture and its print can never put a
-/// box in a different place. Each row: the lines of the tile, then the nodes in order with their layer, their row, x and y, and the size of the picture.
+/// `fixture` is the shared answer key, ONE file (`Fixtures/flow-layout.txt`) read by this suite and by TileDown's `FlowSharedFixtureTests`, so a page's picture
+/// and its print can never put a box in a different place.
 @Suite("Tile blocks: the flow graph")
 struct TileFlowTests {
     struct Case: Sendable {
@@ -18,50 +18,64 @@ struct TileFlowTests {
         var height: Int
     }
 
-    static let fixture: [Case] = [
-        Case(
-            name: "one edge",
-            lines: "edge: a -> b",
-            nodes: [("a", 0, 0, 12, 12), ("b", 1, 0, 212, 12)],
-            width: 364,
-            height: 64,
-        ),
-        Case(
-            name: "the build pipeline of the docs",
-            lines: "edge: parse -> build\nedge: build -> test\nedge: build -> package\nedge: test -> release\nedge: package -> release\nnode: test\nstatus: running",
-            nodes: [("parse", 0, 0, 12, 12), ("build", 1, 0, 212, 12), ("test", 2, 0, 412, 12), ("package", 2, 1, 412, 76), ("release", 3, 0, 612, 12)],
-            width: 764,
-            height: 128,
-        ),
-        Case(
-            name: "a longer path pushes a node right: a -> b, b -> c, a -> c puts c in the third column",
-            lines: "edge: a -> b\nedge: b -> c\nedge: a -> c",
-            nodes: [("a", 0, 0, 12, 12), ("b", 1, 0, 212, 12), ("c", 2, 0, 412, 12)],
-            width: 564,
-            height: 64,
-        ),
-        Case(
-            name: "two sources into one node, rows in the order the nodes first appear",
-            lines: "edge: a -> c\nedge: b -> c",
-            nodes: [("a", 0, 0, 12, 12), ("c", 1, 0, 212, 12), ("b", 0, 1, 12, 76)],
-            width: 364,
-            height: 128,
-        ),
-        Case(
-            name: "a node with no edge",
-            lines: "node: solo\nlabel: Alone",
-            nodes: [("solo", 0, 0, 12, 12)],
-            width: 164,
-            height: 64,
-        ),
-        Case(
-            name: "three columns of different heights",
-            lines: "edge: a -> b\nedge: a -> c\nedge: a -> d\nedge: b -> e",
-            nodes: [("a", 0, 0, 12, 12), ("b", 1, 0, 212, 12), ("c", 1, 1, 212, 76), ("d", 1, 2, 212, 140), ("e", 2, 0, 412, 12)],
-            width: 564,
-            height: 192,
-        ),
-    ]
+    /// The cases of `Fixtures/flow-layout.txt`, the one answer key that TileDown's tests read too (its `FlowSharedFixtureTests` finds this file in the
+    /// MarkdownPDF checkout it builds against). A fixture that cannot be read or parsed fails every test that needs it: nothing is skipped.
+    static let fixture: [Case] = {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/flow-layout.txt")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return [Case(name: "the fixture file cannot be read", lines: "", nodes: [], width: -1, height: -1)]
+        }
+        return parseFixture(text)
+    }()
+
+    /// The cases of the fixture text: `case:` NAME, `lines:` then the lines of the tile, `nodes:` then `id layer row x y`, `size: W H`, `----`.
+    static func parseFixture(_ text: String) -> [Case] {
+        var cases: [Case] = []
+        var current: Case?
+        var section = ""
+        for raw in text.components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") {
+                continue
+            }
+            if line == "----" {
+                if let finished = current {
+                    cases.append(finished)
+                }
+                current = nil
+                continue
+            }
+            if line.hasPrefix("case:") {
+                current = Case(name: String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces), lines: "", nodes: [], width: 0, height: 0)
+                section = ""
+            } else if line == "lines:" || line == "nodes:" {
+                section = line
+            } else if line.hasPrefix("size:") {
+                let numbers = line.dropFirst(5).split(separator: " ").compactMap { Int($0) }
+                if numbers.count == 2 {
+                    current?.width = numbers[0]
+                    current?.height = numbers[1]
+                }
+            } else if section == "lines:" {
+                if let existing = current?.lines {
+                    current?.lines = existing.isEmpty ? line : existing + "\n" + line
+                }
+            } else if section == "nodes:" {
+                let parts = line.split(separator: " ").map(String.init)
+                if parts.count == 5, let layer = Int(parts[1]), let row = Int(parts[2]), let x = Int(parts[3]), let y = Int(parts[4]) {
+                    current?.nodes.append((parts[0], layer, row, x, y))
+                }
+            }
+        }
+        return cases
+    }
+
+    @Test("the fixture file holds the six cases, each with nodes and a size")
+    func fixtureIsRead() {
+        #expect(Self.fixture.count == 6, Comment(rawValue: "\(Self.fixture.map(\.name))"))
+        #expect(Self.fixture.allSatisfy { !$0.nodes.isEmpty && $0.width > 0 && $0.height > 0 && !$0.lines.isEmpty })
+    }
 
     private func flow(_ body: String) -> TileBlock.Flow? {
         if case let .tile(.flow(flow)) = TileBlock.parse(type: "flow", body: body) {

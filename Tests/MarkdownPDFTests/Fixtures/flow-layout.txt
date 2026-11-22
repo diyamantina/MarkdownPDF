@@ -1,0 +1,74 @@
+# The answer key of the flow layout: ONE file, read by the tests of both MarkdownPDF (TileFlowTests) and TileDown (FlowSharedFixtureTests).
+# A page's SVG and the PDF print put every box in the same place: a node's layer is the length of the longest path into it, its row its place among
+# the nodes of its layer in the order they first appear, x = 12 + layer * 200, y = 12 + row * 64, boxes 140 by 40.
+#
+# A case is: `case: NAME`, the lines of the tile after `lines:`, the nodes after `nodes:` (id layer row x y), and `size: WIDTH HEIGHT`. Cases end with `----`.
+
+case: one edge
+lines:
+edge: a -> b
+nodes:
+a 0 0 12 12
+b 1 0 212 12
+size: 364 64
+----
+case: the build pipeline of the docs
+lines:
+edge: parse -> build
+edge: build -> test
+edge: build -> package
+edge: test -> release
+edge: package -> release
+node: test
+status: running
+nodes:
+parse 0 0 12 12
+build 1 0 212 12
+test 2 0 412 12
+package 2 1 412 76
+release 3 0 612 12
+size: 764 128
+----
+case: a longer path pushes a node right, a -> b, b -> c, a -> c puts c in the third column
+lines:
+edge: a -> b
+edge: b -> c
+edge: a -> c
+nodes:
+a 0 0 12 12
+b 1 0 212 12
+c 2 0 412 12
+size: 564 64
+----
+case: two sources into one node, rows in the order the nodes first appear
+lines:
+edge: a -> c
+edge: b -> c
+nodes:
+a 0 0 12 12
+c 1 0 212 12
+b 0 1 12 76
+size: 364 128
+----
+case: a node with no edge
+lines:
+node: solo
+label: Alone
+nodes:
+solo 0 0 12 12
+size: 164 64
+----
+case: three columns of different heights
+lines:
+edge: a -> b
+edge: a -> c
+edge: a -> d
+edge: b -> e
+nodes:
+a 0 0 12 12
+b 1 0 212 12
+c 1 1 212 76
+d 1 2 212 140
+e 2 0 412 12
+size: 564 192
+----
