@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A symbol or an emoji in a code block is drawn, not replaced by a letter. A run whose own font is not embedded (the code of a document that embeds
+  the text faces but no monospaced face) is written with the base-14 font, which holds WinAnsi only; every other character used to be folded to an
+  ASCII stand-in, so the down arrow and the check mark printed as `v` and an emoji as `?`, and the text read back from the page had lost the
+  original characters. Such a run is now split: an emoji the colour face can draw is drawn from it, a character WinAnsi cannot hold and the embedded
+  proportional face has is drawn from that face, and the rest stays in the base-14 font as before. The width and the drawing share one split, the
+  text layer keeps the original characters, and a document that embeds no text face is drawn exactly as before. A character that no embedded face
+  has stays as it was (the stand-in); a named list of those characters is pinned by the tests.
+- The test `SymbolOracleTests` states the rule for 62 characters (arrows, box drawing, Braille, check marks, emoji, the emoji presentation of text
+  symbols, a flag, a keycap, a skin tone, a joined emoji) in a code fence, a code span and the body, with the code face embedded and not: each is
+  drawn from a face that has it (the answer key is the cmap of the embedded faces and the colour face, read back from the bytes), or it is on the
+  named list of those no face has.
+
 ## [0.16.0] - 2026-11-22
 
 The PDF of a page now matches the page: the tiles are drawn, formulas use the real math font, emoji are drawn in colour, and the diagrams and

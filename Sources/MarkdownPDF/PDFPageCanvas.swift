@@ -74,6 +74,13 @@ final class PDFPageCanvas {
         fontSet: PDFOptions.FontSet,
     ) {
         let baselineY = y + run.baselineOffset
+        drawStandardText(run, x: x, baselineY: baselineY)
+        let width = run.width(fontSet: fontSet)
+        drawDecorations(for: run, x: x, y: baselineY, width: width)
+    }
+
+    /// The text of a run in its base-14 font at the baseline `baselineY`, without decorations.
+    private func drawStandardText(_ run: PDFTextRun, x: Double, baselineY: Double) {
         resourceUsage.useFont(run.font)
         setFillColor(run.color)
         contentStream.append([
@@ -83,9 +90,6 @@ final class PDFPageCanvas {
             .showText(PDFSyntax.LiteralString(run.portableText)),
             .endText,
         ])
-
-        let width = run.width(fontSet: fontSet)
-        drawDecorations(for: run, x: x, y: baselineY, width: width)
     }
 
     func drawTextRun(
@@ -96,6 +100,11 @@ final class PDFPageCanvas {
         embeddedFonts: PDFEmbeddedFontCatalog,
     ) throws {
         guard let entry = embeddedFonts.entry(for: run.font) else {
+            // A run whose own font is not embedded: the characters WinAnsi cannot hold are drawn from the embedded faces, not folded to stand-in letters.
+            if let pieces = try embeddedFonts.standardPieces(of: run, fontSet: fontSet) {
+                try drawPieces(pieces, of: run, embeddedFonts: embeddedFonts, entry: nil, x: x, baselineY: y + run.baselineOffset)
+                return
+            }
             drawTextRun(run, x: x, y: y, fontSet: fontSet)
             return
         }
@@ -124,7 +133,7 @@ final class PDFPageCanvas {
         _ pieces: [PDFEmbeddedFontCatalog.Piece],
         of run: PDFTextRun,
         embeddedFonts: PDFEmbeddedFontCatalog,
-        entry: PDFEmbeddedFontCatalog.Entry,
+        entry: PDFEmbeddedFontCatalog.Entry?,
         x: Double,
         baselineY: Double,
     ) throws {
@@ -133,8 +142,10 @@ final class PDFPageCanvas {
             switch piece {
             case let .text(pieceRun, mapping):
                 // A stretch drawn in a fallback face carries that face as its font; the others keep the face of the run.
-                let resource = embeddedFonts.entry(for: pieceRun.font)?.resource ?? entry.resource
+                guard let resource = embeddedFonts.entry(for: pieceRun.font)?.resource ?? entry?.resource else { continue }
                 try drawCIDText(mapping: mapping, fontResource: resource, fontSize: pieceRun.size, x: penX, y: baselineY, color: pieceRun.color)
+            case let .standard(pieceRun, _):
+                drawStandardText(pieceRun, x: penX, baselineY: baselineY)
             case let .emoji(cluster, drawing, _):
                 guard let colorEmoji = embeddedFonts.colorEmoji else { continue }
                 // One `/ActualText` span holds the emoji: the invisible base glyph, whose `/ToUnicode` entry is the emoji, and the layers as paths.

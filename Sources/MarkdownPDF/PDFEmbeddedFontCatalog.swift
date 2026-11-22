@@ -70,15 +70,18 @@ struct PDFEmbeddedFontCatalog {
         return (try? entry.mapper.map(text: text, fontSize: 1)) != nil
     }
 
-    /// One piece of a laid-out run: plain text shaped by the run's own face, or an emoji drawn from the colour face.
+    /// One piece of a laid-out run: plain text shaped by the run's own face, an emoji drawn from the colour face, or text the base-14 font draws (the
+    /// stretches of a run whose own font is not embedded that WinAnsi can hold, next to stretches drawn from an embedded face: ``standardPieces(of:fontSet:)``).
     enum Piece {
         case text(run: PDFTextRun, mapping: ShapedTextMapping)
         case emoji(cluster: EmojiSegmenter.Cluster, drawing: ColorEmojiFont.Drawing, advance: Double)
+        case standard(run: PDFTextRun, advance: Double)
 
         var advance: Double {
             switch self {
             case let .text(_, mapping): mapping.totalAdvance
             case let .emoji(_, _, advance): advance
+            case let .standard(_, advance): advance
             }
         }
     }
@@ -161,6 +164,9 @@ struct PDFEmbeddedFontCatalog {
 
     func width(of run: PDFTextRun, fallbackFontSet: PDFOptions.FontSet) throws -> Double {
         guard let entry = entry(for: run.font) else {
+            if let pieces = try standardPieces(of: run, fontSet: fallbackFontSet) {
+                return pieces.reduce(0) { $0 + $1.advance }
+            }
             return run.width(fontSet: fallbackFontSet)
         }
 
