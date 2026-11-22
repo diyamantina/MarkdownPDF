@@ -13,6 +13,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
     case coverImageUnsupported(String)
     case colophonTextEmpty
     case indexTermEmptyForm(term: String)
+    /// The page holds characters that no embedded face draws, and ``PDFOptions/undrawnCharacters`` is `.fail`.
+    case undrawnCharacters(MarkdownPDF.Render.Report)
 
     public var errorDescription: String? {
         switch self {
@@ -40,7 +42,22 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "The colophon is enabled with custom text that is empty."
         case let .indexTermEmptyForm(term):
             "The index term \"\(term)\" has an empty form between its pipes."
+        case let .undrawnCharacters(report):
+            Self.undrawnDescription(report)
         }
+    }
+
+    private static func undrawnDescription(_ report: MarkdownPDF.Render.Report) -> String {
+        let shown = report.undrawn.prefix(8).map { entry in
+            "\(entry.text) (" + entry.codePoints.map { "U+" + String($0, radix: 16, uppercase: true) }.joined(separator: " ") + ")"
+        }
+        let more = report.undrawn.count > shown.count ? " and \(report.undrawn.count - shown.count) more" : ""
+        let reasons = Set(report.undrawn.map(\.reason))
+        var text = "\(report.undrawn.count) character(s) are not drawn from a face: \(shown.joined(separator: ", "))\(more)."
+        if reasons.contains(.bundledFacesUnavailable) {
+            text += " The bundled faces are unavailable: the resource bundle MarkdownPDF_MarkdownPDF.bundle is missing from the deployment."
+        }
+        return text
     }
 
     public var recoverySuggestion: String? {
@@ -67,6 +84,8 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
             "Give PDFOptions.Colophon some Markdown text, or leave the text nil for the default colophon."
         case .indexTermEmptyForm:
             "Remove the stray pipe, or write a literal pipe as \\| inside a form."
+        case .undrawnCharacters:
+            "Ship the resource bundle MarkdownPDF_MarkdownPDF.bundle beside the executable, give the faces in PDFOptions(embeddedFonts:), or leave PDFOptions.undrawnCharacters at .report and read the list."
         case .missingEmbeddedMathFont:
             "Pass PDFOptions(embeddedFonts:) with TrueType math-font data that contains an OpenType MATH table, or use PDFOptions.MathTypesetting.enabled for fallback rendering."
         }

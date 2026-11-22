@@ -20,6 +20,11 @@ public struct PDFOptions: Equatable, Sendable {
     /// a caller that prints articles turns it on. A missing glyph that is not an emoji is still drawn as the box.
     public var omitUndrawableEmoji: Bool
 
+    /// What a render does with a character that no embedded face draws (the check mark of a stripped deployment that lost its font bundle, an emoji no
+    /// face has). The default `.report` draws what it can and leaves the list to ``MarkdownPDFRenderer/renderWithReport(markdown:assetsBaseURL:)``;
+    /// `.fail` makes the render throw ``MarkdownPDFError/undrawnCharacters(_:)``, so a build that would print wrong letters fails instead.
+    public var undrawnCharacters: MarkdownPDF.Render.UndrawnPolicy = .report
+
     /// The tallest a standalone image may be drawn, as a fraction of the page height.
     ///
     /// The default of `0.45` keeps a figure from filling a document page and

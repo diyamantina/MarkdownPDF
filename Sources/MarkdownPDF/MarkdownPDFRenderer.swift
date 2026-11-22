@@ -4,8 +4,52 @@ import MathTypeset
 public struct MarkdownPDFRenderer: Sendable {
     public var options: PDFOptions
 
+    /// The faces the render takes when the caller embeds none and the document needs them: the bundled ones. A test passes `.disabled` to stand for a
+    /// deployment whose resource bundle is absent, which is what the lookup of the bundled faces returns then.
+    var bundledFaces: PDFOptions.EmbeddedFonts
+
     public init(options: PDFOptions = PDFOptions()) {
         self.options = options
+        bundledFaces = BundledFonts.dejaVu
+    }
+
+    init(options: PDFOptions, bundledFaces: PDFOptions.EmbeddedFonts) {
+        self.options = options
+        self.bundledFaces = bundledFaces
+    }
+
+    /// True when the faces MarkdownPDF bundles (DejaVu) are found in this deployment. False when the resource bundle `MarkdownPDF_MarkdownPDF.bundle`
+    /// is missing beside the executable: every character beyond WinAnsi is then written as a stand-in letter, or, with
+    /// ``PDFOptions/undrawnCharacters`` set to `.fail`, the render throws. A packaging check can call this, or render a probe page with `.fail`.
+    public static var bundledFacesAreAvailable: Bool {
+        !BundledFonts.dejaVu.hasNoTextFaces
+    }
+
+    /// Renders one Markdown source and reports what it could not draw from a face (``MarkdownPDF/Render/Report``). The bytes are the ones
+    /// ``render(markdown:assetsBaseURL:)`` returns. With ``PDFOptions/undrawnCharacters`` set to `.fail` a non-empty report throws instead.
+    public func renderWithReport(
+        markdown: String,
+        assetsBaseURL: URL? = nil,
+    ) throws -> MarkdownPDF.Render.Output {
+        try renderWithReport(
+            sources: [MarkdownSource(markdown: markdown, assetsBaseURL: assetsBaseURL)],
+            startsEachSourceOnNewPage: false,
+        )
+    }
+
+    /// Renders several sources and reports what could not be drawn from a face; see ``renderWithReport(markdown:assetsBaseURL:)``.
+    public func renderWithReport(
+        sources: [MarkdownSource],
+        startsEachSourceOnNewPage: Bool = true,
+    ) throws -> MarkdownPDF.Render.Output {
+        let prepared = try prepare(sources)
+        let resolved = resolvedOptions(for: prepared.combined)
+        let report = try UndrawnAnalysis.report(of: prepared.combined, options: resolved, bundledFacesAvailable: !bundledFaces.hasNoTextFaces)
+        if options.undrawnCharacters == .fail, !report.isEmpty {
+            throw MarkdownPDFError.undrawnCharacters(report)
+        }
+        let data = try renderUnits(prepared.units, colophon: prepared.colophon, options: resolved, startsEachUnitOnNewPage: startsEachSourceOnNewPage)
+        return MarkdownPDF.Render.Output(data: data, report: report)
     }
 
     public func render(
@@ -38,6 +82,20 @@ public struct MarkdownPDFRenderer: Sendable {
         sources: [MarkdownSource],
         startsEachSourceOnNewPage: Bool = true,
     ) throws -> Data {
+        if options.undrawnCharacters == .fail {
+            return try renderWithReport(sources: sources, startsEachSourceOnNewPage: startsEachSourceOnNewPage).data
+        }
+        let prepared = try prepare(sources)
+        return try renderUnits(
+            prepared.units,
+            colophon: prepared.colophon,
+            options: resolvedOptions(for: prepared.combined),
+            startsEachUnitOnNewPage: startsEachSourceOnNewPage,
+        )
+    }
+
+    /// The parsed sources, the colophon, and the whole document the options are resolved for.
+    private func prepare(_ sources: [MarkdownSource]) throws -> (units: [RenderUnit], colophon: ColophonContent?, combined: MarkdownDocument) {
         let parser = MarkdownParser(
             options: MarkdownParser.Options(
                 mathTypesetting: options.mathTypesetting.isEnabled,
@@ -53,12 +111,7 @@ public struct MarkdownPDFRenderer: Sendable {
         }
         let colophon = try colophonContent()
         let combined = MarkdownDocument(blocks: units.flatMap(\.document.blocks) + (colophon?.blocks ?? []))
-        return try renderUnits(
-            units,
-            colophon: colophon,
-            options: resolvedOptions(for: combined),
-            startsEachUnitOnNewPage: startsEachSourceOnNewPage,
-        )
+        return (units, colophon, combined)
     }
 
     /// The blocks of the colophon, or nil when it is disabled. Custom text is parsed
@@ -93,7 +146,7 @@ public struct MarkdownPDFRenderer: Sendable {
             // The faces the caller gave for the formulas and the emoji are kept; only the text faces are the bundled ones.
             let math = options.embeddedFonts.math
             let emoji = options.embeddedFonts.emoji
-            resolvedOptions.embeddedFonts = .dejaVu
+            resolvedOptions.embeddedFonts = bundledFaces
             resolvedOptions.embeddedFonts.math = math
             resolvedOptions.embeddedFonts.emoji = emoji
         }

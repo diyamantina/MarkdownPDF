@@ -123,9 +123,20 @@ struct SymbolOracleTests {
     ) throws -> Verdict {
         var verdict = Verdict(configuration: configuration.name, place: place.name, entry: entry.name)
         let catalog = try PDFEmbeddedFontCatalog(fonts: configuration.fonts.hasNoTextFaces ? .dejaVu : configuration.fonts)
-        let data = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: configuration.fonts, mathTypesetting: .enabled)).render(markdown: place.template(entry.text))
+        let output = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: configuration.fonts, mathTypesetting: .enabled))
+            .renderWithReport(markdown: place.template(entry.text))
+        let data = output.data
+        // The renderer's own report must agree with the answer key (the cmaps): a character a face has is not in it, one no face has is.
+        let inReport = output.report.undrawn.contains { $0.text == entry.text }
         guard faceHas(entry.text, catalog: catalog) else {
             verdict.reported = true
+            if !inReport {
+                verdict.wrong = "silent: no face has it, and the report does not name it"
+            }
+            return verdict
+        }
+        if inReport {
+            verdict.wrong = "the report names a character that a face draws"
             return verdict
         }
         // 1. no stand-in letter: what the base-14 font wrote is the letters around the character and nothing else

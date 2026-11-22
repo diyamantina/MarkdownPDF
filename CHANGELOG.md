@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A character that no embedded face draws is reported, never replaced silently. `MarkdownPDFRenderer.renderWithReport(markdown:assetsBaseURL:)` (and
+  the `sources:` form) returns the same bytes as `render` with a `MarkdownPDF.Render.Report`: each such character as written, its code points, the
+  reason (`bundledFacesUnavailable`, `noEmbeddedFace`, `noFaceHasIt`) and how often the document writes it, in the order of first appearance.
+  `PDFOptions.undrawnCharacters` set to `.fail` makes `render` throw `MarkdownPDFError.undrawnCharacters` instead, so a deployment that lost the
+  resource bundle with the bundled faces (a package that ships the executable alone) fails loudly instead of printing `v` for a check mark.
+  `MarkdownPDFRenderer.bundledFacesAreAvailable` says whether the bundled faces are found. The default is unchanged: `render` draws what the faces
+  allow. The first public types in the namespace `MarkdownPDF.Render`; the older flat names migrate area by area.
+
 ## [0.16.1] - 2026-11-22
 
 A patch release: one defect, with the test that states the rule for every character of a measured domain. No API change.
