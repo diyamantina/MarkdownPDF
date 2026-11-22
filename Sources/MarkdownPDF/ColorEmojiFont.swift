@@ -35,6 +35,9 @@ struct ColorEmojiFont: @unchecked Sendable {
     private let colr: COLRTable
     private let cpal: CPALTable
     private let outlines: TrueTypeGlyphOutline
+    /// The glyph substitutions of the face (`ccmp`, 2298 ligatures in the bundled face): they turn the glyphs of the scalars of a sequence into the one
+    /// glyph of the sequence. Nil when the face has no `GSUB` table or it cannot be read: sequences are then not drawn from it.
+    private let substitutions: GSUBFeatureApplier?
 
     init(source: PDFOptions.EmbeddedFontSource, resourceName: String = "EF6") throws {
         let metadata = try TrueTypeFontParser().parse(source.data, faceIndex: source.faceIndex, preferFullUnicodeCMap: true)
@@ -51,15 +54,89 @@ struct ColorEmojiFont: @unchecked Sendable {
         )
         self.metadata = metadata
         mapper = TrueTypeGlyphMapper(data: source.data, metadata: metadata)
+        if let record = metadata.table(named: "GSUB"), let table = try? GSUBTable(
+            fontData: source.data,
+            gsubTableRange: Int(record.offset) ..< Int(record.offset) + Int(record.length),
+            scriptTag: "DFLT",
+            numGlyphs: metadata.maxp.numGlyphs,
+        ) {
+            substitutions = GSUBFeatureApplier(gsub: table, gdef: nil, numGlyphs: metadata.maxp.numGlyphs)
+        } else {
+            substitutions = nil
+        }
         resource = PDFEmbeddedFontResource(resourceName: resourceName, fontProgram: source.data, metadata: metadata, baseName: source.baseName)
     }
 
     /// The base glyph of a cluster: the cmap glyph of its first scalar, nil when the font has none (so the cluster is not drawn from this face).
     func baseGlyph(of cluster: EmojiSegmenter.Cluster) -> UInt16? {
+        if cluster.scalars.count >= 2, !(cluster.scalars.count == 2 && cluster.scalars[1].value == 0xFE0F) {
+            return sequenceGlyph(of: cluster)
+        }
         guard let mapped = try? mapper.map(text: String(cluster.base), fontSize: 1), let glyph = mapped.glyphs.first, glyph.glyphID != 0 else {
             return nil
         }
         return glyph.glyphID
+    }
+
+    /// The glyph of a sequence: the cmap glyphs of its scalars, put through the face's own `ccmp` ligatures; the sequence is drawn from this face only when
+    /// that leaves exactly one glyph (a flag, a keycap, a skin tone, a joined emoji have one in the bundled face). Nil otherwise: a scalar the cmap lacks, no
+    /// substitution table, or a result of several glyphs, which would be the parts of the sequence drawn one by one.
+    private func sequenceGlyph(of cluster: EmojiSegmenter.Cluster) -> UInt16? {
+        // The spelling as written first, then the fully qualified one (the variation selector after each text-default emoji of the sequence): unicode.org
+        // lists both and the face carries the ligatures of the qualified form.
+        if let glyph = sequenceGlyph(of: cluster.scalars) {
+            return glyph
+        }
+        let qualified = Self.fullyQualified(cluster.scalars)
+        return qualified == cluster.scalars ? nil : sequenceGlyph(of: qualified)
+    }
+
+    /// The scalars with the emoji variation selector after every text-default emoji (an emoji that is not drawn as an emoji by default) and after a
+    /// keycap base, unless the selector is there already or a skin tone modifier follows (a modifier takes the place of the selector).
+    static func fullyQualified(_ scalars: [Unicode.Scalar]) -> [Unicode.Scalar] {
+        var result: [Unicode.Scalar] = []
+        for (index, scalar) in scalars.enumerated() {
+            result.append(scalar)
+            let next = index + 1 < scalars.count ? scalars[index + 1] : nil
+            if next?.value == 0xFE0F {
+                continue
+            }
+            if let next, (0x1F3FB ... 0x1F3FF).contains(next.value) {
+                continue
+            }
+            let isKeycapBase = next?.value == 0x20E3 && (scalar.value == 0x23 || scalar.value == 0x2A || (0x30 ... 0x39).contains(scalar.value))
+            let isTextDefaultEmoji = scalar.value > 0x7F && scalar.properties.isEmoji && !scalar.properties.isEmojiPresentation
+                && !(0x1F3FB ... 0x1F3FF).contains(scalar.value) && scalar.value != 0x200D && scalar.value != 0x20E3
+            if isKeycapBase || isTextDefaultEmoji {
+                result.append("\u{FE0F}")
+            }
+        }
+        return result
+    }
+
+    private func sequenceGlyph(of scalars: [Unicode.Scalar]) -> UInt16? {
+        guard let substitutions else { return nil }
+        var glyphs: [ShapedGlyph] = []
+        for (index, scalar) in scalars.enumerated() {
+            guard let mapped = try? mapper.map(text: String(scalar), fontSize: 1), let glyph = mapped.glyphs.first, glyph.glyphID != 0 else { return nil }
+            glyphs.append(ShapedGlyph(glyphID: glyph.glyphID, sourceScalarRange: index ..< index + 1))
+        }
+        // A long sequence is built in steps (a joined family is two ligatures, the first pair and then the third emoji): apply until nothing shrinks.
+        // MEASURED on the bundled face: `ccmp` joins flags and skin tones; the joined sequences and the keycap need the contextual lookups of `liga`, `rlig`
+        // and `clig` after it, in this order (every one of the four tags is read from the face's own tables, none is assumed present).
+        var substituted = glyphs
+        for _ in 0 ..< 8 {
+            var next = substituted
+            for feature in ["ccmp", "liga", "rlig", "clig"] {
+                next = substitutions.apply(feature: feature, to: next)
+            }
+            if next.count >= substituted.count {
+                break
+            }
+            substituted = next
+        }
+        guard substituted.count == 1, let glyph = substituted.first?.glyphID, glyph != 0 else { return nil }
+        return glyph
     }
 
     /// The advance of the cluster in points at `fontSize`, nil when the font cannot draw it.
@@ -88,10 +165,14 @@ struct ColorEmojiFont: @unchecked Sendable {
             glyphID: base, cid: cid, pdfCharacterCode: cid, advanceWidth: advanceWidth,
             advance: Double(advanceWidth) / Double(metadata.head.unitsPerEm) * fontSize,
         )
-        let scalar = cluster.base
+        // The text of the glyph: the emoji scalar for a single emoji and one with its selector (as before), the whole sequence, joiners and selectors
+        // included, for a sequence.
+        let isSequence = cluster.scalars.count >= 2 && !(cluster.scalars.count == 2 && cluster.scalars[1].value == 0xFE0F)
+        let scalars = isSequence ? cluster.scalars : [cluster.base]
+        let text = String(String.UnicodeScalarView(scalars))
         guard let mapping = try? ShapedTextMapping(
-            sourceText: String(scalar),
-            clusters: [ShapedTextMapping.Cluster(sourceScalarRange: 0 ..< 1, normalizedText: String(scalar), glyphs: [glyph], toUnicodeScalars: [scalar])],
+            sourceText: text,
+            clusters: [ShapedTextMapping.Cluster(sourceScalarRange: 0 ..< scalars.count, normalizedText: text, glyphs: [glyph], toUnicodeScalars: scalars)],
         ) else { return nil }
         return Drawing(base: mapping, layers: layers, unitsPerEm: Double(metadata.head.unitsPerEm))
     }

@@ -1,0 +1,1063 @@
+Whole-set coverage of the bundled faces
+emoji source: emoji-test.txt, Unicode 18.0, 2026-04-30, 22:40:18 GMT, 5244 entries
+symbol blocks: Arrows, Mathematical Operators, Miscellaneous Technical, Box Drawing, Block Elements, Geometric Shapes, Miscellaneous Symbols, Dingbats, Braille Patterns, Supplemental Arrows-B, Miscellaneous Symbols and Arrows (assigned code points of the Swift standard library's Unicode data)
+
+single code point: 1404 entries, 1361 drawn, 43 reported, 0 wrong
+variation selector 16 sequence: 207 entries, 207 drawn, 0 reported, 0 wrong
+zwj sequence: 2667 entries, 2199 drawn, 468 reported, 0 wrong
+modifier sequence: 675 entries, 645 drawn, 30 reported, 0 wrong
+skin tone component: 5 entries, 0 drawn, 5 reported, 0 wrong
+keycap: 24 entries, 24 drawn, 0 reported, 0 wrong
+flag: 259 entries, 258 drawn, 1 reported, 0 wrong
+tag sequence: 3 entries, 3 drawn, 0 reported, 0 wrong
+block Arrows: 112 entries, 112 drawn, 0 reported, 0 wrong
+block Mathematical Operators: 256 entries, 256 drawn, 0 reported, 0 wrong
+block Miscellaneous Technical: 256 entries, 160 drawn, 96 reported, 0 wrong
+block Box Drawing: 128 entries, 128 drawn, 0 reported, 0 wrong
+block Block Elements: 32 entries, 32 drawn, 0 reported, 0 wrong
+block Geometric Shapes: 96 entries, 96 drawn, 0 reported, 0 wrong
+block Miscellaneous Symbols: 256 entries, 212 drawn, 44 reported, 0 wrong
+block Dingbats: 192 entries, 189 drawn, 3 reported, 0 wrong
+block Braille Patterns: 256 entries, 256 drawn, 0 reported, 0 wrong
+block Supplemental Arrows-B: 128 entries, 8 drawn, 120 reported, 0 wrong
+block Miscellaneous Symbols and Arrows: 254 entries, 39 drawn, 215 reported, 0 wrong
+
+TOTAL: 7210 entries, 6185 drawn
+WRONG: 0
+
+REPORTED, by class:
+[single code point] 43
+  U+1FAEB cracking face
+  U+1FAE8 shaking face
+  U+1FAE9 face with bags under eyes
+  U+1FAEA distorted face
+  U+1FA77 pink heart
+  U+1FA75 light blue heart
+  U+1FA76 grey heart
+  U+1FAEF fight cloud
+  U+1FAF7 leftwards pushing hand
+  U+1FAF8 rightwards pushing hand
+  U+1FAF9 leftwards thumb sign
+  U+1FAFA rightwards thumb sign
+  U+1FAC8 hairy creature
+  U+1FAC6 fingerprint
+  U+1FACE moose
+  U+1FACF donkey
+  U+1FABD wing
+  U+1FABF goose
+  U+1FACD orca
+  U+1FABC jellyfish
+  U+1FACC monarch butterfly
+  U+1FABB hyacinth
+  U+1FABE leafless tree
+  U+1FADD pickle
+  U+1FADA ginger root
+  U+1FADB pea pod
+  U+1FADC root vegetable
+  U+1F6D8 landslide
+  U+1F6D9 lighthouse
+  U+1FA8B meteor
+  U+1FAAD folding hand fan
+  U+1FAAE hair pick
+  U+1FA8A trombone
+  U+1FA87 maracas
+  U+1FA88 flute
+  U+1FA89 harp
+  U+1FA8E treasure chest
+  U+1FA8C eraser
+  U+1FA8D net with handle
+  U+1FA8F shovel
+  U+1FAAF khanda
+  U+1F6DC wireless
+  U+1FADF splatter
+[zwj sequence] 468
+  U+1F642 U+200D U+2194 U+FE0F head shaking horizontally
+  U+1F642 U+200D U+2194 head shaking horizontally
+  U+1F642 U+200D U+2195 U+FE0F head shaking vertically
+  U+1F642 U+200D U+2195 head shaking vertically
+  U+1F6B6 U+200D U+27A1 U+FE0F person walking facing right
+  U+1F6B6 U+200D U+27A1 person walking facing right
+  U+1F6B6 U+1F3FB U+200D U+27A1 U+FE0F person walking facing right: light skin tone
+  U+1F6B6 U+1F3FB U+200D U+27A1 person walking facing right: light skin tone
+  U+1F6B6 U+1F3FC U+200D U+27A1 U+FE0F person walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FC U+200D U+27A1 person walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FD U+200D U+27A1 U+FE0F person walking facing right: medium skin tone
+  U+1F6B6 U+1F3FD U+200D U+27A1 person walking facing right: medium skin tone
+  U+1F6B6 U+1F3FE U+200D U+27A1 U+FE0F person walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FE U+200D U+27A1 person walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+27A1 U+FE0F person walking facing right: dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+27A1 person walking facing right: dark skin tone
+  U+1F6B6 U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman walking facing right
+  U+1F6B6 U+200D U+2640 U+200D U+27A1 U+FE0F woman walking facing right
+  U+1F6B6 U+200D U+2640 U+FE0F U+200D U+27A1 woman walking facing right
+  U+1F6B6 U+200D U+2640 U+200D U+27A1 woman walking facing right
+  U+1F6B6 U+1F3FB U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman walking facing right: light skin tone
+  U+1F6B6 U+1F3FB U+200D U+2640 U+200D U+27A1 U+FE0F woman walking facing right: light skin tone
+  U+1F6B6 U+1F3FB U+200D U+2640 U+FE0F U+200D U+27A1 woman walking facing right: light skin tone
+  U+1F6B6 U+1F3FB U+200D U+2640 U+200D U+27A1 woman walking facing right: light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2640 U+200D U+27A1 U+FE0F woman walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2640 U+FE0F U+200D U+27A1 woman walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2640 U+200D U+27A1 woman walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FD U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman walking facing right: medium skin tone
+  U+1F6B6 U+1F3FD U+200D U+2640 U+200D U+27A1 U+FE0F woman walking facing right: medium skin tone
+  U+1F6B6 U+1F3FD U+200D U+2640 U+FE0F U+200D U+27A1 woman walking facing right: medium skin tone
+  U+1F6B6 U+1F3FD U+200D U+2640 U+200D U+27A1 woman walking facing right: medium skin tone
+  U+1F6B6 U+1F3FE U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FE U+200D U+2640 U+200D U+27A1 U+FE0F woman walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FE U+200D U+2640 U+FE0F U+200D U+27A1 woman walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FE U+200D U+2640 U+200D U+27A1 woman walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman walking facing right: dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2640 U+200D U+27A1 U+FE0F woman walking facing right: dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2640 U+FE0F U+200D U+27A1 woman walking facing right: dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2640 U+200D U+27A1 woman walking facing right: dark skin tone
+  U+1F6B6 U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man walking facing right
+  U+1F6B6 U+200D U+2642 U+200D U+27A1 U+FE0F man walking facing right
+  U+1F6B6 U+200D U+2642 U+FE0F U+200D U+27A1 man walking facing right
+  U+1F6B6 U+200D U+2642 U+200D U+27A1 man walking facing right
+  U+1F6B6 U+1F3FB U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man walking facing right: light skin tone
+  U+1F6B6 U+1F3FB U+200D U+2642 U+200D U+27A1 U+FE0F man walking facing right: light skin tone
+  U+1F6B6 U+1F3FB U+200D U+2642 U+FE0F U+200D U+27A1 man walking facing right: light skin tone
+  U+1F6B6 U+1F3FB U+200D U+2642 U+200D U+27A1 man walking facing right: light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2642 U+200D U+27A1 U+FE0F man walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2642 U+FE0F U+200D U+27A1 man walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FC U+200D U+2642 U+200D U+27A1 man walking facing right: medium-light skin tone
+  U+1F6B6 U+1F3FD U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man walking facing right: medium skin tone
+  U+1F6B6 U+1F3FD U+200D U+2642 U+200D U+27A1 U+FE0F man walking facing right: medium skin tone
+  U+1F6B6 U+1F3FD U+200D U+2642 U+FE0F U+200D U+27A1 man walking facing right: medium skin tone
+  U+1F6B6 U+1F3FD U+200D U+2642 U+200D U+27A1 man walking facing right: medium skin tone
+  U+1F6B6 U+1F3FE U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FE U+200D U+2642 U+200D U+27A1 U+FE0F man walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FE U+200D U+2642 U+FE0F U+200D U+27A1 man walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FE U+200D U+2642 U+200D U+27A1 man walking facing right: medium-dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man walking facing right: dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2642 U+200D U+27A1 U+FE0F man walking facing right: dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2642 U+FE0F U+200D U+27A1 man walking facing right: dark skin tone
+  U+1F6B6 U+1F3FF U+200D U+2642 U+200D U+27A1 man walking facing right: dark skin tone
+  U+1F9CE U+200D U+27A1 U+FE0F person kneeling facing right
+  U+1F9CE U+200D U+27A1 person kneeling facing right
+  U+1F9CE U+1F3FB U+200D U+27A1 U+FE0F person kneeling facing right: light skin tone
+  U+1F9CE U+1F3FB U+200D U+27A1 person kneeling facing right: light skin tone
+  U+1F9CE U+1F3FC U+200D U+27A1 U+FE0F person kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FC U+200D U+27A1 person kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FD U+200D U+27A1 U+FE0F person kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FD U+200D U+27A1 person kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FE U+200D U+27A1 U+FE0F person kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FE U+200D U+27A1 person kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FF U+200D U+27A1 U+FE0F person kneeling facing right: dark skin tone
+  U+1F9CE U+1F3FF U+200D U+27A1 person kneeling facing right: dark skin tone
+  U+1F9CE U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman kneeling facing right
+  U+1F9CE U+200D U+2640 U+200D U+27A1 U+FE0F woman kneeling facing right
+  U+1F9CE U+200D U+2640 U+FE0F U+200D U+27A1 woman kneeling facing right
+  U+1F9CE U+200D U+2640 U+200D U+27A1 woman kneeling facing right
+  U+1F9CE U+1F3FB U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman kneeling facing right: light skin tone
+  U+1F9CE U+1F3FB U+200D U+2640 U+200D U+27A1 U+FE0F woman kneeling facing right: light skin tone
+  U+1F9CE U+1F3FB U+200D U+2640 U+FE0F U+200D U+27A1 woman kneeling facing right: light skin tone
+  U+1F9CE U+1F3FB U+200D U+2640 U+200D U+27A1 woman kneeling facing right: light skin tone
+  U+1F9CE U+1F3FC U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FC U+200D U+2640 U+200D U+27A1 U+FE0F woman kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FC U+200D U+2640 U+FE0F U+200D U+27A1 woman kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FC U+200D U+2640 U+200D U+27A1 woman kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FD U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FD U+200D U+2640 U+200D U+27A1 U+FE0F woman kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FD U+200D U+2640 U+FE0F U+200D U+27A1 woman kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FD U+200D U+2640 U+200D U+27A1 woman kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FE U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FE U+200D U+2640 U+200D U+27A1 U+FE0F woman kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FE U+200D U+2640 U+FE0F U+200D U+27A1 woman kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FE U+200D U+2640 U+200D U+27A1 woman kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman kneeling facing right: dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2640 U+200D U+27A1 U+FE0F woman kneeling facing right: dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2640 U+FE0F U+200D U+27A1 woman kneeling facing right: dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2640 U+200D U+27A1 woman kneeling facing right: dark skin tone
+  U+1F9CE U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man kneeling facing right
+  U+1F9CE U+200D U+2642 U+200D U+27A1 U+FE0F man kneeling facing right
+  U+1F9CE U+200D U+2642 U+FE0F U+200D U+27A1 man kneeling facing right
+  U+1F9CE U+200D U+2642 U+200D U+27A1 man kneeling facing right
+  U+1F9CE U+1F3FB U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man kneeling facing right: light skin tone
+  U+1F9CE U+1F3FB U+200D U+2642 U+200D U+27A1 U+FE0F man kneeling facing right: light skin tone
+  U+1F9CE U+1F3FB U+200D U+2642 U+FE0F U+200D U+27A1 man kneeling facing right: light skin tone
+  U+1F9CE U+1F3FB U+200D U+2642 U+200D U+27A1 man kneeling facing right: light skin tone
+  U+1F9CE U+1F3FC U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FC U+200D U+2642 U+200D U+27A1 U+FE0F man kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FC U+200D U+2642 U+FE0F U+200D U+27A1 man kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FC U+200D U+2642 U+200D U+27A1 man kneeling facing right: medium-light skin tone
+  U+1F9CE U+1F3FD U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FD U+200D U+2642 U+200D U+27A1 U+FE0F man kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FD U+200D U+2642 U+FE0F U+200D U+27A1 man kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FD U+200D U+2642 U+200D U+27A1 man kneeling facing right: medium skin tone
+  U+1F9CE U+1F3FE U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FE U+200D U+2642 U+200D U+27A1 U+FE0F man kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FE U+200D U+2642 U+FE0F U+200D U+27A1 man kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FE U+200D U+2642 U+200D U+27A1 man kneeling facing right: medium-dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man kneeling facing right: dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2642 U+200D U+27A1 U+FE0F man kneeling facing right: dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2642 U+FE0F U+200D U+27A1 man kneeling facing right: dark skin tone
+  U+1F9CE U+1F3FF U+200D U+2642 U+200D U+27A1 man kneeling facing right: dark skin tone
+  U+1F9D1 U+200D U+1F9AF U+200D U+27A1 U+FE0F person with white cane facing right
+  U+1F9D1 U+200D U+1F9AF U+200D U+27A1 person with white cane facing right
+  U+1F9D1 U+1F3FB U+200D U+1F9AF U+200D U+27A1 U+FE0F person with white cane facing right: light skin tone
+  U+1F9D1 U+1F3FB U+200D U+1F9AF U+200D U+27A1 person with white cane facing right: light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F9AF U+200D U+27A1 U+FE0F person with white cane facing right: medium-light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F9AF U+200D U+27A1 person with white cane facing right: medium-light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F9AF U+200D U+27A1 U+FE0F person with white cane facing right: medium skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F9AF U+200D U+27A1 person with white cane facing right: medium skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F9AF U+200D U+27A1 U+FE0F person with white cane facing right: medium-dark skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F9AF U+200D U+27A1 person with white cane facing right: medium-dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F9AF U+200D U+27A1 U+FE0F person with white cane facing right: dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F9AF U+200D U+27A1 person with white cane facing right: dark skin tone
+  U+1F468 U+200D U+1F9AF U+200D U+27A1 U+FE0F man with white cane facing right
+  U+1F468 U+200D U+1F9AF U+200D U+27A1 man with white cane facing right
+  U+1F468 U+1F3FB U+200D U+1F9AF U+200D U+27A1 U+FE0F man with white cane facing right: light skin tone
+  U+1F468 U+1F3FB U+200D U+1F9AF U+200D U+27A1 man with white cane facing right: light skin tone
+  U+1F468 U+1F3FC U+200D U+1F9AF U+200D U+27A1 U+FE0F man with white cane facing right: medium-light skin tone
+  U+1F468 U+1F3FC U+200D U+1F9AF U+200D U+27A1 man with white cane facing right: medium-light skin tone
+  U+1F468 U+1F3FD U+200D U+1F9AF U+200D U+27A1 U+FE0F man with white cane facing right: medium skin tone
+  U+1F468 U+1F3FD U+200D U+1F9AF U+200D U+27A1 man with white cane facing right: medium skin tone
+  U+1F468 U+1F3FE U+200D U+1F9AF U+200D U+27A1 U+FE0F man with white cane facing right: medium-dark skin tone
+  U+1F468 U+1F3FE U+200D U+1F9AF U+200D U+27A1 man with white cane facing right: medium-dark skin tone
+  U+1F468 U+1F3FF U+200D U+1F9AF U+200D U+27A1 U+FE0F man with white cane facing right: dark skin tone
+  U+1F468 U+1F3FF U+200D U+1F9AF U+200D U+27A1 man with white cane facing right: dark skin tone
+  U+1F469 U+200D U+1F9AF U+200D U+27A1 U+FE0F woman with white cane facing right
+  U+1F469 U+200D U+1F9AF U+200D U+27A1 woman with white cane facing right
+  U+1F469 U+1F3FB U+200D U+1F9AF U+200D U+27A1 U+FE0F woman with white cane facing right: light skin tone
+  U+1F469 U+1F3FB U+200D U+1F9AF U+200D U+27A1 woman with white cane facing right: light skin tone
+  U+1F469 U+1F3FC U+200D U+1F9AF U+200D U+27A1 U+FE0F woman with white cane facing right: medium-light skin tone
+  U+1F469 U+1F3FC U+200D U+1F9AF U+200D U+27A1 woman with white cane facing right: medium-light skin tone
+  U+1F469 U+1F3FD U+200D U+1F9AF U+200D U+27A1 U+FE0F woman with white cane facing right: medium skin tone
+  U+1F469 U+1F3FD U+200D U+1F9AF U+200D U+27A1 woman with white cane facing right: medium skin tone
+  U+1F469 U+1F3FE U+200D U+1F9AF U+200D U+27A1 U+FE0F woman with white cane facing right: medium-dark skin tone
+  U+1F469 U+1F3FE U+200D U+1F9AF U+200D U+27A1 woman with white cane facing right: medium-dark skin tone
+  U+1F469 U+1F3FF U+200D U+1F9AF U+200D U+27A1 U+FE0F woman with white cane facing right: dark skin tone
+  U+1F469 U+1F3FF U+200D U+1F9AF U+200D U+27A1 woman with white cane facing right: dark skin tone
+  U+1F9D1 U+200D U+1F9BC U+200D U+27A1 U+FE0F person in motorized wheelchair facing right
+  U+1F9D1 U+200D U+1F9BC U+200D U+27A1 person in motorized wheelchair facing right
+  U+1F9D1 U+1F3FB U+200D U+1F9BC U+200D U+27A1 U+FE0F person in motorized wheelchair facing right: light skin tone
+  U+1F9D1 U+1F3FB U+200D U+1F9BC U+200D U+27A1 person in motorized wheelchair facing right: light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F9BC U+200D U+27A1 U+FE0F person in motorized wheelchair facing right: medium-light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F9BC U+200D U+27A1 person in motorized wheelchair facing right: medium-light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F9BC U+200D U+27A1 U+FE0F person in motorized wheelchair facing right: medium skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F9BC U+200D U+27A1 person in motorized wheelchair facing right: medium skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F9BC U+200D U+27A1 U+FE0F person in motorized wheelchair facing right: medium-dark skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F9BC U+200D U+27A1 person in motorized wheelchair facing right: medium-dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F9BC U+200D U+27A1 U+FE0F person in motorized wheelchair facing right: dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F9BC U+200D U+27A1 person in motorized wheelchair facing right: dark skin tone
+  U+1F468 U+200D U+1F9BC U+200D U+27A1 U+FE0F man in motorized wheelchair facing right
+  U+1F468 U+200D U+1F9BC U+200D U+27A1 man in motorized wheelchair facing right
+  U+1F468 U+1F3FB U+200D U+1F9BC U+200D U+27A1 U+FE0F man in motorized wheelchair facing right: light skin tone
+  U+1F468 U+1F3FB U+200D U+1F9BC U+200D U+27A1 man in motorized wheelchair facing right: light skin tone
+  U+1F468 U+1F3FC U+200D U+1F9BC U+200D U+27A1 U+FE0F man in motorized wheelchair facing right: medium-light skin tone
+  U+1F468 U+1F3FC U+200D U+1F9BC U+200D U+27A1 man in motorized wheelchair facing right: medium-light skin tone
+  U+1F468 U+1F3FD U+200D U+1F9BC U+200D U+27A1 U+FE0F man in motorized wheelchair facing right: medium skin tone
+  U+1F468 U+1F3FD U+200D U+1F9BC U+200D U+27A1 man in motorized wheelchair facing right: medium skin tone
+  U+1F468 U+1F3FE U+200D U+1F9BC U+200D U+27A1 U+FE0F man in motorized wheelchair facing right: medium-dark skin tone
+  U+1F468 U+1F3FE U+200D U+1F9BC U+200D U+27A1 man in motorized wheelchair facing right: medium-dark skin tone
+  U+1F468 U+1F3FF U+200D U+1F9BC U+200D U+27A1 U+FE0F man in motorized wheelchair facing right: dark skin tone
+  U+1F468 U+1F3FF U+200D U+1F9BC U+200D U+27A1 man in motorized wheelchair facing right: dark skin tone
+  U+1F469 U+200D U+1F9BC U+200D U+27A1 U+FE0F woman in motorized wheelchair facing right
+  U+1F469 U+200D U+1F9BC U+200D U+27A1 woman in motorized wheelchair facing right
+  U+1F469 U+1F3FB U+200D U+1F9BC U+200D U+27A1 U+FE0F woman in motorized wheelchair facing right: light skin tone
+  U+1F469 U+1F3FB U+200D U+1F9BC U+200D U+27A1 woman in motorized wheelchair facing right: light skin tone
+  U+1F469 U+1F3FC U+200D U+1F9BC U+200D U+27A1 U+FE0F woman in motorized wheelchair facing right: medium-light skin tone
+  U+1F469 U+1F3FC U+200D U+1F9BC U+200D U+27A1 woman in motorized wheelchair facing right: medium-light skin tone
+  U+1F469 U+1F3FD U+200D U+1F9BC U+200D U+27A1 U+FE0F woman in motorized wheelchair facing right: medium skin tone
+  U+1F469 U+1F3FD U+200D U+1F9BC U+200D U+27A1 woman in motorized wheelchair facing right: medium skin tone
+  U+1F469 U+1F3FE U+200D U+1F9BC U+200D U+27A1 U+FE0F woman in motorized wheelchair facing right: medium-dark skin tone
+  U+1F469 U+1F3FE U+200D U+1F9BC U+200D U+27A1 woman in motorized wheelchair facing right: medium-dark skin tone
+  U+1F469 U+1F3FF U+200D U+1F9BC U+200D U+27A1 U+FE0F woman in motorized wheelchair facing right: dark skin tone
+  U+1F469 U+1F3FF U+200D U+1F9BC U+200D U+27A1 woman in motorized wheelchair facing right: dark skin tone
+  U+1F9D1 U+200D U+1F9BD U+200D U+27A1 U+FE0F person in manual wheelchair facing right
+  U+1F9D1 U+200D U+1F9BD U+200D U+27A1 person in manual wheelchair facing right
+  U+1F9D1 U+1F3FB U+200D U+1F9BD U+200D U+27A1 U+FE0F person in manual wheelchair facing right: light skin tone
+  U+1F9D1 U+1F3FB U+200D U+1F9BD U+200D U+27A1 person in manual wheelchair facing right: light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F9BD U+200D U+27A1 U+FE0F person in manual wheelchair facing right: medium-light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F9BD U+200D U+27A1 person in manual wheelchair facing right: medium-light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F9BD U+200D U+27A1 U+FE0F person in manual wheelchair facing right: medium skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F9BD U+200D U+27A1 person in manual wheelchair facing right: medium skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F9BD U+200D U+27A1 U+FE0F person in manual wheelchair facing right: medium-dark skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F9BD U+200D U+27A1 person in manual wheelchair facing right: medium-dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F9BD U+200D U+27A1 U+FE0F person in manual wheelchair facing right: dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F9BD U+200D U+27A1 person in manual wheelchair facing right: dark skin tone
+  U+1F468 U+200D U+1F9BD U+200D U+27A1 U+FE0F man in manual wheelchair facing right
+  U+1F468 U+200D U+1F9BD U+200D U+27A1 man in manual wheelchair facing right
+  U+1F468 U+1F3FB U+200D U+1F9BD U+200D U+27A1 U+FE0F man in manual wheelchair facing right: light skin tone
+  U+1F468 U+1F3FB U+200D U+1F9BD U+200D U+27A1 man in manual wheelchair facing right: light skin tone
+  U+1F468 U+1F3FC U+200D U+1F9BD U+200D U+27A1 U+FE0F man in manual wheelchair facing right: medium-light skin tone
+  U+1F468 U+1F3FC U+200D U+1F9BD U+200D U+27A1 man in manual wheelchair facing right: medium-light skin tone
+  U+1F468 U+1F3FD U+200D U+1F9BD U+200D U+27A1 U+FE0F man in manual wheelchair facing right: medium skin tone
+  U+1F468 U+1F3FD U+200D U+1F9BD U+200D U+27A1 man in manual wheelchair facing right: medium skin tone
+  U+1F468 U+1F3FE U+200D U+1F9BD U+200D U+27A1 U+FE0F man in manual wheelchair facing right: medium-dark skin tone
+  U+1F468 U+1F3FE U+200D U+1F9BD U+200D U+27A1 man in manual wheelchair facing right: medium-dark skin tone
+  U+1F468 U+1F3FF U+200D U+1F9BD U+200D U+27A1 U+FE0F man in manual wheelchair facing right: dark skin tone
+  U+1F468 U+1F3FF U+200D U+1F9BD U+200D U+27A1 man in manual wheelchair facing right: dark skin tone
+  U+1F469 U+200D U+1F9BD U+200D U+27A1 U+FE0F woman in manual wheelchair facing right
+  U+1F469 U+200D U+1F9BD U+200D U+27A1 woman in manual wheelchair facing right
+  U+1F469 U+1F3FB U+200D U+1F9BD U+200D U+27A1 U+FE0F woman in manual wheelchair facing right: light skin tone
+  U+1F469 U+1F3FB U+200D U+1F9BD U+200D U+27A1 woman in manual wheelchair facing right: light skin tone
+  U+1F469 U+1F3FC U+200D U+1F9BD U+200D U+27A1 U+FE0F woman in manual wheelchair facing right: medium-light skin tone
+  U+1F469 U+1F3FC U+200D U+1F9BD U+200D U+27A1 woman in manual wheelchair facing right: medium-light skin tone
+  U+1F469 U+1F3FD U+200D U+1F9BD U+200D U+27A1 U+FE0F woman in manual wheelchair facing right: medium skin tone
+  U+1F469 U+1F3FD U+200D U+1F9BD U+200D U+27A1 woman in manual wheelchair facing right: medium skin tone
+  U+1F469 U+1F3FE U+200D U+1F9BD U+200D U+27A1 U+FE0F woman in manual wheelchair facing right: medium-dark skin tone
+  U+1F469 U+1F3FE U+200D U+1F9BD U+200D U+27A1 woman in manual wheelchair facing right: medium-dark skin tone
+  U+1F469 U+1F3FF U+200D U+1F9BD U+200D U+27A1 U+FE0F woman in manual wheelchair facing right: dark skin tone
+  U+1F469 U+1F3FF U+200D U+1F9BD U+200D U+27A1 woman in manual wheelchair facing right: dark skin tone
+  U+1F3C3 U+200D U+27A1 U+FE0F person running facing right
+  U+1F3C3 U+200D U+27A1 person running facing right
+  U+1F3C3 U+1F3FB U+200D U+27A1 U+FE0F person running facing right: light skin tone
+  U+1F3C3 U+1F3FB U+200D U+27A1 person running facing right: light skin tone
+  U+1F3C3 U+1F3FC U+200D U+27A1 U+FE0F person running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FC U+200D U+27A1 person running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FD U+200D U+27A1 U+FE0F person running facing right: medium skin tone
+  U+1F3C3 U+1F3FD U+200D U+27A1 person running facing right: medium skin tone
+  U+1F3C3 U+1F3FE U+200D U+27A1 U+FE0F person running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FE U+200D U+27A1 person running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+27A1 U+FE0F person running facing right: dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+27A1 person running facing right: dark skin tone
+  U+1F3C3 U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman running facing right
+  U+1F3C3 U+200D U+2640 U+200D U+27A1 U+FE0F woman running facing right
+  U+1F3C3 U+200D U+2640 U+FE0F U+200D U+27A1 woman running facing right
+  U+1F3C3 U+200D U+2640 U+200D U+27A1 woman running facing right
+  U+1F3C3 U+1F3FB U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman running facing right: light skin tone
+  U+1F3C3 U+1F3FB U+200D U+2640 U+200D U+27A1 U+FE0F woman running facing right: light skin tone
+  U+1F3C3 U+1F3FB U+200D U+2640 U+FE0F U+200D U+27A1 woman running facing right: light skin tone
+  U+1F3C3 U+1F3FB U+200D U+2640 U+200D U+27A1 woman running facing right: light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2640 U+200D U+27A1 U+FE0F woman running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2640 U+FE0F U+200D U+27A1 woman running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2640 U+200D U+27A1 woman running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FD U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman running facing right: medium skin tone
+  U+1F3C3 U+1F3FD U+200D U+2640 U+200D U+27A1 U+FE0F woman running facing right: medium skin tone
+  U+1F3C3 U+1F3FD U+200D U+2640 U+FE0F U+200D U+27A1 woman running facing right: medium skin tone
+  U+1F3C3 U+1F3FD U+200D U+2640 U+200D U+27A1 woman running facing right: medium skin tone
+  U+1F3C3 U+1F3FE U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FE U+200D U+2640 U+200D U+27A1 U+FE0F woman running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FE U+200D U+2640 U+FE0F U+200D U+27A1 woman running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FE U+200D U+2640 U+200D U+27A1 woman running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2640 U+FE0F U+200D U+27A1 U+FE0F woman running facing right: dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2640 U+200D U+27A1 U+FE0F woman running facing right: dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2640 U+FE0F U+200D U+27A1 woman running facing right: dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2640 U+200D U+27A1 woman running facing right: dark skin tone
+  U+1F3C3 U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man running facing right
+  U+1F3C3 U+200D U+2642 U+200D U+27A1 U+FE0F man running facing right
+  U+1F3C3 U+200D U+2642 U+FE0F U+200D U+27A1 man running facing right
+  U+1F3C3 U+200D U+2642 U+200D U+27A1 man running facing right
+  U+1F3C3 U+1F3FB U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man running facing right: light skin tone
+  U+1F3C3 U+1F3FB U+200D U+2642 U+200D U+27A1 U+FE0F man running facing right: light skin tone
+  U+1F3C3 U+1F3FB U+200D U+2642 U+FE0F U+200D U+27A1 man running facing right: light skin tone
+  U+1F3C3 U+1F3FB U+200D U+2642 U+200D U+27A1 man running facing right: light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2642 U+200D U+27A1 U+FE0F man running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2642 U+FE0F U+200D U+27A1 man running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FC U+200D U+2642 U+200D U+27A1 man running facing right: medium-light skin tone
+  U+1F3C3 U+1F3FD U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man running facing right: medium skin tone
+  U+1F3C3 U+1F3FD U+200D U+2642 U+200D U+27A1 U+FE0F man running facing right: medium skin tone
+  U+1F3C3 U+1F3FD U+200D U+2642 U+FE0F U+200D U+27A1 man running facing right: medium skin tone
+  U+1F3C3 U+1F3FD U+200D U+2642 U+200D U+27A1 man running facing right: medium skin tone
+  U+1F3C3 U+1F3FE U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FE U+200D U+2642 U+200D U+27A1 U+FE0F man running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FE U+200D U+2642 U+FE0F U+200D U+27A1 man running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FE U+200D U+2642 U+200D U+27A1 man running facing right: medium-dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2642 U+FE0F U+200D U+27A1 U+FE0F man running facing right: dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2642 U+200D U+27A1 U+FE0F man running facing right: dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2642 U+FE0F U+200D U+27A1 man running facing right: dark skin tone
+  U+1F3C3 U+1F3FF U+200D U+2642 U+200D U+27A1 man running facing right: dark skin tone
+  U+1F9D1 U+200D U+1FA70 ballet dancer
+  U+1F9D1 U+1F3FB U+200D U+1FA70 ballet dancer: light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1FA70 ballet dancer: medium-light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1FA70 ballet dancer: medium skin tone
+  U+1F9D1 U+1F3FE U+200D U+1FA70 ballet dancer: medium-dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1FA70 ballet dancer: dark skin tone
+  U+1F46F U+1F3FB U+200D U+2642 U+FE0F men with bunny ears: light skin tone
+  U+1F46F U+1F3FB U+200D U+2642 men with bunny ears: light skin tone
+  U+1F46F U+1F3FC U+200D U+2642 U+FE0F men with bunny ears: medium-light skin tone
+  U+1F46F U+1F3FC U+200D U+2642 men with bunny ears: medium-light skin tone
+  U+1F46F U+1F3FD U+200D U+2642 U+FE0F men with bunny ears: medium skin tone
+  U+1F46F U+1F3FD U+200D U+2642 men with bunny ears: medium skin tone
+  U+1F46F U+1F3FE U+200D U+2642 U+FE0F men with bunny ears: medium-dark skin tone
+  U+1F46F U+1F3FE U+200D U+2642 men with bunny ears: medium-dark skin tone
+  U+1F46F U+1F3FF U+200D U+2642 U+FE0F men with bunny ears: dark skin tone
+  U+1F46F U+1F3FF U+200D U+2642 men with bunny ears: dark skin tone
+  U+1F46F U+1F3FB U+200D U+2640 U+FE0F women with bunny ears: light skin tone
+  U+1F46F U+1F3FB U+200D U+2640 women with bunny ears: light skin tone
+  U+1F46F U+1F3FC U+200D U+2640 U+FE0F women with bunny ears: medium-light skin tone
+  U+1F46F U+1F3FC U+200D U+2640 women with bunny ears: medium-light skin tone
+  U+1F46F U+1F3FD U+200D U+2640 U+FE0F women with bunny ears: medium skin tone
+  U+1F46F U+1F3FD U+200D U+2640 women with bunny ears: medium skin tone
+  U+1F46F U+1F3FE U+200D U+2640 U+FE0F women with bunny ears: medium-dark skin tone
+  U+1F46F U+1F3FE U+200D U+2640 women with bunny ears: medium-dark skin tone
+  U+1F46F U+1F3FF U+200D U+2640 U+FE0F women with bunny ears: dark skin tone
+  U+1F46F U+1F3FF U+200D U+2640 women with bunny ears: dark skin tone
+  U+1F9D1 U+1F3FB U+200D U+1F430 U+200D U+1F9D1 U+1F3FC people with bunny ears: light skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FB U+200D U+1F430 U+200D U+1F9D1 U+1F3FD people with bunny ears: light skin tone, medium skin tone
+  U+1F9D1 U+1F3FB U+200D U+1F430 U+200D U+1F9D1 U+1F3FE people with bunny ears: light skin tone, medium-dark skin tone
+  U+1F9D1 U+1F3FB U+200D U+1F430 U+200D U+1F9D1 U+1F3FF people with bunny ears: light skin tone, dark skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F430 U+200D U+1F9D1 U+1F3FB people with bunny ears: medium-light skin tone, light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F430 U+200D U+1F9D1 U+1F3FD people with bunny ears: medium-light skin tone, medium skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F430 U+200D U+1F9D1 U+1F3FE people with bunny ears: medium-light skin tone, medium-dark skin tone
+  U+1F9D1 U+1F3FC U+200D U+1F430 U+200D U+1F9D1 U+1F3FF people with bunny ears: medium-light skin tone, dark skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F430 U+200D U+1F9D1 U+1F3FB people with bunny ears: medium skin tone, light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F430 U+200D U+1F9D1 U+1F3FC people with bunny ears: medium skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F430 U+200D U+1F9D1 U+1F3FE people with bunny ears: medium skin tone, medium-dark skin tone
+  U+1F9D1 U+1F3FD U+200D U+1F430 U+200D U+1F9D1 U+1F3FF people with bunny ears: medium skin tone, dark skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F430 U+200D U+1F9D1 U+1F3FB people with bunny ears: medium-dark skin tone, light skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F430 U+200D U+1F9D1 U+1F3FC people with bunny ears: medium-dark skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F430 U+200D U+1F9D1 U+1F3FD people with bunny ears: medium-dark skin tone, medium skin tone
+  U+1F9D1 U+1F3FE U+200D U+1F430 U+200D U+1F9D1 U+1F3FF people with bunny ears: medium-dark skin tone, dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F430 U+200D U+1F9D1 U+1F3FB people with bunny ears: dark skin tone, light skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F430 U+200D U+1F9D1 U+1F3FC people with bunny ears: dark skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F430 U+200D U+1F9D1 U+1F3FD people with bunny ears: dark skin tone, medium skin tone
+  U+1F9D1 U+1F3FF U+200D U+1F430 U+200D U+1F9D1 U+1F3FE people with bunny ears: dark skin tone, medium-dark skin tone
+  U+1F468 U+1F3FB U+200D U+1F430 U+200D U+1F468 U+1F3FC men with bunny ears: light skin tone, medium-light skin tone
+  U+1F468 U+1F3FB U+200D U+1F430 U+200D U+1F468 U+1F3FD men with bunny ears: light skin tone, medium skin tone
+  U+1F468 U+1F3FB U+200D U+1F430 U+200D U+1F468 U+1F3FE men with bunny ears: light skin tone, medium-dark skin tone
+  U+1F468 U+1F3FB U+200D U+1F430 U+200D U+1F468 U+1F3FF men with bunny ears: light skin tone, dark skin tone
+  U+1F468 U+1F3FC U+200D U+1F430 U+200D U+1F468 U+1F3FB men with bunny ears: medium-light skin tone, light skin tone
+  U+1F468 U+1F3FC U+200D U+1F430 U+200D U+1F468 U+1F3FD men with bunny ears: medium-light skin tone, medium skin tone
+  U+1F468 U+1F3FC U+200D U+1F430 U+200D U+1F468 U+1F3FE men with bunny ears: medium-light skin tone, medium-dark skin tone
+  U+1F468 U+1F3FC U+200D U+1F430 U+200D U+1F468 U+1F3FF men with bunny ears: medium-light skin tone, dark skin tone
+  U+1F468 U+1F3FD U+200D U+1F430 U+200D U+1F468 U+1F3FB men with bunny ears: medium skin tone, light skin tone
+  U+1F468 U+1F3FD U+200D U+1F430 U+200D U+1F468 U+1F3FC men with bunny ears: medium skin tone, medium-light skin tone
+  U+1F468 U+1F3FD U+200D U+1F430 U+200D U+1F468 U+1F3FE men with bunny ears: medium skin tone, medium-dark skin tone
+  U+1F468 U+1F3FD U+200D U+1F430 U+200D U+1F468 U+1F3FF men with bunny ears: medium skin tone, dark skin tone
+  U+1F468 U+1F3FE U+200D U+1F430 U+200D U+1F468 U+1F3FB men with bunny ears: medium-dark skin tone, light skin tone
+  U+1F468 U+1F3FE U+200D U+1F430 U+200D U+1F468 U+1F3FC men with bunny ears: medium-dark skin tone, medium-light skin tone
+  U+1F468 U+1F3FE U+200D U+1F430 U+200D U+1F468 U+1F3FD men with bunny ears: medium-dark skin tone, medium skin tone
+  U+1F468 U+1F3FE U+200D U+1F430 U+200D U+1F468 U+1F3FF men with bunny ears: medium-dark skin tone, dark skin tone
+  U+1F468 U+1F3FF U+200D U+1F430 U+200D U+1F468 U+1F3FB men with bunny ears: dark skin tone, light skin tone
+  U+1F468 U+1F3FF U+200D U+1F430 U+200D U+1F468 U+1F3FC men with bunny ears: dark skin tone, medium-light skin tone
+  U+1F468 U+1F3FF U+200D U+1F430 U+200D U+1F468 U+1F3FD men with bunny ears: dark skin tone, medium skin tone
+  U+1F468 U+1F3FF U+200D U+1F430 U+200D U+1F468 U+1F3FE men with bunny ears: dark skin tone, medium-dark skin tone
+  U+1F469 U+1F3FB U+200D U+1F430 U+200D U+1F469 U+1F3FC women with bunny ears: light skin tone, medium-light skin tone
+  U+1F469 U+1F3FB U+200D U+1F430 U+200D U+1F469 U+1F3FD women with bunny ears: light skin tone, medium skin tone
+  U+1F469 U+1F3FB U+200D U+1F430 U+200D U+1F469 U+1F3FE women with bunny ears: light skin tone, medium-dark skin tone
+  U+1F469 U+1F3FB U+200D U+1F430 U+200D U+1F469 U+1F3FF women with bunny ears: light skin tone, dark skin tone
+  U+1F469 U+1F3FC U+200D U+1F430 U+200D U+1F469 U+1F3FB women with bunny ears: medium-light skin tone, light skin tone
+  U+1F469 U+1F3FC U+200D U+1F430 U+200D U+1F469 U+1F3FD women with bunny ears: medium-light skin tone, medium skin tone
+  U+1F469 U+1F3FC U+200D U+1F430 U+200D U+1F469 U+1F3FE women with bunny ears: medium-light skin tone, medium-dark skin tone
+  U+1F469 U+1F3FC U+200D U+1F430 U+200D U+1F469 U+1F3FF women with bunny ears: medium-light skin tone, dark skin tone
+  U+1F469 U+1F3FD U+200D U+1F430 U+200D U+1F469 U+1F3FB women with bunny ears: medium skin tone, light skin tone
+  U+1F469 U+1F3FD U+200D U+1F430 U+200D U+1F469 U+1F3FC women with bunny ears: medium skin tone, medium-light skin tone
+  U+1F469 U+1F3FD U+200D U+1F430 U+200D U+1F469 U+1F3FE women with bunny ears: medium skin tone, medium-dark skin tone
+  U+1F469 U+1F3FD U+200D U+1F430 U+200D U+1F469 U+1F3FF women with bunny ears: medium skin tone, dark skin tone
+  U+1F469 U+1F3FE U+200D U+1F430 U+200D U+1F469 U+1F3FB women with bunny ears: medium-dark skin tone, light skin tone
+  U+1F469 U+1F3FE U+200D U+1F430 U+200D U+1F469 U+1F3FC women with bunny ears: medium-dark skin tone, medium-light skin tone
+  U+1F469 U+1F3FE U+200D U+1F430 U+200D U+1F469 U+1F3FD women with bunny ears: medium-dark skin tone, medium skin tone
+  U+1F469 U+1F3FE U+200D U+1F430 U+200D U+1F469 U+1F3FF women with bunny ears: medium-dark skin tone, dark skin tone
+  U+1F469 U+1F3FF U+200D U+1F430 U+200D U+1F469 U+1F3FB women with bunny ears: dark skin tone, light skin tone
+  U+1F469 U+1F3FF U+200D U+1F430 U+200D U+1F469 U+1F3FC women with bunny ears: dark skin tone, medium-light skin tone
+  U+1F469 U+1F3FF U+200D U+1F430 U+200D U+1F469 U+1F3FD women with bunny ears: dark skin tone, medium skin tone
+  U+1F469 U+1F3FF U+200D U+1F430 U+200D U+1F469 U+1F3FE women with bunny ears: dark skin tone, medium-dark skin tone
+  U+1F93C U+1F3FB U+200D U+2642 U+FE0F men wrestling: light skin tone
+  U+1F93C U+1F3FB U+200D U+2642 men wrestling: light skin tone
+  U+1F93C U+1F3FC U+200D U+2642 U+FE0F men wrestling: medium-light skin tone
+  U+1F93C U+1F3FC U+200D U+2642 men wrestling: medium-light skin tone
+  U+1F93C U+1F3FD U+200D U+2642 U+FE0F men wrestling: medium skin tone
+  U+1F93C U+1F3FD U+200D U+2642 men wrestling: medium skin tone
+  U+1F93C U+1F3FE U+200D U+2642 U+FE0F men wrestling: medium-dark skin tone
+  U+1F93C U+1F3FE U+200D U+2642 men wrestling: medium-dark skin tone
+  U+1F93C U+1F3FF U+200D U+2642 U+FE0F men wrestling: dark skin tone
+  U+1F93C U+1F3FF U+200D U+2642 men wrestling: dark skin tone
+  U+1F93C U+1F3FB U+200D U+2640 U+FE0F women wrestling: light skin tone
+  U+1F93C U+1F3FB U+200D U+2640 women wrestling: light skin tone
+  U+1F93C U+1F3FC U+200D U+2640 U+FE0F women wrestling: medium-light skin tone
+  U+1F93C U+1F3FC U+200D U+2640 women wrestling: medium-light skin tone
+  U+1F93C U+1F3FD U+200D U+2640 U+FE0F women wrestling: medium skin tone
+  U+1F93C U+1F3FD U+200D U+2640 women wrestling: medium skin tone
+  U+1F93C U+1F3FE U+200D U+2640 U+FE0F women wrestling: medium-dark skin tone
+  U+1F93C U+1F3FE U+200D U+2640 women wrestling: medium-dark skin tone
+  U+1F93C U+1F3FF U+200D U+2640 U+FE0F women wrestling: dark skin tone
+  U+1F93C U+1F3FF U+200D U+2640 women wrestling: dark skin tone
+  U+1F9D1 U+1F3FB U+200D U+1FAEF U+200D U+1F9D1 U+1F3FC people wrestling: light skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FB U+200D U+1FAEF U+200D U+1F9D1 U+1F3FD people wrestling: light skin tone, medium skin tone
+  U+1F9D1 U+1F3FB U+200D U+1FAEF U+200D U+1F9D1 U+1F3FE people wrestling: light skin tone, medium-dark skin tone
+  U+1F9D1 U+1F3FB U+200D U+1FAEF U+200D U+1F9D1 U+1F3FF people wrestling: light skin tone, dark skin tone
+  U+1F9D1 U+1F3FC U+200D U+1FAEF U+200D U+1F9D1 U+1F3FB people wrestling: medium-light skin tone, light skin tone
+  U+1F9D1 U+1F3FC U+200D U+1FAEF U+200D U+1F9D1 U+1F3FD people wrestling: medium-light skin tone, medium skin tone
+  U+1F9D1 U+1F3FC U+200D U+1FAEF U+200D U+1F9D1 U+1F3FE people wrestling: medium-light skin tone, medium-dark skin tone
+  U+1F9D1 U+1F3FC U+200D U+1FAEF U+200D U+1F9D1 U+1F3FF people wrestling: medium-light skin tone, dark skin tone
+  U+1F9D1 U+1F3FD U+200D U+1FAEF U+200D U+1F9D1 U+1F3FB people wrestling: medium skin tone, light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1FAEF U+200D U+1F9D1 U+1F3FC people wrestling: medium skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FD U+200D U+1FAEF U+200D U+1F9D1 U+1F3FE people wrestling: medium skin tone, medium-dark skin tone
+  U+1F9D1 U+1F3FD U+200D U+1FAEF U+200D U+1F9D1 U+1F3FF people wrestling: medium skin tone, dark skin tone
+  U+1F9D1 U+1F3FE U+200D U+1FAEF U+200D U+1F9D1 U+1F3FB people wrestling: medium-dark skin tone, light skin tone
+  U+1F9D1 U+1F3FE U+200D U+1FAEF U+200D U+1F9D1 U+1F3FC people wrestling: medium-dark skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FE U+200D U+1FAEF U+200D U+1F9D1 U+1F3FD people wrestling: medium-dark skin tone, medium skin tone
+  U+1F9D1 U+1F3FE U+200D U+1FAEF U+200D U+1F9D1 U+1F3FF people wrestling: medium-dark skin tone, dark skin tone
+  U+1F9D1 U+1F3FF U+200D U+1FAEF U+200D U+1F9D1 U+1F3FB people wrestling: dark skin tone, light skin tone
+  U+1F9D1 U+1F3FF U+200D U+1FAEF U+200D U+1F9D1 U+1F3FC people wrestling: dark skin tone, medium-light skin tone
+  U+1F9D1 U+1F3FF U+200D U+1FAEF U+200D U+1F9D1 U+1F3FD people wrestling: dark skin tone, medium skin tone
+  U+1F9D1 U+1F3FF U+200D U+1FAEF U+200D U+1F9D1 U+1F3FE people wrestling: dark skin tone, medium-dark skin tone
+  U+1F468 U+1F3FB U+200D U+1FAEF U+200D U+1F468 U+1F3FC men wrestling: light skin tone, medium-light skin tone
+  U+1F468 U+1F3FB U+200D U+1FAEF U+200D U+1F468 U+1F3FD men wrestling: light skin tone, medium skin tone
+  U+1F468 U+1F3FB U+200D U+1FAEF U+200D U+1F468 U+1F3FE men wrestling: light skin tone, medium-dark skin tone
+  U+1F468 U+1F3FB U+200D U+1FAEF U+200D U+1F468 U+1F3FF men wrestling: light skin tone, dark skin tone
+  U+1F468 U+1F3FC U+200D U+1FAEF U+200D U+1F468 U+1F3FB men wrestling: medium-light skin tone, light skin tone
+  U+1F468 U+1F3FC U+200D U+1FAEF U+200D U+1F468 U+1F3FD men wrestling: medium-light skin tone, medium skin tone
+  U+1F468 U+1F3FC U+200D U+1FAEF U+200D U+1F468 U+1F3FE men wrestling: medium-light skin tone, medium-dark skin tone
+  U+1F468 U+1F3FC U+200D U+1FAEF U+200D U+1F468 U+1F3FF men wrestling: medium-light skin tone, dark skin tone
+  U+1F468 U+1F3FD U+200D U+1FAEF U+200D U+1F468 U+1F3FB men wrestling: medium skin tone, light skin tone
+  U+1F468 U+1F3FD U+200D U+1FAEF U+200D U+1F468 U+1F3FC men wrestling: medium skin tone, medium-light skin tone
+  U+1F468 U+1F3FD U+200D U+1FAEF U+200D U+1F468 U+1F3FE men wrestling: medium skin tone, medium-dark skin tone
+  U+1F468 U+1F3FD U+200D U+1FAEF U+200D U+1F468 U+1F3FF men wrestling: medium skin tone, dark skin tone
+  U+1F468 U+1F3FE U+200D U+1FAEF U+200D U+1F468 U+1F3FB men wrestling: medium-dark skin tone, light skin tone
+  U+1F468 U+1F3FE U+200D U+1FAEF U+200D U+1F468 U+1F3FC men wrestling: medium-dark skin tone, medium-light skin tone
+  U+1F468 U+1F3FE U+200D U+1FAEF U+200D U+1F468 U+1F3FD men wrestling: medium-dark skin tone, medium skin tone
+  U+1F468 U+1F3FE U+200D U+1FAEF U+200D U+1F468 U+1F3FF men wrestling: medium-dark skin tone, dark skin tone
+  U+1F468 U+1F3FF U+200D U+1FAEF U+200D U+1F468 U+1F3FB men wrestling: dark skin tone, light skin tone
+  U+1F468 U+1F3FF U+200D U+1FAEF U+200D U+1F468 U+1F3FC men wrestling: dark skin tone, medium-light skin tone
+  U+1F468 U+1F3FF U+200D U+1FAEF U+200D U+1F468 U+1F3FD men wrestling: dark skin tone, medium skin tone
+  U+1F468 U+1F3FF U+200D U+1FAEF U+200D U+1F468 U+1F3FE men wrestling: dark skin tone, medium-dark skin tone
+  U+1F469 U+1F3FB U+200D U+1FAEF U+200D U+1F469 U+1F3FC women wrestling: light skin tone, medium-light skin tone
+  U+1F469 U+1F3FB U+200D U+1FAEF U+200D U+1F469 U+1F3FD women wrestling: light skin tone, medium skin tone
+  U+1F469 U+1F3FB U+200D U+1FAEF U+200D U+1F469 U+1F3FE women wrestling: light skin tone, medium-dark skin tone
+  U+1F469 U+1F3FB U+200D U+1FAEF U+200D U+1F469 U+1F3FF women wrestling: light skin tone, dark skin tone
+  U+1F469 U+1F3FC U+200D U+1FAEF U+200D U+1F469 U+1F3FB women wrestling: medium-light skin tone, light skin tone
+  U+1F469 U+1F3FC U+200D U+1FAEF U+200D U+1F469 U+1F3FD women wrestling: medium-light skin tone, medium skin tone
+  U+1F469 U+1F3FC U+200D U+1FAEF U+200D U+1F469 U+1F3FE women wrestling: medium-light skin tone, medium-dark skin tone
+  U+1F469 U+1F3FC U+200D U+1FAEF U+200D U+1F469 U+1F3FF women wrestling: medium-light skin tone, dark skin tone
+  U+1F469 U+1F3FD U+200D U+1FAEF U+200D U+1F469 U+1F3FB women wrestling: medium skin tone, light skin tone
+  U+1F469 U+1F3FD U+200D U+1FAEF U+200D U+1F469 U+1F3FC women wrestling: medium skin tone, medium-light skin tone
+  U+1F469 U+1F3FD U+200D U+1FAEF U+200D U+1F469 U+1F3FE women wrestling: medium skin tone, medium-dark skin tone
+  U+1F469 U+1F3FD U+200D U+1FAEF U+200D U+1F469 U+1F3FF women wrestling: medium skin tone, dark skin tone
+  U+1F469 U+1F3FE U+200D U+1FAEF U+200D U+1F469 U+1F3FB women wrestling: medium-dark skin tone, light skin tone
+  U+1F469 U+1F3FE U+200D U+1FAEF U+200D U+1F469 U+1F3FC women wrestling: medium-dark skin tone, medium-light skin tone
+  U+1F469 U+1F3FE U+200D U+1FAEF U+200D U+1F469 U+1F3FD women wrestling: medium-dark skin tone, medium skin tone
+  U+1F469 U+1F3FE U+200D U+1FAEF U+200D U+1F469 U+1F3FF women wrestling: medium-dark skin tone, dark skin tone
+  U+1F469 U+1F3FF U+200D U+1FAEF U+200D U+1F469 U+1F3FB women wrestling: dark skin tone, light skin tone
+  U+1F469 U+1F3FF U+200D U+1FAEF U+200D U+1F469 U+1F3FC women wrestling: dark skin tone, medium-light skin tone
+  U+1F469 U+1F3FF U+200D U+1FAEF U+200D U+1F469 U+1F3FD women wrestling: dark skin tone, medium skin tone
+  U+1F469 U+1F3FF U+200D U+1FAEF U+200D U+1F469 U+1F3FE women wrestling: dark skin tone, medium-dark skin tone
+  U+1F9D1 U+200D U+1F9D1 U+200D U+1F9D2 family: adult, adult, child
+  U+1F9D1 U+200D U+1F9D1 U+200D U+1F9D2 U+200D U+1F9D2 family: adult, adult, child, child
+  U+1F9D1 U+200D U+1F9D2 family: adult, child
+  U+1F9D1 U+200D U+1F9D2 U+200D U+1F9D2 family: adult, child, child
+  U+1F426 U+200D U+2B1B black bird
+  U+1F426 U+200D U+1F525 phoenix
+  U+1F34B U+200D U+1F7E9 lime
+  U+1F344 U+200D U+1F7EB brown mushroom
+  U+26D3 U+FE0F U+200D U+1F4A5 broken chain
+  U+26D3 U+200D U+1F4A5 broken chain
+[modifier sequence] 30
+  U+1FAF7 U+1F3FB leftwards pushing hand: light skin tone
+  U+1FAF7 U+1F3FC leftwards pushing hand: medium-light skin tone
+  U+1FAF7 U+1F3FD leftwards pushing hand: medium skin tone
+  U+1FAF7 U+1F3FE leftwards pushing hand: medium-dark skin tone
+  U+1FAF7 U+1F3FF leftwards pushing hand: dark skin tone
+  U+1FAF8 U+1F3FB rightwards pushing hand: light skin tone
+  U+1FAF8 U+1F3FC rightwards pushing hand: medium-light skin tone
+  U+1FAF8 U+1F3FD rightwards pushing hand: medium skin tone
+  U+1FAF8 U+1F3FE rightwards pushing hand: medium-dark skin tone
+  U+1FAF8 U+1F3FF rightwards pushing hand: dark skin tone
+  U+1FAF9 U+1F3FB leftwards thumb sign: light skin tone
+  U+1FAF9 U+1F3FC leftwards thumb sign: medium-light skin tone
+  U+1FAF9 U+1F3FD leftwards thumb sign: medium skin tone
+  U+1FAF9 U+1F3FE leftwards thumb sign: medium-dark skin tone
+  U+1FAF9 U+1F3FF leftwards thumb sign: dark skin tone
+  U+1FAFA U+1F3FB rightwards thumb sign: light skin tone
+  U+1FAFA U+1F3FC rightwards thumb sign: medium-light skin tone
+  U+1FAFA U+1F3FD rightwards thumb sign: medium skin tone
+  U+1FAFA U+1F3FE rightwards thumb sign: medium-dark skin tone
+  U+1FAFA U+1F3FF rightwards thumb sign: dark skin tone
+  U+1F46F U+1F3FB people with bunny ears: light skin tone
+  U+1F46F U+1F3FC people with bunny ears: medium-light skin tone
+  U+1F46F U+1F3FD people with bunny ears: medium skin tone
+  U+1F46F U+1F3FE people with bunny ears: medium-dark skin tone
+  U+1F46F U+1F3FF people with bunny ears: dark skin tone
+  U+1F93C U+1F3FB people wrestling: light skin tone
+  U+1F93C U+1F3FC people wrestling: medium-light skin tone
+  U+1F93C U+1F3FD people wrestling: medium skin tone
+  U+1F93C U+1F3FE people wrestling: medium-dark skin tone
+  U+1F93C U+1F3FF people wrestling: dark skin tone
+[skin tone component] 5
+  U+1F3FB light skin tone
+  U+1F3FC medium-light skin tone
+  U+1F3FD medium skin tone
+  U+1F3FE medium-dark skin tone
+  U+1F3FF dark skin tone
+[flag] 1
+  U+1F1E8 U+1F1F6 flag: Sark
+[block Miscellaneous Technical] 96
+  U+2316 POSITION INDICATOR
+  U+2317 VIEWDATA SQUARE
+  U+2322 FROWN
+  U+2323 SMILE
+  U+2329 LEFT-POINTING ANGLE BRACKET
+  U+232A RIGHT-POINTING ANGLE BRACKET
+  U+232D CYLINDRICITY
+  U+232E ALL AROUND-PROFILE
+  U+232F SYMMETRY
+  U+2330 TOTAL RUNOUT
+  U+2331 DIMENSION ORIGIN
+  U+2332 CONICAL TAPER
+  U+2333 SLOPE
+  U+2334 COUNTERBORE
+  U+237B NOT CHECK MARK
+  U+237C RIGHT ANGLE WITH DOWNWARDS ZIGZAG ARROW
+  U+237E BELL SYMBOL
+  U+237F VERTICAL LINE WITH MIDDLE DOT
+  U+2384 COMPOSITION SYMBOL
+  U+2385 WHITE SQUARE WITH CENTRE VERTICAL LINE
+  U+2386 ENTER SYMBOL
+  U+238C UNDO SYMBOL
+  U+238D MONOSTABLE SYMBOL
+  U+238E HYSTERESIS SYMBOL
+  U+238F OPEN-CIRCUIT-OUTPUT H-TYPE SYMBOL
+  U+2390 OPEN-CIRCUIT-OUTPUT L-TYPE SYMBOL
+  U+2391 PASSIVE-PULL-DOWN-OUTPUT SYMBOL
+  U+2392 PASSIVE-PULL-UP-OUTPUT SYMBOL
+  U+2393 DIRECT CURRENT SYMBOL FORM TWO
+  U+2396 DECIMAL SEPARATOR KEY SYMBOL
+  U+2397 PREVIOUS PAGE
+  U+2398 NEXT PAGE
+  U+2399 PRINT SCREEN SYMBOL
+  U+239A CLEAR SCREEN SYMBOL
+  U+23AF HORIZONTAL LINE EXTENSION
+  U+23B0 UPPER LEFT OR LOWER RIGHT CURLY BRACKET SECTION
+  U+23B1 UPPER RIGHT OR LOWER LEFT CURLY BRACKET SECTION
+  U+23B2 SUMMATION TOP
+  U+23B3 SUMMATION BOTTOM
+  U+23B4 TOP SQUARE BRACKET
+  U+23B5 BOTTOM SQUARE BRACKET
+  U+23B6 BOTTOM SQUARE BRACKET OVER TOP SQUARE BRACKET
+  U+23B7 RADICAL SYMBOL BOTTOM
+  U+23B8 LEFT VERTICAL BOX LINE
+  U+23B9 RIGHT VERTICAL BOX LINE
+  U+23BA HORIZONTAL SCAN LINE-1
+  U+23BB HORIZONTAL SCAN LINE-3
+  U+23BC HORIZONTAL SCAN LINE-7
+  U+23BD HORIZONTAL SCAN LINE-9
+  U+23BE DENTISTRY SYMBOL LIGHT VERTICAL AND TOP RIGHT
+  U+23BF DENTISTRY SYMBOL LIGHT VERTICAL AND BOTTOM RIGHT
+  U+23C0 DENTISTRY SYMBOL LIGHT VERTICAL WITH CIRCLE
+  U+23C1 DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL WITH CIRCLE
+  U+23C2 DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL WITH CIRCLE
+  U+23C3 DENTISTRY SYMBOL LIGHT VERTICAL WITH TRIANGLE
+  U+23C4 DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL WITH TRIANGLE
+  U+23C5 DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL WITH TRIANGLE
+  U+23C6 DENTISTRY SYMBOL LIGHT VERTICAL AND WAVE
+  U+23C7 DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL WITH WAVE
+  U+23C8 DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL WITH WAVE
+  U+23C9 DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL
+  U+23CA DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL
+  U+23CB DENTISTRY SYMBOL LIGHT VERTICAL AND TOP LEFT
+  U+23CC DENTISTRY SYMBOL LIGHT VERTICAL AND BOTTOM LEFT
+  U+23CD SQUARE FOOT
+  U+23D0 VERTICAL LINE EXTENSION
+  U+23D1 METRICAL BREVE
+  U+23D2 METRICAL LONG OVER SHORT
+  U+23D3 METRICAL SHORT OVER LONG
+  U+23D4 METRICAL LONG OVER TWO SHORTS
+  U+23D5 METRICAL TWO SHORTS OVER LONG
+  U+23D6 METRICAL TWO SHORTS JOINED
+  U+23D7 METRICAL TRISEME
+  U+23D8 METRICAL TETRASEME
+  U+23D9 METRICAL PENTASEME
+  U+23DA EARTH GROUND
+  U+23DB FUSE
+  U+23DC TOP PARENTHESIS
+  U+23DD BOTTOM PARENTHESIS
+  U+23DE TOP CURLY BRACKET
+  U+23DF BOTTOM CURLY BRACKET
+  U+23E0 TOP TORTOISE SHELL BRACKET
+  U+23E1 BOTTOM TORTOISE SHELL BRACKET
+  U+23E2 WHITE TRAPEZIUM
+  U+23E4 STRAIGHTNESS
+  U+23E6 AC CURRENT
+  U+23E7 ELECTRICAL INTERSECTION
+  U+23F4 BLACK MEDIUM LEFT-POINTING TRIANGLE
+  U+23F5 BLACK MEDIUM RIGHT-POINTING TRIANGLE
+  U+23F6 BLACK MEDIUM UP-POINTING TRIANGLE
+  U+23F7 BLACK MEDIUM DOWN-POINTING TRIANGLE
+  U+23FB POWER SYMBOL
+  U+23FC POWER ON-OFF SYMBOL
+  U+23FD POWER ON SYMBOL
+  U+23FE POWER SLEEP SYMBOL
+  U+23FF OBSERVER EYE SYMBOL
+[block Miscellaneous Symbols] 44
+  U+269D OUTLINED WHITE STAR
+  U+26B9 SEXTILE
+  U+26BA SEMISEXTILE
+  U+26BB QUINCUNX
+  U+26BC SESQUIQUADRATE
+  U+26BF SQUARED KEY
+  U+26C6 RAIN
+  U+26C7 BLACK SNOWMAN
+  U+26C9 TURNED WHITE SHOGI PIECE
+  U+26CA TURNED BLACK SHOGI PIECE
+  U+26CB WHITE DIAMOND IN SQUARE
+  U+26CC CROSSING LANES
+  U+26CD DISABLED CAR
+  U+26D0 CAR SLIDING
+  U+26D2 CIRCLED CROSSING LANES
+  U+26D5 ALTERNATE ONE-WAY LEFT WAY TRAFFIC
+  U+26D6 BLACK TWO-WAY LEFT WAY TRAFFIC
+  U+26D7 WHITE TWO-WAY LEFT WAY TRAFFIC
+  U+26D8 BLACK LEFT LANE MERGE
+  U+26D9 WHITE LEFT LANE MERGE
+  U+26DA DRIVE SLOW SIGN
+  U+26DB HEAVY WHITE DOWN-POINTING TRIANGLE
+  U+26DC LEFT CLOSED ENTRY
+  U+26DD SQUARED SALTIRE
+  U+26DE FALLING DIAGONAL IN WHITE CIRCLE IN BLACK SQUARE
+  U+26DF BLACK TRUCK
+  U+26E0 RESTRICTED LEFT ENTRY-1
+  U+26E1 RESTRICTED LEFT ENTRY-2
+  U+26E3 HEAVY CIRCLE WITH STROKE AND TWO DOTS ABOVE
+  U+26E4 PENTAGRAM
+  U+26E5 RIGHT-HANDED INTERLACED PENTAGRAM
+  U+26E6 LEFT-HANDED INTERLACED PENTAGRAM
+  U+26E7 INVERTED PENTAGRAM
+  U+26E8 BLACK CROSS ON SHIELD
+  U+26EB CASTLE
+  U+26EC HISTORIC SITE
+  U+26ED GEAR WITHOUT HUB
+  U+26EE GEAR WITH HANDLES
+  U+26EF MAP SYMBOL FOR LIGHTHOUSE
+  U+26F6 SQUARE FOUR CORNERS
+  U+26FB JAPANESE BANK SYMBOL
+  U+26FC HEADSTONE GRAVEYARD SYMBOL
+  U+26FE CUP ON BLACK SQUARE
+  U+26FF WHITE FLAG WITH HORIZONTAL MIDDLE BLACK STRIPE
+[block Dingbats] 3
+  U+2700 BLACK SAFETY SCISSORS
+  U+275F HEAVY LOW SINGLE COMMA QUOTATION MARK ORNAMENT
+  U+2760 HEAVY LOW DOUBLE COMMA QUOTATION MARK ORNAMENT
+[block Supplemental Arrows-B] 120
+  U+2900 RIGHTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE
+  U+2901 RIGHTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE
+  U+2902 LEFTWARDS DOUBLE ARROW WITH VERTICAL STROKE
+  U+2903 RIGHTWARDS DOUBLE ARROW WITH VERTICAL STROKE
+  U+2904 LEFT RIGHT DOUBLE ARROW WITH VERTICAL STROKE
+  U+2905 RIGHTWARDS TWO-HEADED ARROW FROM BAR
+  U+2908 DOWNWARDS ARROW WITH HORIZONTAL STROKE
+  U+2909 UPWARDS ARROW WITH HORIZONTAL STROKE
+  U+290C LEFTWARDS DOUBLE DASH ARROW
+  U+290D RIGHTWARDS DOUBLE DASH ARROW
+  U+290E LEFTWARDS TRIPLE DASH ARROW
+  U+290F RIGHTWARDS TRIPLE DASH ARROW
+  U+2910 RIGHTWARDS TWO-HEADED TRIPLE DASH ARROW
+  U+2911 RIGHTWARDS ARROW WITH DOTTED STEM
+  U+2912 UPWARDS ARROW TO BAR
+  U+2913 DOWNWARDS ARROW TO BAR
+  U+2914 RIGHTWARDS ARROW WITH TAIL WITH VERTICAL STROKE
+  U+2915 RIGHTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+  U+2916 RIGHTWARDS TWO-HEADED ARROW WITH TAIL
+  U+2917 RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE
+  U+2918 RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+  U+2919 LEFTWARDS ARROW-TAIL
+  U+291A RIGHTWARDS ARROW-TAIL
+  U+291B LEFTWARDS DOUBLE ARROW-TAIL
+  U+291C RIGHTWARDS DOUBLE ARROW-TAIL
+  U+291D LEFTWARDS ARROW TO BLACK DIAMOND
+  U+291E RIGHTWARDS ARROW TO BLACK DIAMOND
+  U+291F LEFTWARDS ARROW FROM BAR TO BLACK DIAMOND
+  U+2920 RIGHTWARDS ARROW FROM BAR TO BLACK DIAMOND
+  U+2921 NORTH WEST AND SOUTH EAST ARROW
+  U+2922 NORTH EAST AND SOUTH WEST ARROW
+  U+2923 NORTH WEST ARROW WITH HOOK
+  U+2924 NORTH EAST ARROW WITH HOOK
+  U+2925 SOUTH EAST ARROW WITH HOOK
+  U+2926 SOUTH WEST ARROW WITH HOOK
+  U+2927 NORTH WEST ARROW AND NORTH EAST ARROW
+  U+2928 NORTH EAST ARROW AND SOUTH EAST ARROW
+  U+2929 SOUTH EAST ARROW AND SOUTH WEST ARROW
+  U+292A SOUTH WEST ARROW AND NORTH WEST ARROW
+  U+292B RISING DIAGONAL CROSSING FALLING DIAGONAL
+  U+292C FALLING DIAGONAL CROSSING RISING DIAGONAL
+  U+292D SOUTH EAST ARROW CROSSING NORTH EAST ARROW
+  U+292E NORTH EAST ARROW CROSSING SOUTH EAST ARROW
+  U+292F FALLING DIAGONAL CROSSING NORTH EAST ARROW
+  U+2930 RISING DIAGONAL CROSSING SOUTH EAST ARROW
+  U+2931 NORTH EAST ARROW CROSSING NORTH WEST ARROW
+  U+2932 NORTH WEST ARROW CROSSING NORTH EAST ARROW
+  U+2933 WAVE ARROW POINTING DIRECTLY RIGHT
+  U+2936 ARROW POINTING DOWNWARDS THEN CURVING LEFTWARDS
+  U+2937 ARROW POINTING DOWNWARDS THEN CURVING RIGHTWARDS
+  U+2938 RIGHT-SIDE ARC CLOCKWISE ARROW
+  U+2939 LEFT-SIDE ARC ANTICLOCKWISE ARROW
+  U+293A TOP ARC ANTICLOCKWISE ARROW
+  U+293B BOTTOM ARC ANTICLOCKWISE ARROW
+  U+293C TOP ARC CLOCKWISE ARROW WITH MINUS
+  U+293D TOP ARC ANTICLOCKWISE ARROW WITH PLUS
+  U+293E LOWER RIGHT SEMICIRCULAR CLOCKWISE ARROW
+  U+293F LOWER LEFT SEMICIRCULAR ANTICLOCKWISE ARROW
+  U+2942 RIGHTWARDS ARROW ABOVE SHORT LEFTWARDS ARROW
+  U+2943 LEFTWARDS ARROW ABOVE SHORT RIGHTWARDS ARROW
+  U+2944 SHORT RIGHTWARDS ARROW ABOVE LEFTWARDS ARROW
+  U+2945 RIGHTWARDS ARROW WITH PLUS BELOW
+  U+2946 LEFTWARDS ARROW WITH PLUS BELOW
+  U+2947 RIGHTWARDS ARROW THROUGH X
+  U+2948 LEFT RIGHT ARROW THROUGH SMALL CIRCLE
+  U+2949 UPWARDS TWO-HEADED ARROW FROM SMALL CIRCLE
+  U+294A LEFT BARB UP RIGHT BARB DOWN HARPOON
+  U+294B LEFT BARB DOWN RIGHT BARB UP HARPOON
+  U+294C UP BARB RIGHT DOWN BARB LEFT HARPOON
+  U+294D UP BARB LEFT DOWN BARB RIGHT HARPOON
+  U+294E LEFT BARB UP RIGHT BARB UP HARPOON
+  U+294F UP BARB RIGHT DOWN BARB RIGHT HARPOON
+  U+2950 LEFT BARB DOWN RIGHT BARB DOWN HARPOON
+  U+2951 UP BARB LEFT DOWN BARB LEFT HARPOON
+  U+2952 LEFTWARDS HARPOON WITH BARB UP TO BAR
+  U+2953 RIGHTWARDS HARPOON WITH BARB UP TO BAR
+  U+2954 UPWARDS HARPOON WITH BARB RIGHT TO BAR
+  U+2955 DOWNWARDS HARPOON WITH BARB RIGHT TO BAR
+  U+2956 LEFTWARDS HARPOON WITH BARB DOWN TO BAR
+  U+2957 RIGHTWARDS HARPOON WITH BARB DOWN TO BAR
+  U+2958 UPWARDS HARPOON WITH BARB LEFT TO BAR
+  U+2959 DOWNWARDS HARPOON WITH BARB LEFT TO BAR
+  U+295A LEFTWARDS HARPOON WITH BARB UP FROM BAR
+  U+295B RIGHTWARDS HARPOON WITH BARB UP FROM BAR
+  U+295C UPWARDS HARPOON WITH BARB RIGHT FROM BAR
+  U+295D DOWNWARDS HARPOON WITH BARB RIGHT FROM BAR
+  U+295E LEFTWARDS HARPOON WITH BARB DOWN FROM BAR
+  U+295F RIGHTWARDS HARPOON WITH BARB DOWN FROM BAR
+  U+2960 UPWARDS HARPOON WITH BARB LEFT FROM BAR
+  U+2961 DOWNWARDS HARPOON WITH BARB LEFT FROM BAR
+  U+2962 LEFTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB DOWN
+  U+2963 UPWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT
+  U+2964 RIGHTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB DOWN
+  U+2965 DOWNWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT
+  U+2966 LEFTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB UP
+  U+2967 LEFTWARDS HARPOON WITH BARB DOWN ABOVE RIGHTWARDS HARPOON WITH BARB DOWN
+  U+2968 RIGHTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB UP
+  U+2969 RIGHTWARDS HARPOON WITH BARB DOWN ABOVE LEFTWARDS HARPOON WITH BARB DOWN
+  U+296A LEFTWARDS HARPOON WITH BARB UP ABOVE LONG DASH
+  U+296B LEFTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH
+  U+296C RIGHTWARDS HARPOON WITH BARB UP ABOVE LONG DASH
+  U+296D RIGHTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH
+  U+296E UPWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT
+  U+296F DOWNWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT
+  U+2970 RIGHT DOUBLE ARROW WITH ROUNDED HEAD
+  U+2971 EQUALS SIGN ABOVE RIGHTWARDS ARROW
+  U+2972 TILDE OPERATOR ABOVE RIGHTWARDS ARROW
+  U+2973 LEFTWARDS ARROW ABOVE TILDE OPERATOR
+  U+2974 RIGHTWARDS ARROW ABOVE TILDE OPERATOR
+  U+2975 RIGHTWARDS ARROW ABOVE ALMOST EQUAL TO
+  U+2976 LESS-THAN ABOVE LEFTWARDS ARROW
+  U+2977 LEFTWARDS ARROW THROUGH LESS-THAN
+  U+2978 GREATER-THAN ABOVE RIGHTWARDS ARROW
+  U+2979 SUBSET ABOVE RIGHTWARDS ARROW
+  U+297A LEFTWARDS ARROW THROUGH SUBSET
+  U+297B SUPERSET ABOVE LEFTWARDS ARROW
+  U+297C LEFT FISH TAIL
+  U+297D RIGHT FISH TAIL
+  U+297E UP FISH TAIL
+  U+297F DOWN FISH TAIL
+[block Miscellaneous Symbols and Arrows] 215
+  U+2B1D BLACK VERY SMALL SQUARE
+  U+2B1E WHITE VERY SMALL SQUARE
+  U+2B25 BLACK MEDIUM DIAMOND
+  U+2B26 WHITE MEDIUM DIAMOND
+  U+2B27 BLACK MEDIUM LOZENGE
+  U+2B28 WHITE MEDIUM LOZENGE
+  U+2B29 BLACK SMALL DIAMOND
+  U+2B2A BLACK SMALL LOZENGE
+  U+2B2B WHITE SMALL LOZENGE
+  U+2B2C BLACK HORIZONTAL ELLIPSE
+  U+2B2D WHITE HORIZONTAL ELLIPSE
+  U+2B2E BLACK VERTICAL ELLIPSE
+  U+2B2F WHITE VERTICAL ELLIPSE
+  U+2B30 LEFT ARROW WITH SMALL CIRCLE
+  U+2B31 THREE LEFTWARDS ARROWS
+  U+2B32 LEFT ARROW WITH CIRCLED PLUS
+  U+2B33 LONG LEFTWARDS SQUIGGLE ARROW
+  U+2B34 LEFTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE
+  U+2B35 LEFTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE
+  U+2B36 LEFTWARDS TWO-HEADED ARROW FROM BAR
+  U+2B37 LEFTWARDS TWO-HEADED TRIPLE DASH ARROW
+  U+2B38 LEFTWARDS ARROW WITH DOTTED STEM
+  U+2B39 LEFTWARDS ARROW WITH TAIL WITH VERTICAL STROKE
+  U+2B3A LEFTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+  U+2B3B LEFTWARDS TWO-HEADED ARROW WITH TAIL
+  U+2B3C LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE
+  U+2B3D LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+  U+2B3E LEFTWARDS ARROW THROUGH X
+  U+2B3F WAVE ARROW POINTING DIRECTLY LEFT
+  U+2B40 EQUALS SIGN ABOVE LEFTWARDS ARROW
+  U+2B41 REVERSE TILDE OPERATOR ABOVE LEFTWARDS ARROW
+  U+2B42 LEFTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO
+  U+2B43 RIGHTWARDS ARROW THROUGH GREATER-THAN
+  U+2B44 RIGHTWARDS ARROW THROUGH SUPERSET
+  U+2B45 LEFTWARDS QUADRUPLE ARROW
+  U+2B46 RIGHTWARDS QUADRUPLE ARROW
+  U+2B47 REVERSE TILDE OPERATOR ABOVE RIGHTWARDS ARROW
+  U+2B48 RIGHTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO
+  U+2B49 TILDE OPERATOR ABOVE LEFTWARDS ARROW
+  U+2B4A LEFTWARDS ARROW ABOVE ALMOST EQUAL TO
+  U+2B4B LEFTWARDS ARROW ABOVE REVERSE TILDE OPERATOR
+  U+2B4C RIGHTWARDS ARROW ABOVE REVERSE TILDE OPERATOR
+  U+2B4D DOWNWARDS TRIANGLE-HEADED ZIGZAG ARROW
+  U+2B4E SHORT SLANTED NORTH ARROW
+  U+2B4F SHORT BACKSLANTED SOUTH ARROW
+  U+2B51 BLACK SMALL STAR
+  U+2B52 WHITE SMALL STAR
+  U+2B56 HEAVY OVAL WITH OVAL INSIDE
+  U+2B57 HEAVY CIRCLE WITH CIRCLE INSIDE
+  U+2B58 HEAVY CIRCLE
+  U+2B59 HEAVY CIRCLED SALTIRE
+  U+2B5A SLANTED NORTH ARROW WITH HOOKED HEAD
+  U+2B5B BACKSLANTED SOUTH ARROW WITH HOOKED TAIL
+  U+2B5C SLANTED NORTH ARROW WITH HORIZONTAL TAIL
+  U+2B5D BACKSLANTED SOUTH ARROW WITH HORIZONTAL TAIL
+  U+2B5E BENT ARROW POINTING DOWNWARDS THEN NORTH EAST
+  U+2B5F SHORT BENT ARROW POINTING DOWNWARDS THEN NORTH EAST
+  U+2B60 LEFTWARDS TRIANGLE-HEADED ARROW
+  U+2B61 UPWARDS TRIANGLE-HEADED ARROW
+  U+2B62 RIGHTWARDS TRIANGLE-HEADED ARROW
+  U+2B63 DOWNWARDS TRIANGLE-HEADED ARROW
+  U+2B64 LEFT RIGHT TRIANGLE-HEADED ARROW
+  U+2B65 UP DOWN TRIANGLE-HEADED ARROW
+  U+2B66 NORTH WEST TRIANGLE-HEADED ARROW
+  U+2B67 NORTH EAST TRIANGLE-HEADED ARROW
+  U+2B68 SOUTH EAST TRIANGLE-HEADED ARROW
+  U+2B69 SOUTH WEST TRIANGLE-HEADED ARROW
+  U+2B6A LEFTWARDS TRIANGLE-HEADED DASHED ARROW
+  U+2B6B UPWARDS TRIANGLE-HEADED DASHED ARROW
+  U+2B6C RIGHTWARDS TRIANGLE-HEADED DASHED ARROW
+  U+2B6D DOWNWARDS TRIANGLE-HEADED DASHED ARROW
+  U+2B6E CLOCKWISE TRIANGLE-HEADED OPEN CIRCLE ARROW
+  U+2B6F ANTICLOCKWISE TRIANGLE-HEADED OPEN CIRCLE ARROW
+  U+2B70 LEFTWARDS TRIANGLE-HEADED ARROW TO BAR
+  U+2B71 UPWARDS TRIANGLE-HEADED ARROW TO BAR
+  U+2B72 RIGHTWARDS TRIANGLE-HEADED ARROW TO BAR
+  U+2B73 DOWNWARDS TRIANGLE-HEADED ARROW TO BAR
+  U+2B76 NORTH WEST TRIANGLE-HEADED ARROW TO BAR
+  U+2B77 NORTH EAST TRIANGLE-HEADED ARROW TO BAR
+  U+2B78 SOUTH EAST TRIANGLE-HEADED ARROW TO BAR
+  U+2B79 SOUTH WEST TRIANGLE-HEADED ARROW TO BAR
+  U+2B7A LEFTWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE
+  U+2B7B UPWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE
+  U+2B7C RIGHTWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE
+  U+2B7D DOWNWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE
+  U+2B7E HORIZONTAL TAB KEY
+  U+2B7F VERTICAL TAB KEY
+  U+2B80 LEFTWARDS TRIANGLE-HEADED ARROW OVER RIGHTWARDS TRIANGLE-HEADED ARROW
+  U+2B81 UPWARDS TRIANGLE-HEADED ARROW LEFTWARDS OF DOWNWARDS TRIANGLE-HEADED ARROW
+  U+2B82 RIGHTWARDS TRIANGLE-HEADED ARROW OVER LEFTWARDS TRIANGLE-HEADED ARROW
+  U+2B83 DOWNWARDS TRIANGLE-HEADED ARROW LEFTWARDS OF UPWARDS TRIANGLE-HEADED ARROW
+  U+2B84 LEFTWARDS TRIANGLE-HEADED PAIRED ARROWS
+  U+2B85 UPWARDS TRIANGLE-HEADED PAIRED ARROWS
+  U+2B86 RIGHTWARDS TRIANGLE-HEADED PAIRED ARROWS
+  U+2B87 DOWNWARDS TRIANGLE-HEADED PAIRED ARROWS
+  U+2B88 LEFTWARDS BLACK CIRCLED WHITE ARROW
+  U+2B89 UPWARDS BLACK CIRCLED WHITE ARROW
+  U+2B8A RIGHTWARDS BLACK CIRCLED WHITE ARROW
+  U+2B8B DOWNWARDS BLACK CIRCLED WHITE ARROW
+  U+2B8C ANTICLOCKWISE TRIANGLE-HEADED RIGHT U-SHAPED ARROW
+  U+2B8D ANTICLOCKWISE TRIANGLE-HEADED BOTTOM U-SHAPED ARROW
+  U+2B8E ANTICLOCKWISE TRIANGLE-HEADED LEFT U-SHAPED ARROW
+  U+2B8F ANTICLOCKWISE TRIANGLE-HEADED TOP U-SHAPED ARROW
+  U+2B90 RETURN LEFT
+  U+2B91 RETURN RIGHT
+  U+2B92 NEWLINE LEFT
+  U+2B93 NEWLINE RIGHT
+  U+2B94 FOUR CORNER ARROWS CIRCLING ANTICLOCKWISE
+  U+2B95 RIGHTWARDS BLACK ARROW
+  U+2B96 EQUALS SIGN WITH INFINITY ABOVE
+  U+2B97 SYMBOL FOR TYPE A ELECTRONICS
+  U+2B98 THREE-D TOP-LIGHTED LEFTWARDS EQUILATERAL ARROWHEAD
+  U+2B99 THREE-D RIGHT-LIGHTED UPWARDS EQUILATERAL ARROWHEAD
+  U+2B9A THREE-D TOP-LIGHTED RIGHTWARDS EQUILATERAL ARROWHEAD
+  U+2B9B THREE-D LEFT-LIGHTED DOWNWARDS EQUILATERAL ARROWHEAD
+  U+2B9C BLACK LEFTWARDS EQUILATERAL ARROWHEAD
+  U+2B9D BLACK UPWARDS EQUILATERAL ARROWHEAD
+  U+2B9E BLACK RIGHTWARDS EQUILATERAL ARROWHEAD
+  U+2B9F BLACK DOWNWARDS EQUILATERAL ARROWHEAD
+  U+2BA0 DOWNWARDS TRIANGLE-HEADED ARROW WITH LONG TIP LEFTWARDS
+  U+2BA1 DOWNWARDS TRIANGLE-HEADED ARROW WITH LONG TIP RIGHTWARDS
+  U+2BA2 UPWARDS TRIANGLE-HEADED ARROW WITH LONG TIP LEFTWARDS
+  U+2BA3 UPWARDS TRIANGLE-HEADED ARROW WITH LONG TIP RIGHTWARDS
+  U+2BA4 LEFTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP UPWARDS
+  U+2BA5 RIGHTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP UPWARDS
+  U+2BA6 LEFTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP DOWNWARDS
+  U+2BA7 RIGHTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP DOWNWARDS
+  U+2BA8 BLACK CURVED DOWNWARDS AND LEFTWARDS ARROW
+  U+2BA9 BLACK CURVED DOWNWARDS AND RIGHTWARDS ARROW
+  U+2BAA BLACK CURVED UPWARDS AND LEFTWARDS ARROW
+  U+2BAB BLACK CURVED UPWARDS AND RIGHTWARDS ARROW
+  U+2BAC BLACK CURVED LEFTWARDS AND UPWARDS ARROW
+  U+2BAD BLACK CURVED RIGHTWARDS AND UPWARDS ARROW
+  U+2BAE BLACK CURVED LEFTWARDS AND DOWNWARDS ARROW
+  U+2BAF BLACK CURVED RIGHTWARDS AND DOWNWARDS ARROW
+  U+2BB0 RIBBON ARROW DOWN LEFT
+  U+2BB1 RIBBON ARROW DOWN RIGHT
+  U+2BB2 RIBBON ARROW UP LEFT
+  U+2BB3 RIBBON ARROW UP RIGHT
+  U+2BB4 RIBBON ARROW LEFT UP
+  U+2BB5 RIBBON ARROW RIGHT UP
+  U+2BB6 RIBBON ARROW LEFT DOWN
+  U+2BB7 RIBBON ARROW RIGHT DOWN
+  U+2BB8 UPWARDS WHITE ARROW FROM BAR WITH HORIZONTAL BAR
+  U+2BB9 UP ARROWHEAD IN A RECTANGLE BOX
+  U+2BBA OVERLAPPING WHITE SQUARES
+  U+2BBB OVERLAPPING WHITE AND BLACK SQUARES
+  U+2BBC OVERLAPPING BLACK SQUARES
+  U+2BBD BALLOT BOX WITH LIGHT X
+  U+2BBE CIRCLED X
+  U+2BBF CIRCLED BOLD X
+  U+2BC0 BLACK SQUARE CENTRED
+  U+2BC1 BLACK DIAMOND CENTRED
+  U+2BC2 TURNED BLACK PENTAGON
+  U+2BC3 HORIZONTAL BLACK OCTAGON
+  U+2BC4 BLACK OCTAGON
+  U+2BC5 BLACK MEDIUM UP-POINTING TRIANGLE CENTRED
+  U+2BC6 BLACK MEDIUM DOWN-POINTING TRIANGLE CENTRED
+  U+2BC7 BLACK MEDIUM LEFT-POINTING TRIANGLE CENTRED
+  U+2BC8 BLACK MEDIUM RIGHT-POINTING TRIANGLE CENTRED
+  U+2BC9 NEPTUNE FORM TWO
+  U+2BCA TOP HALF BLACK CIRCLE
+  U+2BCB BOTTOM HALF BLACK CIRCLE
+  U+2BCC LIGHT FOUR POINTED BLACK CUSP
+  U+2BCD ROTATED LIGHT FOUR POINTED BLACK CUSP
+  U+2BCE WHITE FOUR POINTED CUSP
+  U+2BCF ROTATED WHITE FOUR POINTED CUSP
+  U+2BD0 SQUARE POSITION INDICATOR
+  U+2BD1 UNCERTAINTY SIGN
+  U+2BD2 GROUP MARK
+  U+2BD3 PLUTO FORM TWO
+  U+2BD4 PLUTO FORM THREE
+  U+2BD5 PLUTO FORM FOUR
+  U+2BD6 PLUTO FORM FIVE
+  U+2BD7 TRANSPLUTO
+  U+2BD8 PROSERPINA
+  U+2BD9 ASTRAEA
+  U+2BDA HYGIEA
+  U+2BDB PHOLUS
+  U+2BDC NESSUS
+  U+2BDD WHITE MOON SELENA
+  U+2BDE BLACK DIAMOND ON CROSS
+  U+2BDF TRUE LIGHT MOON ARTA
+  U+2BE0 CUPIDO
+  U+2BE1 HADES
+  U+2BE2 ZEUS
+  U+2BE3 KRONOS
+  U+2BE4 APOLLON
+  U+2BE5 ADMETOS
+  U+2BE6 VULCANUS
+  U+2BE7 POSEIDON
+  U+2BE8 LEFT HALF BLACK STAR
+  U+2BE9 RIGHT HALF BLACK STAR
+  U+2BEA STAR WITH LEFT HALF BLACK
+  U+2BEB STAR WITH RIGHT HALF BLACK
+  U+2BEC LEFTWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS
+  U+2BED UPWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS
+  U+2BEE RIGHTWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS
+  U+2BEF DOWNWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS
+  U+2BF0 ERIS FORM ONE
+  U+2BF1 ERIS FORM TWO
+  U+2BF2 SEDNA
+  U+2BF3 RUSSIAN ASTROLOGICAL SYMBOL VIGINTILE
+  U+2BF4 RUSSIAN ASTROLOGICAL SYMBOL NOVILE
+  U+2BF5 RUSSIAN ASTROLOGICAL SYMBOL QUINTILE
+  U+2BF6 RUSSIAN ASTROLOGICAL SYMBOL BINOVILE
+  U+2BF7 RUSSIAN ASTROLOGICAL SYMBOL SENTAGON
+  U+2BF8 RUSSIAN ASTROLOGICAL SYMBOL TREDECILE
+  U+2BF9 EQUALS SIGN WITH INFINITY BELOW
+  U+2BFA UNITED SYMBOL
+  U+2BFB SEPARATED SYMBOL
+  U+2BFC DOUBLED SYMBOL
+  U+2BFD PASSED SYMBOL
+  U+2BFE REVERSED RIGHT ANGLE
+  U+2BFF HELLSCHREIBER PAUSE SYMBOL

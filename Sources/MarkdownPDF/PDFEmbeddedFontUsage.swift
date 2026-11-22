@@ -87,6 +87,11 @@ struct PDFEmbeddedFontUsage: Equatable {
         return sequences
     }
 
+    /// True when the text holds an emoji beyond ASCII, or the enclosing keycap (a keycap spelled with and without its variation selector is one picture).
+    private static func isEmojiText(_ text: String) -> Bool {
+        text.unicodeScalars.contains { ($0.value > 0x7F && $0.properties.isEmoji) || $0.value == 0x20E3 }
+    }
+
     private static func mergedMappings(
         existing: [PDFToUnicodeCMap.Mapping],
         newMappings: [PDFToUnicodeCMap.Mapping],
@@ -95,6 +100,11 @@ struct PDFEmbeddedFontUsage: Equatable {
         for mapping in newMappings {
             if let existing = mappingsByCode[mapping.code] {
                 guard existing != mapping.unicode else { continue }
+                // Two emoji that the colour face draws with ONE glyph (the kiss and its joined spelling, a flag and its alias) are aliases of one picture: the
+                // glyph keeps the first text, and each emoji carries its own text in its `/ActualText` span, so nothing is lost and nothing collides.
+                if isEmojiText(existing), isEmojiText(mapping.unicode) {
+                    continue
+                }
                 // A glyph shared between a base character and a precomposed sub/superscript that
                 // folded onto it (see #221) is not a real conflict: a single glyph can only carry
                 // one ToUnicode value, so collapse both to the common base character.

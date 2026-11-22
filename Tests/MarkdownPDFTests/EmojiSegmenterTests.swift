@@ -47,12 +47,20 @@ struct EmojiSegmenterTests {
         #expect(EmojiSegmenter.cluster(of: Character(scalar))?.base == scalar)
     }
 
-    @Test("sequences are text for now: a flag, a keycap, a skin tone, a joined family", arguments: [
+    @Test("a sequence is one cluster of all its scalars: a flag, a keycap, a skin tone, a joined family; the colour face decides whether it can draw it", arguments: [
         "\u{1F1ED}\u{1F1F7}", "1\u{FE0F}\u{20E3}", "\u{1F44D}\u{1F3FD}", "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}",
     ])
     func sequences(text: String) {
-        #expect(EmojiSegmenter.cluster(of: Character(text)) == nil)
-        #expect(!EmojiSegmenter.containsColorEmoji(text))
+        let cluster = EmojiSegmenter.cluster(of: Character(text))
+        #expect(cluster?.scalars == Array(text.unicodeScalars), "the cluster must hold every scalar of the sequence")
+        #expect(EmojiSegmenter.containsColorEmoji(text))
+    }
+
+    @Test("a multi-scalar cluster that is not an emoji sequence stays text: a letter with a combining mark, two scalars one of which is not an emoji")
+    func notSequences() {
+        #expect(EmojiSegmenter.cluster(of: Character("e\u{0301}")) == nil)
+        #expect(EmojiSegmenter.cluster(of: Character("a\u{20E3}")) == nil)
+        #expect(!EmojiSegmenter.containsColorEmoji("e\u{0301} text"))
     }
 
     @Test("ASCII, digits, # and * are never emoji, even with U+FE0F")

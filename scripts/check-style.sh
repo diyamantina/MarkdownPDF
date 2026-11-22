@@ -38,6 +38,8 @@ while IFS= read -r f; do
   [ -f "$f" ] || continue
   case "$f" in
     researchcode/*) continue ;;
+    # The Unicode Consortium's data file and its licence, kept as published (the file's own text has em dashes), and the report generated from it.
+    Tests/MarkdownPDFTests/Unicode/*) continue ;;
   esac
   if ! LC_ALL=C grep -Iq . "$f" 2>/dev/null; then
     continue

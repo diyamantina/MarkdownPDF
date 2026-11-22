@@ -30,7 +30,29 @@ enum EmojiSegmenter {
         if scalars.count == 2, scalars[1].value == 0xFE0F, scalars[0].value > 0x7F, scalars[0].properties.isEmoji {
             return Cluster(scalars: scalars, base: scalars[0])
         }
+        // A sequence: a joined emoji, an emoji with a skin tone, a keycap, a flag, a subdivision flag. The colour face decides whether it has a glyph for
+        // the whole sequence (its own `ccmp` ligatures); when it has none, the cluster is drawn as text, as before.
+        if scalars.count >= 2, isEmojiSequence(scalars) {
+            return Cluster(scalars: scalars, base: scalars[0])
+        }
         return nil
+    }
+
+    /// True when every scalar of a multi-scalar grapheme cluster belongs to an emoji sequence (an emoji, the variation selector, the zero width joiner,
+    /// the enclosing keycap, a skin tone modifier, a tag character) and the cluster has an emoji beyond ASCII or ends in the enclosing keycap.
+    private static func isEmojiSequence(_ scalars: [Unicode.Scalar]) -> Bool {
+        var hasEmoji = false
+        for scalar in scalars {
+            let value = scalar.value
+            if value == 0xFE0F || value == 0x200D || value == 0x20E3 || (0x1F3FB ... 0x1F3FF).contains(value) || (0xE0020 ... 0xE007F).contains(value) {
+                continue
+            }
+            guard scalar.properties.isEmoji else { return false }
+            if value > 0x7F {
+                hasEmoji = true
+            }
+        }
+        return hasEmoji || scalars.last?.value == 0x20E3
     }
 
     /// Whether the text holds any colour emoji (a quick test before the full split).

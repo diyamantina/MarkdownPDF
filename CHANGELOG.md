@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Emoji sequences are drawn. A flag, a keycap, an emoji with a skin tone, a joined emoji (a family, a heart on fire) and a subdivision flag are drawn from
+  the bundled colour face as ONE glyph, by the face's own `ccmp` substitutions (2298 ligatures in the face, no new face and no new licence): the glyphs
+  of the scalars go through the substitution lookups until one glyph is left. A sequence written without its variation selectors (the unqualified and
+  minimally qualified spellings of unicode.org) is drawn too: it is fully qualified first. The text read back is the whole sequence, joiner and selector
+  included. Two sequences that the face draws with one glyph (a kiss and its joined spelling, a keycap with and without its selector) share the glyph's
+  text-extraction entry: the first wins and each one keeps its own `/ActualText`, so the render no longer stops with a conflict.
+- An emoji written without its variation selector that no text face has (the bare desktop computer) is drawn from the colour face; one that a text face
+  has stays text.
+- The whole set, measured. `WholeSetCoverageTests` takes every emoji sequence of the Unicode Consortium's `emoji-test.txt` (Unicode 18.0, 2026-04-30; the
+  file is in the tests with the Unicode License V3, which allows the copy with its notice) and the assigned code points of eleven symbol blocks (arrows,
+  mathematical operators, miscellaneous technical, box drawing, block elements, geometric shapes, miscellaneous symbols, dingbats, Braille, supplemental
+  arrows-B, miscellaneous symbols and arrows): 7210 entries, each DRAWN from a face or REPORTED by name, none replaced by a wrong letter. Before this
+  change 2917 were drawn (40.5 percent), after it 6185 (85.8 percent), and 1025 are named in `Tests/MarkdownPDFTests/Unicode/whole-set-report.txt`
+  with the class counts: the emoji the bundled colour face does not have (those newer than the face: 547 of the 1025) and the symbols of four blocks the
+  proportional face lacks (478). The run takes minutes and is not in the default suite:
+  `MARKDOWNPDF_WHOLE_SET=check swift test --filter WholeSetCoverageTests` (or `write` after a deliberate change); the report is the same on a second run.
 - A character that no embedded face draws is reported, never replaced silently. `MarkdownPDFRenderer.renderWithReport(markdown:assetsBaseURL:)` (and
   the `sources:` form) returns the same bytes as `render` with a `MarkdownPDF.Render.Report`: each such character as written, its code points, the
   reason (`bundledFacesUnavailable`, `noEmbeddedFace`, `noFaceHasIt`) and how often the document writes it, in the order of first appearance.

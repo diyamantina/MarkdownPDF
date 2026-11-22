@@ -17,7 +17,9 @@ extension PDFEmbeddedFontCatalog {
         guard entry(for: run.font) == nil, run.inlineMathBox == nil, let sans = entry(for: .helvetica) else { return nil }
         let hasEmoji = colorEmoji != nil && EmojiSegmenter.containsColorEmoji(run.text)
         let needsFace = run.text.unicodeScalars.contains { Self.drawsFromFace($0, sans: sans) }
-        guard hasEmoji || needsFace else { return nil }
+        // a bare text-default emoji that no text face has is drawn from the colour face too
+        let hasBare = colorEmoji != nil && run.text.unicodeScalars.contains { bareEmojiNeedsColourFace($0, own: sans) }
+        guard hasEmoji || needsFace || hasBare else { return nil }
         var pieces: [Piece] = []
         var pending = ""
         var changedAny = false
@@ -49,7 +51,19 @@ extension PDFEmbeddedFontCatalog {
         for segment in segments {
             switch segment {
             case let .text(text):
-                pending += text
+                guard hasBare else {
+                    pending += text
+                    continue
+                }
+                for scalar in text.unicodeScalars {
+                    if bareEmojiNeedsColourFace(scalar, own: sans), let piece = bareEmojiPiece(scalar, size: run.size) {
+                        try flushText()
+                        pieces.append(piece)
+                        changedAny = true
+                    } else {
+                        pending.unicodeScalars.append(scalar)
+                    }
+                }
             case let .emoji(cluster):
                 if let colorEmoji, let drawing = colorEmoji.drawing(of: cluster, fontSize: run.size),
                    let advance = colorEmoji.advance(of: cluster, fontSize: run.size)

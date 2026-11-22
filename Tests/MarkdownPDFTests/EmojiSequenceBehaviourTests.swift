@@ -5,12 +5,11 @@ import Testing
 /// What the engine does with an emoji sequence, MEASURED with the bundled colour face (and the basis of the "Known" paragraph of the 0.16.0 notes):
 ///
 /// - a single emoji, and an emoji with its variation selector, are drawn in colour;
-/// - a joined sequence (zero width joiner) falls apart into its single emoji, each drawn in colour, with no missing-glyph box;
-/// - a skin-tone pair (the emoji and its modifier), a keycap (a digit, the variation selector and the enclosing keycap) and a flag (two regional
-///   indicators) are not drawn yet: they stay text and show as the missing-glyph box (a `.notdef` glyph, code 0000), or are left out when
-///   `PDFOptions.omitUndrawableEmoji` is on.
+/// - a sequence (a joined one, a skin-tone pair, a keycap, a flag, a subdivision flag) is drawn as ONE glyph of the colour face: the face's own
+///   `ccmp` substitution turns the glyphs of the scalars into the glyph of the sequence (0.17.0; before it a joined sequence fell apart into its
+///   emoji and the others showed the missing-glyph box).
 ///
-/// When sequences are drawn this test changes with it: that is its job.
+/// The text read back from the page is the whole sequence, with its joiner and its selector, exactly.
 @Suite("Emoji sequences")
 struct EmojiSequenceBehaviourTests {
     /// The sample, the number of missing-glyph boxes it draws, and the number it draws with the option that leaves undrawable emoji out.
@@ -19,10 +18,20 @@ struct EmojiSequenceBehaviourTests {
         ("emoji with a variation selector", "\u{2699}\u{FE0F}", 0, 0),
         ("joined family", "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", 0, 0),
         ("joined heart on fire", "\u{2764}\u{FE0F}\u{200D}\u{1F525}", 0, 0),
-        ("skin tone pair", "\u{1F44D}\u{1F3FD}", 2, 0),
-        // The enclosing keycap mark (U+20E3) is not an emoji code point, so the option does not leave it out: its box stays.
-        ("keycap", "1\u{FE0F}\u{20E3}", 1, 1),
-        ("flag", "\u{1F1ED}\u{1F1F7}", 2, 0),
+        ("skin tone pair", "\u{1F44D}\u{1F3FD}", 0, 0),
+        ("keycap", "1\u{FE0F}\u{20E3}", 0, 0),
+        ("flag", "\u{1F1ED}\u{1F1F7}", 0, 0),
+        ("subdivision flag (tag sequence)", "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}", 0, 0),
+        ("joined rainbow flag", "\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}", 0, 0),
+        // The spellings without the variation selector (unicode.org lists them as unqualified and minimally qualified): the same picture.
+        ("keycap without the selector", "1\u{20E3}", 0, 0),
+        ("heart on fire without the selector", "\u{2764}\u{200D}\u{1F525}", 0, 0),
+        ("eye in speech bubble, selector after the eye only", "\u{1F441}\u{FE0F}\u{200D}\u{1F5E8}", 0, 0),
+        ("eye in speech bubble, no selector", "\u{1F441}\u{200D}\u{1F5E8}", 0, 0),
+        ("man with beard without the selector", "\u{1F9D4}\u{200D}\u{2642}", 0, 0),
+        // A text-default emoji written bare that no text face has: drawn from the colour face. (The bare heart is in the text face and stays text.)
+        ("bare desktop computer, in no text face", "\u{1F5A5}", 0, 0),
+        ("bare hole, in no text face", "\u{1F573}", 0, 0),
     ]
 
     /// The glyph codes of every `Tj` string of the page content that are 0000, the `.notdef` of a font.
@@ -48,8 +57,23 @@ struct EmojiSequenceBehaviourTests {
         }
     }
 
-    /// MEASURED: the text read back keeps every emoji and letter of the sequence, but not the zero width joiner and not the variation selector
-    /// of a joined or keycap sequence (each drawn emoji carries its own text), so a copied family reads as three emoji.
+    @Test("a sequence is one drawn glyph, and the text read back is the whole sequence, scalar for scalar, joiner and selector included")
+    func sequenceTextExact() throws {
+        for sample in Self.samples {
+            let data = try MarkdownPDFRenderer().render(markdown: "a \(sample.text) b\n")
+            let words = try PDFDocumentReader(data: data).pages.flatMap(\.words).map(\.text).joined(separator: " ")
+            #expect(
+                words.contains(sample.text) || words.unicodeScalars.map(\.value).contains(sample.text.unicodeScalars.first?.value ?? 0),
+                Comment(rawValue: "\(sample.name): \(words)"),
+            )
+            let wanted = sample.text.unicodeScalars.map(\.value)
+            let read = words.unicodeScalars.map(\.value)
+            let found = read.indices.contains { index in index + wanted.count <= read.count && Array(read[index ..< index + wanted.count]) == wanted }
+            #expect(found, Comment(rawValue: "\(sample.name): the sequence is not in the text read back: \(read.map { String($0, radix: 16) })"))
+        }
+    }
+
+    /// The text read back keeps every emoji and letter of the sequence (the weaker form of the test above, joiner and selector set aside).
     @Test("every sequence reads back with its emoji and letters, drawn or not, without the joiner and the variation selector")
     func textIsKept() throws {
         func essential(_ text: String) -> [UInt32] {

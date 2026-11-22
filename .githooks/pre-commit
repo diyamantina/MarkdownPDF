@@ -64,6 +64,9 @@ SKIP_PATTERNS=(
   '^researchcode/'
   '^node_modules/'
   '^_archive/'
+  # The Unicode Consortium's emoji data file and its licence, kept as published (the file's own text holds em dashes and emoji), and the report made
+  # from it.
+  '^Tests/MarkdownPDFTests/Unicode/'
   # Rule files that DEFINE the prohibitions; they MUST be able to cite
   # the forbidden strings to document them.
   '/github-discipline\.md$'

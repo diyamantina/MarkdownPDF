@@ -43,6 +43,12 @@ enum UndrawnAnalysis {
         if let cluster = EmojiSegmenter.cluster(of: character), catalog.colorEmoji?.drawing(of: cluster, fontSize: 10) != nil {
             return true
         }
+        // a bare text-default emoji that no text face has is drawn from the colour face
+        if scalars.count == 1, let sans = catalog.entry(for: .helvetica), catalog.bareEmojiNeedsColourFace(scalars[0], own: sans),
+           catalog.bareEmojiPiece(scalars[0], size: 10) != nil
+        {
+            return true
+        }
         return scalars.allSatisfy { scalar in
             if PDFTextEncoding.isInvisibleFormatControl(scalar) {
                 return true

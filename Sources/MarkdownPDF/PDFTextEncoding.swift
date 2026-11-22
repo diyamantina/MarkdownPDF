@@ -49,17 +49,38 @@ enum PDFTextEncoding {
         guard text.unicodeScalars.contains(where: isInvisibleFormatControl) else {
             return text
         }
-        // The emoji variation selector U+FE0F right after an emoji-capable scalar is kept: it asks for the colour presentation, which a colour
-        // emoji face draws. Every path that does not draw a colour emoji removes it again (``strippingVariationSelectors(_:)``).
+        // The controls that make an emoji sequence are kept: the emoji variation selector U+FE0F (after an emoji-capable scalar, or between a keycap base
+        // and the enclosing keycap), the zero width joiner between two emoji, and the tag characters after a black flag. A colour emoji face draws the
+        // sequence as one glyph. Every path that does not draw a colour emoji removes them again (``strippingVariationSelectors(_:)``).
+        let scalars = Array(text.unicodeScalars)
         var kept = String.UnicodeScalarView()
         var previous: UnicodeScalar?
-        for scalar in text.unicodeScalars {
-            if !isInvisibleFormatControl(scalar) || (scalar.value == 0xFE0F && previous.map(isEmojiCapable) == true) {
+        for (index, scalar) in scalars.enumerated() {
+            let next = index + 1 < scalars.count ? scalars[index + 1] : nil
+            if !isInvisibleFormatControl(scalar) || keepsForEmojiSequence(scalar, previous: previous, next: next) {
                 kept.append(scalar)
+                previous = scalar
             }
-            previous = scalar
         }
         return String(kept)
+    }
+
+    /// Whether an invisible control stays because it is part of an emoji sequence.
+    private static func keepsForEmojiSequence(_ scalar: UnicodeScalar, previous: UnicodeScalar?, next: UnicodeScalar?) -> Bool {
+        guard let previous else { return false }
+        switch scalar.value {
+        case 0xFE0F:
+            // after an emoji, or between a keycap base (a digit, `#`, `*`) and the enclosing keycap
+            return isEmojiCapable(previous) || (next?.value == 0x20E3 && (previous.value == 0x23 || previous.value == 0x2A || (0x30 ... 0x39).contains(previous.value)))
+        case 0x200D:
+            // between two emoji (the first with or without its selector or skin tone, the second beyond ASCII)
+            return (isEmojiCapable(previous) || previous.value == 0xFE0F || (0x1F3FB ... 0x1F3FF).contains(previous.value)) && next.map(isEmojiCapable) == true
+        case 0xE0020 ... 0xE007F:
+            // the tag characters of a subdivision flag, after the black flag
+            return previous.value == 0x1F3F4 || (0xE0020 ... 0xE007F).contains(previous.value)
+        default:
+            return false
+        }
     }
 
     /// Whether the scalar can take the emoji variation selector: an emoji scalar outside ASCII (digits, `#` and `*` form keycaps, a later phase).
@@ -67,10 +88,15 @@ enum PDFTextEncoding {
         scalar.value > 0x7F && scalar.properties.isEmoji
     }
 
-    /// The text without its variation selectors (U+FE00 to U+FE0F): for a face that draws no colour emoji, a selector is not a glyph.
+    /// The text without the controls of emoji sequences (the variation selectors U+FE00 to U+FE0F, the zero width joiner, the tag characters): for a face that
+    /// draws no colour emoji they are not glyphs. (The joiner and the tags were removed from every run before the sequences were drawn; they stay removed
+    /// on every path that does not draw one.)
     static func strippingVariationSelectors(_ text: String) -> String {
-        guard text.unicodeScalars.contains(where: { (0xFE00 ... 0xFE0F).contains($0.value) }) else { return text }
-        return String(String.UnicodeScalarView(text.unicodeScalars.filter { !(0xFE00 ... 0xFE0F).contains($0.value) }))
+        func isControl(_ value: UInt32) -> Bool {
+            (0xFE00 ... 0xFE0F).contains(value) || value == 0x200D || (0xE0020 ... 0xE007F).contains(value)
+        }
+        guard text.unicodeScalars.contains(where: { isControl($0.value) }) else { return text }
+        return String(String.UnicodeScalarView(text.unicodeScalars.filter { !isControl($0.value) }))
     }
 
     /// Whether `scalar` is a genuinely-invisible, semantically-inert

@@ -96,7 +96,10 @@ struct PDFEmbeddedFontCatalog {
     func pieces(of run: PDFTextRun, entry: Entry) throws -> [Piece]? {
         let hasEmoji = colorEmoji != nil && EmojiSegmenter.containsColorEmoji(run.text)
         let fallback = fallbackFace(for: run, entry: entry)
-        guard hasEmoji || fallback != nil else { return nil }
+        // An emoji written without its variation selector that no text face has (the bare desktop computer): the colour face draws it, instead of the
+        // missing-glyph box. One that a text face has stays text, as before.
+        let hasBare = colorEmoji != nil && run.text.unicodeScalars.contains { bareEmojiNeedsColourFace($0, own: entry) }
+        guard hasEmoji || fallback != nil || hasBare else { return nil }
         var pieces: [Piece] = []
         var pending = ""
         var usedFallback = false
@@ -131,7 +134,19 @@ struct PDFEmbeddedFontCatalog {
         for segment in segments {
             switch segment {
             case let .text(text):
-                pending += text
+                guard hasBare else {
+                    pending += text
+                    continue
+                }
+                for scalar in text.unicodeScalars {
+                    if bareEmojiNeedsColourFace(scalar, own: entry), let piece = bareEmojiPiece(scalar, size: run.size) {
+                        try flushText()
+                        pieces.append(piece)
+                        drewAny = true
+                    } else {
+                        pending.unicodeScalars.append(scalar)
+                    }
+                }
             case let .emoji(cluster):
                 if let colorEmoji, let drawing = colorEmoji.drawing(of: cluster, fontSize: run.size),
                    let advance = colorEmoji.advance(of: cluster, fontSize: run.size)
@@ -147,6 +162,33 @@ struct PDFEmbeddedFontCatalog {
         try flushText()
         guard drewAny || usedFallback else { return nil }
         return pieces
+    }
+
+    /// True for an emoji beyond ASCII that is not drawn as an emoji by default (and no skin tone modifier), written here without its variation selector.
+    static func isBareEmoji(_ scalar: UnicodeScalar) -> Bool {
+        scalar.value > 0x7F && scalar.properties.isEmoji && !scalar.properties.isEmojiPresentation && !(0x1F3FB ... 0x1F3FF).contains(scalar.value)
+    }
+
+    /// Whether a scalar is a bare emoji that neither the run's own face nor the proportional face has, so the colour face is the only one that can draw it.
+    func bareEmojiNeedsColourFace(_ scalar: UnicodeScalar, own: Entry) -> Bool {
+        guard Self.isBareEmoji(scalar) else { return false }
+        func covers(_ entry: Entry) -> Bool {
+            (try? entry.mapper.map(text: String(scalar), fontSize: 1)) != nil
+        }
+        if covers(own) {
+            return false
+        }
+        if let sans = entry(for: .helvetica), covers(sans) {
+            return false
+        }
+        return true
+    }
+
+    /// The colour emoji piece of a bare emoji, nil when the colour face has no glyph for it.
+    func bareEmojiPiece(_ scalar: UnicodeScalar, size: Double) -> Piece? {
+        let cluster = EmojiSegmenter.Cluster(scalars: [scalar], base: scalar)
+        guard let colorEmoji, let drawing = colorEmoji.drawing(of: cluster, fontSize: size), let advance = colorEmoji.advance(of: cluster, fontSize: size) else { return nil }
+        return .emoji(cluster: cluster, drawing: drawing, advance: advance)
     }
 
     /// The face a run falls back to for a character its own face lacks: the proportional text face, for the monospaced face (which has no Braille

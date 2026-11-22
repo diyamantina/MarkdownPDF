@@ -60,9 +60,16 @@ struct SymbolOracleTests {
             case let .text(part):
                 for scalar in part.unicodeScalars where !ignorable(scalar) {
                     let one = String(scalar)
-                    if !catalog.covers(one, font: .helvetica), !catalog.covers(one, font: .courier) {
-                        return false
+                    if catalog.covers(one, font: .helvetica) || catalog.covers(one, font: .courier) {
+                        continue
                     }
+                    // a bare text-default emoji that no text face has: the colour face has it (the glyph of its code point in the face's own cmap)
+                    if PDFEmbeddedFontCatalog.isBareEmoji(scalar),
+                       catalog.colorEmoji?.drawing(of: EmojiSegmenter.Cluster(scalars: [scalar], base: scalar), fontSize: 10) != nil
+                    {
+                        continue
+                    }
+                    return false
                 }
             case let .emoji(cluster):
                 if catalog.colorEmoji?.drawing(of: cluster, fontSize: 10) != nil {
@@ -226,9 +233,10 @@ struct SymbolOracleTests {
     }
 
     /// The characters no face has, per configuration. Filled from the first measured run; a change is a decision.
+    /// None: since 0.17.0 the bare desktop computer, the flag, the keycap, the skin tone pair and the joined family are all drawn from the colour face.
     static let expectedReported: [String: [String]] = [
-        "every role embedded": ["U+1F5A5", "family, joined", "flag of Germany", "keycap one", "thumbs up, medium skin tone"],
-        "the code face not embedded": ["U+1F5A5", "family, joined", "flag of Germany", "keycap one", "thumbs up, medium skin tone"],
-        "no face given, the renderer takes the bundled ones": ["U+1F5A5", "family, joined", "flag of Germany", "keycap one", "thumbs up, medium skin tone"],
+        "every role embedded": [],
+        "the code face not embedded": [],
+        "no face given, the renderer takes the bundled ones": [],
     ]
 }
