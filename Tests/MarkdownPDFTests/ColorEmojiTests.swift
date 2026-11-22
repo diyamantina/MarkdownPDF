@@ -124,4 +124,20 @@ struct ColorEmojiTests {
         let colour = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: withFace)).render(markdown: markdown)
         #expect(plain == colour)
     }
+
+    @Test(
+        "the text of a page with drawn emoji, read back by the package's own reader, holds the emoji code points: searching and copying work",
+        .enabled(if: EmojiFixture.available),
+    )
+    func extractedText() throws {
+        let markdown = "# \u{1F9F1} The Foundation\n\n- \u{2699}\u{FE0F} Integration\n\nBefore \u{1F680} after \u{2705}.\n"
+        let pdf = try MarkdownPDFRenderer(options: EmojiFixture.options()).render(markdown: markdown)
+        let words = try PDFDocumentReader(data: pdf).pages.flatMap(\.words).map(\.text)
+        let joined = words.joined(separator: " ")
+        for expected in ["\u{1F9F1}", "\u{2699}\u{FE0F}", "\u{1F680}", "\u{2705}"] {
+            #expect(joined.contains(expected), "\(expected.unicodeScalars.map(\.value)) is not in the extracted text: \(joined.unicodeScalars.map { String($0.value, radix: 16) })")
+        }
+        #expect(!joined.unicodeScalars.contains { (0xF0000 ... 0xFFFFD).contains($0.value) }, "a layer glyph's private-use scalar leaked into the text")
+        #expect(words.contains("Foundation") && words.contains("Integration") && words.contains("after"))
+    }
 }
