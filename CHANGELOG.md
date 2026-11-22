@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-11-23
+
+A patch release: the closing-mark fix of 0.18.1 cut a whole identifier in a narrow cell; the mark now hangs instead.
+
+### Fixed
+
+- A closing mark that touches an inline code span and does not fit on the line now hangs past the measure, by at most the padding of its table cell (less
+  half a point, so never to the border), and the unit before it stays whole: `CATransform3D.` in the swiftui-3d-is-flat table cell is one word, where 0.18.1
+  cut it into `CATransform3` and `D.`. An identifier that fits the cell alone is never cut. A mark too wide to hang (`?`, `!`, `)`) still takes the piece
+  before it to the next line, and its last character when the piece is alone on its line. The cell is the test case; the identifier is measured whole by a
+  sweep of every right margin from 54 to 329 points without the mark, and with a full stop, a comma and a semicolon it must stay one word at every one.
+
 ## [0.18.1] - 2026-11-23
 
 A patch release: the closing-mark rule of 0.18.0 covered a cut by character only, and the case that was seen in a real table was another path.

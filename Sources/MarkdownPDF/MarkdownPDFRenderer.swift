@@ -3794,6 +3794,7 @@ private struct Layout {
                 flatten(cell, font: standardFont(for: style.fontRole), size: fontSize, color: style.color),
                 maxWidth: max(1, width - cellPadding * 2),
                 softBreaks: true,
+                hangAllowance: max(0, cellPadding - 0.5),
             )
         }
         return TablePreparedRow(cellLines: cellLines)
@@ -4475,6 +4476,7 @@ private struct Layout {
         _ runs: [PDFTextRun],
         maxWidth: Double,
         softBreaks: Bool = false,
+        hangAllowance: Double = 0,
     ) throws -> [[PDFTextRun]] {
         let tokens = tokenize(runs)
         var lines: [[PDFTextRun]] = []
@@ -4494,20 +4496,29 @@ private struct Layout {
             // past the measure, where nothing is drawn. So a word wraps only when it
             // does not fit without that space, and spaces alone never start a line.
             if currentWidth + width > maxWidth, !current.isEmpty, try !hangs(token, after: currentWidth, maxWidth: maxWidth) {
-                // A closing mark that follows a piece of another run with no space between them (a full stop after an inline code span) is a token
-                // of its own, and would start the next line alone: the piece it follows goes to the next line with it.
-                // When that piece is the only one on the line (a code span wider than the cell, cut by character), its last character goes instead.
-                if Self.isClosingMarkToken(token), let last = current.last, !last.text.hasSuffix(" "), current.count > 1 || last.text.count > 1 {
-                    var carried = last
-                    if current.count > 1 {
+                // A closing mark that touches the piece before it (a full stop after an inline code span) is a token of its own and would start the
+                // next line alone. Typographically it HANGS: it may stand past the measure by up to `hangAllowance` (the padding of a cell, so never
+                // past the cell border), and the unit before it stays whole. Only when the mark would hang further than that (a wide mark such as `?`)
+                // does the piece go to the next line with it; and when that piece is alone on its line, its last character goes.
+                if Self.isClosingMarkToken(token), let last = current.last, !last.text.hasSuffix(" ") {
+                    if try currentWidth + inkWidth(token) <= maxWidth + hangAllowance {
+                        current.append(token)
+                        currentWidth += width
+                    } else if current.count > 1 {
                         current.removeLast()
+                        lines.append(current)
+                        current = [last, token]
+                        currentWidth = try textWidth(last) + width
+                    } else if last.text.count > 1 {
+                        lines.append([last.withText(String(last.text.dropLast()))])
+                        let carried = last.withText(String(last.text.suffix(1)))
+                        current = [carried, token]
+                        currentWidth = try textWidth(carried) + width
                     } else {
-                        current = [last.withText(String(last.text.dropLast()))]
-                        carried = last.withText(String(last.text.suffix(1)))
+                        lines.append(current)
+                        current = [token]
+                        currentWidth = width
                     }
-                    lines.append(current)
-                    current = [carried, token]
-                    currentWidth = try textWidth(carried) + width
                 } else {
                     lines.append(current)
                     current = [token]
