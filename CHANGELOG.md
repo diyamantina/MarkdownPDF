@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rectangle.
 
 ### Fixed
+- A Mermaid diagram whose left-to-right row is still wider than the page at the smallest scale is drawn top to bottom (right to left becomes
+  bottom to top) instead of being given up as source.
 - The text of a Mermaid node is centred in its box. A one-line label in a node of the minimum height sat about 4 pt high in a plain rectangle.
 - A chart's y-axis title is now drawn above the plot, in a row of its own between the legend and the top gridline. It was drawn inside
   the plot, where the first bar and the axis line ran through it.

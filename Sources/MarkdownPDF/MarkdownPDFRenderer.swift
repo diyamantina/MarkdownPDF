@@ -2751,6 +2751,20 @@ private struct Layout {
                 scale = max(minimumScale, scale * 0.85)
                 continue
             }
+            // A row that stays wider than the page at the smallest scale is turned, as a person redrawing a long pipeline for a page would:
+            // left to right becomes top to bottom (right to left, bottom to top). A top-down diagram is never turned again.
+            if case let .fallback(reason) = result, reason.contains("wider than the content area") {
+                var turned = diagram
+                switch diagram.direction {
+                case .leftRight:
+                    turned.direction = .topBottom
+                case .rightLeft:
+                    turned.direction = .bottomTop
+                case .topBottom, .bottomTop:
+                    return result
+                }
+                return try mermaidRenderPlan(for: turned)
+            }
             return result
         }
     }
