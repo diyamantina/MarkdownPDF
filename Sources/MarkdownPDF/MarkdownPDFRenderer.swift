@@ -3317,8 +3317,8 @@ private struct Layout {
             )
         }
 
-        // A rectangle keeps its text where it always was (pinned by `MermaidLayoutGoldenTests`); the other shapes centre the text block in the box.
-        let topInset = box.shape == .rectangle ? box.verticalPadding : (box.height - box.textHeight) / 2
+        // The text block is centred in the box: a node taller than its text (a one-line label in the minimum height, a diamond) keeps it in the middle.
+        let topInset = (box.height - box.textHeight) / 2
         var textY = frame.top - topInset - box.fontSize
         for line in box.labelLines {
             let lineWidth = try inkWidth(ofLine: line)
