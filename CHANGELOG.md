@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-22
+
+A minor release: the bundled colour emoji face is replaced by a newer one and more of Unicode is drawn; nothing is removed and no API changes.
+
+Notice: Emoji graphics are Twemoji, Copyright 2020 Twitter, Inc and other contributors, used under CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). Changes: converted to layered glyph outlines in a COLR font. The compiled font is a build by a third
+party whose repository states no licence of its own for it; its name table carries no licence field and its embedding flag allows preview and print
+embedding, which a PDF is.
+
 ### Changed
 
 - The bundled colour emoji face is Twemoji 17.0.3 (a COLR version 0 build, Emoji 17.0; the art is CC BY 4.0, text in `Fonts/LICENSE-Twemoji.txt`),

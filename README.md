@@ -827,7 +827,8 @@ The package bundles three font sets, each with its exact upstream license beside
 
 - DejaVu Sans, for text outside WinAnsi (`LICENSE-DejaVu.txt`).
 - Latin Modern Math, for typeset formulas (`LICENSE-LatinModernMath-GUST.txt`, GUST Font License).
-- Twemoji, for colour emoji (`LICENSE-Twemoji.txt`). The emoji graphics are Twemoji by Twitter, Inc. and other contributors and by the
+- Twemoji, for colour emoji (`LICENSE-Twemoji.txt`). Emoji graphics: Twemoji, Copyright 2020 Twitter, Inc and other contributors, used under
+  CC BY 4.0; changes: converted to layered glyph outlines in a COLR font. The emoji graphics are Twemoji by Twitter, Inc. and other contributors and by the
   [continued Twemoji project](https://github.com/jdecked/twemoji), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the
   font is the COLR/CPAL build of Twemoji 17.0.3 made by [twemoji-colr](https://github.com/breadgrocery/twemoji-colr) (release v17.0.3; that
   repository carries no licence file, so the licence of the art is the licence of the font as far as it is stated anywhere). The package reads the
