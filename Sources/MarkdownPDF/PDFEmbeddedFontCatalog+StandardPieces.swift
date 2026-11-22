@@ -12,6 +12,7 @@ extension PDFEmbeddedFontCatalog {
     ///
     /// Width and drawing both go through this, so they cannot disagree. With no embedded proportional face the run is not split (a document that embeds
     /// nothing is drawn exactly as before, and the colour emoji face is not used for it).
+    @inline(never)
     func standardPieces(of run: PDFTextRun, fontSet: PDFOptions.FontSet) throws -> [Piece]? {
         guard entry(for: run.font) == nil, run.inlineMathBox == nil, let sans = entry(for: .helvetica) else { return nil }
         let hasEmoji = colorEmoji != nil && EmojiSegmenter.containsColorEmoji(run.text)
@@ -63,6 +64,32 @@ extension PDFEmbeddedFontCatalog {
         }
         try flushText()
         return changedAny ? pieces : nil
+    }
+
+    /// The width of a run whose own font is not embedded: the sum of the pieces ``standardPieces(of:fontSet:)`` makes of it, or the base-14 width when it
+    /// makes none. Out of line, with nothing but the call in the caller: ``width(of:fallbackFontSet:)`` is called at the bottom of every deep block
+    /// nesting, and a local of the size of a run in its frame is enough to overflow the stack of a test thread at a hundred levels of list (MEASURED:
+    /// `deepListIndentIsClamped` crashed with signal 10 when the call was written `try x(run) ?? run.width(...)`).
+    @inline(never)
+    func widthWithoutEmbeddedFace(of run: PDFTextRun, fontSet: PDFOptions.FontSet) throws -> Double {
+        guard mayBeSplitWithoutEmbeddedFace(run) else { return run.width(fontSet: fontSet) }
+        return try splitWidth(of: run, fontSet: fontSet)
+    }
+
+    /// The cheap test that comes first, with no local of any size: a text face is embedded and the run holds a character beyond ASCII. Anything else is
+    /// drawn and measured by the base-14 font as before. Its frame, and the frame of the caller, must stay small: the frame of the function that does
+    /// the work holds the pieces, and that is too much to put on the stack below a deep nesting that is already close to the limit.
+    @inline(never)
+    func mayBeSplitWithoutEmbeddedFace(_ run: PDFTextRun) -> Bool {
+        hasEntry(for: .helvetica) && run.text.utf8.contains { $0 >= 0x80 }
+    }
+
+    @inline(never)
+    private func splitWidth(of run: PDFTextRun, fontSet: PDFOptions.FontSet) throws -> Double {
+        if let pieces = try standardPieces(of: run, fontSet: fontSet) {
+            return pieces.reduce(0) { $0 + $1.advance }
+        }
+        return run.width(fontSet: fontSet)
     }
 
     /// True for a character the base-14 font cannot hold (WinAnsi) and the embedded proportional face can draw. The invisible format controls (a

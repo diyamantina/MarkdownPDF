@@ -59,6 +59,11 @@ struct PDFEmbeddedFontCatalog {
         entriesByFont[font]
     }
 
+    /// Whether a face is embedded for `font`, without copying its entry.
+    func hasEntry(for font: StandardFont) -> Bool {
+        entriesByFont[font] != nil
+    }
+
     /// Whether the embedded font bound to `font` can draw every scalar in `text`.
     /// Used to decide, per math symbol, between the Unicode glyph and an ASCII
     /// transliteration. A font with no embedded entry (the base-14 portable
@@ -164,10 +169,7 @@ struct PDFEmbeddedFontCatalog {
 
     func width(of run: PDFTextRun, fallbackFontSet: PDFOptions.FontSet) throws -> Double {
         guard let entry = entry(for: run.font) else {
-            if let pieces = try standardPieces(of: run, fontSet: fallbackFontSet) {
-                return pieces.reduce(0) { $0 + $1.advance }
-            }
-            return run.width(fontSet: fallbackFontSet)
+            return try widthWithoutEmbeddedFace(of: run, fontSet: fallbackFontSet)
         }
 
         if let pieces = try pieces(of: run, entry: entry) {
