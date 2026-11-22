@@ -68,6 +68,10 @@ charts of the blog and the site print. No change breaks the API: `PDFOptions.omi
   code block that says why, with its body, and nothing is guessed.
 
 ### Fixed
+- A character that the face of a run lacks is drawn with the bundled proportional face when that has it, instead of the missing-glyph box. The
+  monospaced face has no Braille patterns, so the spinner of a command line tool (`U+2839`, `U+2827`) in a code block, a code span or a table
+  cell was drawn as `.notdef`; the other characters of the run stay in their own face. A character that no bundled face has is still the
+  missing-glyph box, and a run that needs no fallback is drawn as before.
 - The legend of a pie and of a doughnut stays inside the chart box and the right margin. It draws `label value` but its column was sized from the
   labels alone, so a long label and its number ran past the box (the doughnut of the cupertino 1.6.5 article, a pie in the site's diagrams page: the
   entry ended 5 to 7 points beyond the margin). The column is now sized from the whole entries, and a label longer than the column (capped as before)

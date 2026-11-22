@@ -86,23 +86,48 @@ struct PDFEmbeddedFontCatalog {
     /// The pieces of a run that holds colour emoji the colour face can draw, nil when it holds none (the run is then laid out as one). Width and
     /// drawing both go through this, so they cannot disagree. An emoji the face cannot draw stays in the text around it, as before.
     func pieces(of run: PDFTextRun, entry: Entry) throws -> [Piece]? {
-        guard let colorEmoji, EmojiSegmenter.containsColorEmoji(run.text) else { return nil }
+        let hasEmoji = colorEmoji != nil && EmojiSegmenter.containsColorEmoji(run.text)
+        let fallback = fallbackFace(for: run, entry: entry)
+        guard hasEmoji || fallback != nil else { return nil }
         var pieces: [Piece] = []
         var pending = ""
+        var usedFallback = false
+        // Plain text is laid out in stretches: each stretch in the run's own face, or in the fallback face where the run's own face lacks a character
+        // and the fallback has it.
         func flushText() throws {
             guard !pending.isEmpty else { return }
-            var piece = run
-            piece.text = pending
-            try pieces.append(.text(run: piece, mapping: shapedMapping(for: piece, entry: entry)))
+            var stretches: [(text: String, usesFallback: Bool)] = []
+            for scalar in pending.unicodeScalars {
+                let usesFallback = fallback.map { Self.needsFallback(scalar, own: entry, fallback: $0.entry) } ?? false
+                if let last = stretches.last, last.usesFallback == usesFallback {
+                    stretches[stretches.count - 1].text.unicodeScalars.append(scalar)
+                } else {
+                    stretches.append((String(scalar), usesFallback))
+                }
+            }
+            for stretch in stretches {
+                var piece = run
+                piece.text = stretch.text
+                if stretch.usesFallback, let fallback {
+                    piece.font = fallback.font
+                    try pieces.append(.text(run: piece, mapping: shapedMapping(for: piece, entry: fallback.entry)))
+                    usedFallback = true
+                } else {
+                    try pieces.append(.text(run: piece, mapping: shapedMapping(for: piece, entry: entry)))
+                }
+            }
             pending = ""
         }
         var drewAny = false
-        for segment in EmojiSegmenter.segments(of: run.text) {
+        let segments = hasEmoji ? EmojiSegmenter.segments(of: run.text) : [.text(run.text)]
+        for segment in segments {
             switch segment {
             case let .text(text):
                 pending += text
             case let .emoji(cluster):
-                if let drawing = colorEmoji.drawing(of: cluster, fontSize: run.size), let advance = colorEmoji.advance(of: cluster, fontSize: run.size) {
+                if let colorEmoji, let drawing = colorEmoji.drawing(of: cluster, fontSize: run.size),
+                   let advance = colorEmoji.advance(of: cluster, fontSize: run.size)
+                {
                     try flushText()
                     pieces.append(.emoji(cluster: cluster, drawing: drawing, advance: advance))
                     drewAny = true
@@ -111,9 +136,27 @@ struct PDFEmbeddedFontCatalog {
                 }
             }
         }
-        guard drewAny else { return nil }
         try flushText()
+        guard drewAny || usedFallback else { return nil }
         return pieces
+    }
+
+    /// The face a run falls back to for a character its own face lacks: the proportional text face, for the monospaced face (which has no Braille
+    /// patterns, for one) and for the bold and oblique faces. Nil for the proportional face itself and for the math face, or when no text face is
+    /// embedded. Only a run that holds a character the own face lacks and the fallback has gets one.
+    private func fallbackFace(for run: PDFTextRun, entry: Entry) -> (font: StandardFont, entry: Entry)? {
+        guard run.font != .helvetica, run.font != .math, let fallbackEntry = self.entry(for: .helvetica) else { return nil }
+        let needed = run.text.unicodeScalars.contains { Self.needsFallback($0, own: entry, fallback: fallbackEntry) }
+        return needed ? (.helvetica, fallbackEntry) : nil
+    }
+
+    /// A scalar the run's own face cannot draw and the fallback face can.
+    private static func needsFallback(_ scalar: UnicodeScalar, own: Entry, fallback: Entry) -> Bool {
+        guard scalar.value > 0x7F else { return false }
+        func covered(_ entry: Entry) -> Bool {
+            (try? entry.mapper.map(text: String(scalar), fontSize: 1)) != nil
+        }
+        return !covered(own) && covered(fallback)
     }
 
     func width(of run: PDFTextRun, fallbackFontSet: PDFOptions.FontSet) throws -> Double {

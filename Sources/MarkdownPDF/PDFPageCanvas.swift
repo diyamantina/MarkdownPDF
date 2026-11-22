@@ -100,8 +100,8 @@ final class PDFPageCanvas {
             return
         }
 
-        if let pieces = try embeddedFonts.pieces(of: run, entry: entry), let colorEmoji = embeddedFonts.colorEmoji {
-            try drawPieces(pieces, of: run, colorEmoji: colorEmoji, entry: entry, x: x, baselineY: y + run.baselineOffset)
+        if let pieces = try embeddedFonts.pieces(of: run, entry: entry) {
+            try drawPieces(pieces, of: run, embeddedFonts: embeddedFonts, entry: entry, x: x, baselineY: y + run.baselineOffset)
             return
         }
         let mapping = try embeddedFonts.shapedMapping(for: run, entry: entry)
@@ -123,7 +123,7 @@ final class PDFPageCanvas {
     private func drawPieces(
         _ pieces: [PDFEmbeddedFontCatalog.Piece],
         of run: PDFTextRun,
-        colorEmoji: ColorEmojiFont,
+        embeddedFonts: PDFEmbeddedFontCatalog,
         entry: PDFEmbeddedFontCatalog.Entry,
         x: Double,
         baselineY: Double,
@@ -132,8 +132,11 @@ final class PDFPageCanvas {
         for piece in pieces {
             switch piece {
             case let .text(pieceRun, mapping):
-                try drawCIDText(mapping: mapping, fontResource: entry.resource, fontSize: pieceRun.size, x: penX, y: baselineY, color: pieceRun.color)
+                // A stretch drawn in a fallback face carries that face as its font; the others keep the face of the run.
+                let resource = embeddedFonts.entry(for: pieceRun.font)?.resource ?? entry.resource
+                try drawCIDText(mapping: mapping, fontResource: resource, fontSize: pieceRun.size, x: penX, y: baselineY, color: pieceRun.color)
             case let .emoji(cluster, drawing, _):
+                guard let colorEmoji = embeddedFonts.colorEmoji else { continue }
                 // One `/ActualText` span holds the emoji: the invisible base glyph, whose `/ToUnicode` entry is the emoji, and the layers as paths.
                 let utf16: [UInt16] = [0xFEFF] + Array(cluster.text.utf16)
                 contentStream.append([.beginActualTextUTF16(PDFSyntax.HexString(twoByteCodes: utf16))])
