@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Mermaid flowchart node shapes: a rounded rectangle `A(label)`, a stadium `A([label])` and a decision diamond `A{label}`, beside the
+  rectangle `A[label]`. A diamond is laid out twice the size of its padded text, so the text stays inside the outline. A shape that is not
+  drawn (`((` circle, `{{` hexagon, `[[` subroutine, `[(` cylinder, `[/` slanted, `>` flag) is reported by its brackets and not drawn as a
+  rectangle.
+
 ### Fixed
 - A chart's y-axis title is now drawn above the plot, in a row of its own between the legend and the top gridline. It was drawn inside
   the plot, where the first bar and the axis line ran through it.

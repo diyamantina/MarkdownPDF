@@ -113,6 +113,41 @@ struct MermaidDiagram: Equatable {
         var id: String
         var label: String
         var hasExplicitLabel: Bool
+        var shape: Shape = .rectangle
+
+        /// The outline a node is drawn with, named by the brackets around its label.
+        enum Shape: Equatable, Sendable {
+            /// `A[label]`
+            case rectangle
+            /// `A(label)`
+            case rounded
+            /// `A([label])`
+            case stadium
+            /// `A{label}`, a decision.
+            case diamond
+
+            /// The size of the box that holds a label of `text` size (the padded text rectangle). A diamond is larger than its text: the
+            /// corner `(w/2, h/2)` of the text rectangle lies inside the outline `|x|/(W/2) + |y|/(H/2) = 1` exactly when `w/W + h/H <= 1`,
+            /// and `W = 2w, H = 2h` gives `1/2 + 1/2 = 1`, the padded corners on the outline, so the text itself is inside it.
+            func boxSize(forText text: (width: Double, height: Double)) -> (width: Double, height: Double) {
+                switch self {
+                case .diamond:
+                    (width: text.width * 2, height: text.height * 2)
+                case .rectangle, .rounded, .stadium:
+                    text
+                }
+            }
+
+            /// The corners of a diamond that fills the box `left, bottom, width, height`: the midpoints of its four sides, clockwise from the top.
+            static func diamondOutline(left: Double, bottom: Double, width: Double, height: Double) -> [PDFPageCanvas.Point] {
+                [
+                    PDFPageCanvas.Point(x: left + width / 2, y: bottom + height),
+                    PDFPageCanvas.Point(x: left + width, y: bottom + height / 2),
+                    PDFPageCanvas.Point(x: left + width / 2, y: bottom),
+                    PDFPageCanvas.Point(x: left, y: bottom + height / 2),
+                ]
+            }
+        }
     }
 
     /// A link between two nodes, or between a node and a group, or between two groups.
@@ -222,6 +257,7 @@ struct MermaidDiagram: Equatable {
     private struct Endpoint {
         var id: String
         var label: String?
+        var shape: Node.Shape = .rectangle
     }
 
     private struct Parser {
@@ -438,6 +474,9 @@ struct MermaidDiagram: Equatable {
             return nil
         }
 
+        /// The bracket that closes each one that opens a node's label.
+        private static let closingBracket: [Character: Character] = ["[": "]", "(": ")", "{": "}"]
+
         private static func mentionsLink(_ line: String) -> Bool {
             ["-->", "-.->", "-.-", "---", "~~~"].contains { line.contains($0) }
         }
@@ -496,6 +535,9 @@ struct MermaidDiagram: Equatable {
             var current = ""
             var insideQuotes = false
             var bracketDepth = 0
+            // The bracket kind that opened the label (`[`, `(` or `{`), and the one that closes it. Only that kind is counted inside it.
+            var opener: Character = "["
+            var closer: Character = "]"
             var index = line.startIndex
 
             while index < line.endIndex {
@@ -505,12 +547,16 @@ struct MermaidDiagram: Equatable {
                         insideQuotes = false
                     }
                 } else if character == "\"" {
-                    // A quote opens a quoted label only straight after `[`. Anywhere else,
+                    // A quote opens a quoted label only straight after a bracket (`[`, `(` or `{`). Anywhere else,
                     // as in `A[5" disk]`, it is a plain character of an unquoted label.
-                    insideQuotes = bracketDepth > 0 && current.last { !$0.isWhitespace } == "["
-                } else if character == "[" {
+                    insideQuotes = bracketDepth > 0 && current.last { !$0.isWhitespace }.map { "[({".contains($0) } == true
+                } else if bracketDepth == 0, let kind = Self.closingBracket[character] {
+                    opener = character
+                    closer = kind
+                    bracketDepth = 1
+                } else if character == opener {
                     bracketDepth += 1
-                } else if character == "]" {
+                } else if character == closer {
                     bracketDepth = max(0, bracketDepth - 1)
                 }
 
@@ -646,13 +692,14 @@ struct MermaidDiagram: Equatable {
                 }
                 if explicit, !nodes[index].hasExplicitLabel {
                     nodes[index].label = label
+                    nodes[index].shape = endpoint.shape
                     nodes[index].hasExplicitLabel = true
                 }
                 return .success(())
             }
 
             nodeIndexes[endpoint.id] = nodes.count
-            nodes.append(Node(id: endpoint.id, label: label, hasExplicitLabel: explicit))
+            nodes.append(Node(id: endpoint.id, label: label, hasExplicitLabel: explicit, shape: endpoint.shape))
             return .success(())
         }
 
@@ -676,14 +723,23 @@ struct MermaidDiagram: Equatable {
             guard !remainder.isEmpty else {
                 return .success(Endpoint(id: id, label: nil))
             }
-            guard remainder.hasPrefix("["), remainder.hasSuffix("]") else {
-                return .failure("only rectangle labels like `A[Label]` are supported")
+            // A shape the renderer does not draw is named, never drawn as a rectangle.
+            for opening in ["((", "{{", "[[", "[(", "[/", "[\\", ">"] where remainder.hasPrefix(opening) {
+                return .failure("the node shape `\(opening)` is not supported; supported shapes are `[ ]`, `( )`, `([ ])` and `{ }`")
+            }
+            let pairs: [(open: String, close: String, shape: Node.Shape)] = [
+                ("([", "])", .stadium), ("[", "]", .rectangle), ("(", ")", .rounded), ("{", "}", .diamond),
+            ]
+            guard let pair = pairs.first(where: { remainder.hasPrefix($0.open) && remainder.hasSuffix($0.close) }),
+                  remainder.count >= pair.open.count + pair.close.count
+            else {
+                return .failure("only node shapes `A[Label]`, `A(Label)`, `A([Label])` and `A{Label}` are supported")
             }
 
-            let innerStart = remainder.index(after: remainder.startIndex)
-            let innerEnd = remainder.index(before: remainder.endIndex)
+            let innerStart = remainder.index(remainder.startIndex, offsetBy: pair.open.count)
+            let innerEnd = remainder.index(remainder.endIndex, offsetBy: -pair.close.count)
             let label = Self.labelWithNewlines(unquoted(String(remainder[innerStart ..< innerEnd])))
-            return .success(Endpoint(id: id, label: label.isEmpty ? id : label))
+            return .success(Endpoint(id: id, label: label.isEmpty ? id : label, shape: pair.shape))
         }
 
         private func isNodeIDCharacter(_ character: Character) -> Bool {

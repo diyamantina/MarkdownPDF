@@ -2779,14 +2779,25 @@ private struct Layout {
                 return .fallback("node label `\(node.label)` is wider than the diagram node limit")
             }
 
+            let textHeight = Double(labelLines.count) * lineHeight + verticalPadding * 2
+            var size = node.shape.boxSize(forText: (
+                width: max(minNodeWidth, widestLine + horizontalPadding * 2),
+                height: max(34 * scale, textHeight),
+            ))
+            if node.shape == .stadium {
+                // The rounded ends take half the height each, so the text keeps its room between them.
+                size.width += size.height / 2
+            }
             measurements[node.id] = MermaidNodeMeasurement(
                 id: node.id,
                 labelLines: labelLines,
-                width: max(minNodeWidth, widestLine + horizontalPadding * 2),
-                height: max(34 * scale, Double(labelLines.count) * lineHeight + verticalPadding * 2),
+                width: size.width,
+                height: size.height,
                 fontSize: fontSize,
                 lineHeight: lineHeight,
                 verticalPadding: verticalPadding,
+                shape: node.shape,
+                textHeight: Double(labelLines.count) * lineHeight,
             )
         }
 
@@ -3285,16 +3296,30 @@ private struct Layout {
 
     private mutating func drawMermaidNode(_ box: MermaidNodeBox, topY: Double) throws {
         let frame = box.frame(topY: topY)
-        currentPage.drawRectangle(
-            x: frame.left,
-            y: frame.bottom,
-            width: box.width,
-            height: box.height,
-            stroke: PDFColor(red: 0.18, green: 0.31, blue: 0.48),
-            fill: PDFColor(red: 0.90, green: 0.94, blue: 0.98),
-        )
+        let stroke = PDFColor(red: 0.18, green: 0.31, blue: 0.48)
+        let fill = PDFColor(red: 0.90, green: 0.94, blue: 0.98)
+        switch box.shape {
+        case .rectangle:
+            currentPage.drawRectangle(x: frame.left, y: frame.bottom, width: box.width, height: box.height, stroke: stroke, fill: fill)
+        case .rounded:
+            currentPage.drawRoundedRectangle(
+                x: frame.left, y: frame.bottom, width: box.width, height: box.height, radius: 6, stroke: stroke, fill: fill,
+            )
+        case .stadium:
+            currentPage.drawRoundedRectangle(
+                x: frame.left, y: frame.bottom, width: box.width, height: box.height, radius: box.height / 2, stroke: stroke, fill: fill,
+            )
+        case .diamond:
+            currentPage.drawPolygon(
+                points: MermaidDiagram.Node.Shape.diamondOutline(left: frame.left, bottom: frame.bottom, width: box.width, height: box.height),
+                stroke: stroke,
+                fill: fill,
+            )
+        }
 
-        var textY = frame.top - box.verticalPadding - box.fontSize
+        // A rectangle keeps its text where it always was (pinned by `MermaidLayoutGoldenTests`); the other shapes centre the text block in the box.
+        let topInset = box.shape == .rectangle ? box.verticalPadding : (box.height - box.textHeight) / 2
+        var textY = frame.top - topInset - box.fontSize
         for line in box.labelLines {
             let lineWidth = try inkWidth(ofLine: line)
             try drawRuns(line, x: frame.left + (box.width - lineWidth) / 2, y: textY)
@@ -5308,10 +5333,15 @@ private struct Layout {
         var fontSize: Double
         var lineHeight: Double
         var verticalPadding: Double
+        var shape: MermaidDiagram.Node.Shape = .rectangle
+        /// The height of the text block; the box is taller than it for a diamond, so the text sits in the middle of it.
+        var textHeight: Double = 0
     }
 
     private struct MermaidNodeBox {
         var id: String
+        var shape: MermaidDiagram.Node.Shape
+        var textHeight: Double
         var labelLines: [[PDFTextRun]]
         var x: Double
         var topOffset: Double
@@ -5323,6 +5353,8 @@ private struct Layout {
 
         init(measurement: MermaidNodeMeasurement, x: Double, topOffset: Double) {
             id = measurement.id
+            shape = measurement.shape
+            textHeight = measurement.textHeight
             labelLines = measurement.labelLines
             self.x = x
             self.topOffset = topOffset
