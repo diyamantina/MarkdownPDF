@@ -440,6 +440,52 @@ final class PDFPageCanvas {
         }
     }
 
+    /// A rectangle with rounded corners: the path starts at the top of the left corner's arc, so a box at `x` begins at `x + radius`.
+    func drawRoundedRectangle(
+        x: Double,
+        y: Double,
+        width: Double,
+        height: Double,
+        radius: Double,
+        stroke: PDFColor? = .black,
+        fill: PDFColor? = nil,
+        lineWidth: Double = 0.5,
+    ) {
+        let r = min(radius, width / 2, height / 2)
+        let k = 0.5522847498307936 * r
+        let right = x + width
+        let top = y + height
+        let operators: [PDFContentStream.Operator] = [
+            .moveTo(x: x + r, y: y),
+            .lineTo(x: right - r, y: y),
+            .curveTo(x1: right - r + k, y1: y, x2: right, y2: y + r - k, x3: right, y3: y + r),
+            .lineTo(x: right, y: top - r),
+            .curveTo(x1: right, y1: top - r + k, x2: right - r + k, y2: top, x3: right - r, y3: top),
+            .lineTo(x: x + r, y: top),
+            .curveTo(x1: x + r - k, y1: top, x2: x, y2: top - r + k, x3: x, y3: top - r),
+            .lineTo(x: x, y: y + r),
+            .curveTo(x1: x, y1: y + r - k, x2: x + r - k, y2: y, x3: x + r, y3: y),
+            .closePath,
+        ]
+        drawPath(operators: operators, stroke: stroke, fill: fill, lineWidth: lineWidth)
+    }
+
+    /// A cubic Bezier curve from `start` to `end` through two control points, stroked.
+    func drawCurve(
+        from start: Point,
+        control1: Point,
+        control2: Point,
+        to end: Point,
+        width: Double,
+        color: PDFColor,
+    ) {
+        let operators: [PDFContentStream.Operator] = [
+            .moveTo(x: start.x, y: start.y),
+            .curveTo(x1: control1.x, y1: control1.y, x2: control2.x, y2: control2.y, x3: end.x, y3: end.y),
+        ]
+        drawPath(operators: operators, stroke: color, fill: nil, lineWidth: width)
+    }
+
     func drawImage(
         name: String,
         x: Double,

@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ` ```tile flow ` draws a dependency graph: rounded boxes in columns, outlined and tinted by their state
+  (`running`, `waiting`, `blocked`, `done`, `failed`), joined by curved arrows with arrowheads, with the
+  title above when one is written. The lines are those of the tile on a TileDown page (`title`, `edge: a -> b`,
+  `node:` with `label` and `status`). The layout is a closed form shared with the page's SVG (a node's column is
+  the longest path into it, its row its place among the nodes of its column; boxes 140 by 40 units, 60 across, 24
+  down), pinned by one table of box coordinates tested in both repositories, and scaled by one factor to the
+  page when the picture is wider than the measure. A cycle, a bad name, a label over 18 characters and the
+  limits (60 nodes, 200 edges) are refusals printed as a code block that says why. Two drawing primitives,
+  `drawRoundedRectangle` and `drawCurve`, join the page canvas.
 - ` ```tile timeline ` draws dated events down a rail: `order` (ascending or descending), then
   `event`, `date` (a real calendar date, `YYYY-MM-DD`), `time` (`HH:MM`) and `body` for each
   event. Events are sorted by date and time, the written order holds for one moment, an event with

@@ -14,6 +14,7 @@ enum TileBlockParser {
             case "progress": return try .tile(.progress(progress(lines)))
             case "kpi": return try .tile(.kpi(kpi(lines)))
             case "timeline": return try .tile(.timeline(timeline(lines)))
+            case "flow": return try .tile(.flow(flow(lines)))
             default: throw Refusal("the tile type \(type) is not drawn in the PDF")
             }
         } catch let refusal as Refusal {
@@ -108,6 +109,90 @@ enum TileBlockParser {
             label: nonEmpty(values["label"]),
             status: status(values["status"], tile: "progress") ?? .running,
         )
+    }
+
+    // MARK: flow
+
+    private static func flow(_ lines: [Line]) throws -> TileBlock.Flow {
+        var title: String?
+        var nodes: [TileBlock.Flow.Node] = []
+        var edges: [TileBlock.Flow.Edge] = []
+        var declared = Set<String>()
+        var current: Int?
+        var seen = Set<String>()
+
+        func position(of name: String) throws -> Int {
+            let allowed = name.utf8.allSatisfy { byte in
+                (0x30 ... 0x39).contains(byte) || (0x41 ... 0x5A).contains(byte) || (0x61 ... 0x7A).contains(byte)
+                    || byte == 0x2D || byte == 0x5F
+            }
+            guard !name.isEmpty, name.utf8.count <= TileBlock.Flow.longestID, allowed else {
+                throw Refusal(
+                    "the flow tile's node name is letters, digits, - and _ up to \(TileBlock.Flow.longestID) characters, not \(name)",
+                )
+            }
+            if let found = nodes.firstIndex(where: { $0.id == name }) {
+                return found
+            }
+            nodes.append(.init(id: name, label: nil, status: nil))
+            return nodes.count - 1
+        }
+
+        for line in lines {
+            switch line.key {
+            case "title":
+                guard title == nil else { throw Refusal("the flow tile has the line title twice") }
+                title = nonEmpty(line.value)
+            case "edge":
+                let parts = line.value.components(separatedBy: "->").map { $0.trimmingCharacters(in: .whitespaces) }
+                guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else {
+                    throw Refusal("the flow tile's edge is written a -> b, not \(line.value)")
+                }
+                let edge = try TileBlock.Flow.Edge(source: position(of: parts[0]), target: position(of: parts[1]))
+                guard !edges.contains(edge) else {
+                    throw Refusal("the flow tile has the edge \(parts[0]) -> \(parts[1]) twice: give it once")
+                }
+                edges.append(edge)
+            case "node":
+                let index = try position(of: line.value)
+                guard declared.insert(line.value).inserted else {
+                    throw Refusal("the flow tile declares the node \(line.value) twice: declare it once")
+                }
+                current = index
+                seen = []
+            case "label", "status":
+                guard let current else {
+                    throw Refusal("the flow tile's \(line.key) comes before any node line: start the node with node: and its name")
+                }
+                guard seen.insert(line.key).inserted else {
+                    throw Refusal("the flow node \(nodes[current].id) has the line \(line.key) twice")
+                }
+                if line.key == "label" {
+                    guard line.value.count <= TileBlock.Flow.longestLabel else {
+                        throw Refusal("the flow tile's label is \(TileBlock.Flow.longestLabel) characters at most, not \(line.value)")
+                    }
+                    nodes[current].label = nonEmpty(line.value)
+                } else {
+                    nodes[current].status = try status(line.value, tile: "flow tile")
+                }
+            default:
+                throw Refusal("the flow tile has no line \(line.key): use title, edge, node, label and status")
+            }
+        }
+        guard !nodes.isEmpty else {
+            throw Refusal("the flow has no node: add an edge line, written a -> b")
+        }
+        guard nodes.count <= TileBlock.Flow.mostNodes else {
+            throw Refusal("the flow tile has \(nodes.count) nodes: use \(TileBlock.Flow.mostNodes) at most")
+        }
+        guard edges.count <= TileBlock.Flow.mostEdges else {
+            throw Refusal("the flow tile has \(edges.count) edges: use \(TileBlock.Flow.mostEdges) at most")
+        }
+        if let path = TileBlock.Flow.cycle(nodeCount: nodes.count, edges: edges) {
+            let names = path.map { nodes[$0].id }.joined(separator: " -> ")
+            throw Refusal("the flow tile has a cycle: \(names). A flow is drawn left to right, so remove one of these edges")
+        }
+        return .init(title: title, nodes: nodes, edges: edges, layout: .init(nodeCount: nodes.count, edges: edges))
     }
 
     private static let eventLines = ["date", "time", "body"]

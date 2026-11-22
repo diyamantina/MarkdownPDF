@@ -5417,6 +5417,7 @@ extension Layout {
             case let .progress(progress): try drawProgress(progress)
             case let .kpi(cards): try drawKPI(cards)
             case let .timeline(timeline): try drawTimeline(timeline)
+            case let .flow(flow): try drawFlow(flow)
             }
         case let .unsupported(reason):
             try renderCodeBlock("Unsupported tile: \(reason)\n\(code)")
@@ -5573,6 +5574,85 @@ extension Layout {
             endStructureElement(figure)
             y -= height + (isLast ? figureTrailingSpacing : gap)
         }
+    }
+
+    // MARK: flow
+
+    /// A dependency graph: rounded boxes in columns, outlined and tinted by their state, joined by curved arrows, with the title above when one is
+    /// written. The units of the layout are the page's (the SAME closed form as the SVG), scaled by one factor so a wide picture fits the measure.
+    private mutating func drawFlow(_ flow: TileBlock.Flow) throws {
+        let size = fontSize(for: .paragraph)
+        if let title = flow.title {
+            ensureSpace(size * 2.4)
+            try drawRuns([tileRun(title, bold: true, size: size, color: .black)], x: options.margins.left, y: y - size)
+            y -= size * 1.8
+        }
+        let layout = flow.layout
+        typealias Units = TileBlock.Flow.Layout
+        let scale = min(1.0, contentWidth / Double(layout.width))
+        let height = Double(layout.height) * scale
+        ensureSpace(height)
+        let alternative = flow.edges
+            .map { "\(flow.nodes[$0.source].shown) to \(flow.nodes[$0.target].shown)" }
+            .joined(separator: "; ")
+        let figure = beginStructureElement(
+            .figure,
+            attributes: PDFTaggedContent.Attributes(alternateDescription: alternative.isEmpty ? flow.title ?? "Flow" : alternative),
+        )
+        let marked = beginMarkedContentForCurrentElement()
+        markBlockQuoteContentDrawn()
+        let left = options.margins.left
+        let top = y
+        func px(_ units: Int) -> Double {
+            left + Double(units) * scale
+        }
+        func py(_ units: Int) -> Double {
+            top - Double(units) * scale
+        }
+        let edgeColor = PDFColor(red: 0.55, green: 0.58, blue: 0.63)
+        for edge in flow.edges {
+            let start = layout.x(ofLayer: layout.layers[edge.source]) + Units.nodeWidth
+            let end = layout.x(ofLayer: layout.layers[edge.target])
+            let startY = layout.y(ofRow: layout.rows[edge.source]) + Units.nodeHeight / 2
+            let endY = layout.y(ofRow: layout.rows[edge.target]) + Units.nodeHeight / 2
+            let middle = (start + end) / 2
+            currentPage.drawCurve(
+                from: .init(x: px(start), y: py(startY)), control1: .init(x: px(middle), y: py(startY)),
+                control2: .init(x: px(middle), y: py(endY)), to: .init(x: px(end), y: py(endY)),
+                width: max(0.6, 1.4 * scale), color: edgeColor,
+            )
+            let head = [
+                PDFPageCanvas.Point(x: px(end - 8), y: py(endY - 4)),
+                PDFPageCanvas.Point(x: px(end), y: py(endY)),
+                PDFPageCanvas.Point(x: px(end - 8), y: py(endY + 4)),
+            ]
+            currentPage.drawPolygon(points: head, stroke: nil, fill: edgeColor)
+        }
+        for (index, node) in flow.nodes.enumerated() {
+            let boxLeft = layout.x(ofLayer: layout.layers[index])
+            let boxTop = layout.y(ofRow: layout.rows[index])
+            let status = node.status
+            let stroke = status.map { Self.tileInk($0) } ?? PDFColor(red: 0.62, green: 0.66, blue: 0.72)
+            let fill = status.map { Self.tileFill($0) } ?? PDFColor(red: 0.98, green: 0.98, blue: 0.99)
+            let boxHeight = Double(Units.nodeHeight) * scale
+            currentPage.drawRoundedRectangle(
+                x: px(boxLeft), y: py(boxTop) - boxHeight, width: Double(Units.nodeWidth) * scale, height: boxHeight,
+                radius: Double(Units.radius) * scale, stroke: stroke, fill: fill, lineWidth: max(0.6, 1.2 * scale),
+            )
+            // the text is centred, as large as fits the box up to a limit
+            let available = Double(Units.nodeWidth - 12) * scale
+            let probe = tileRun(node.shown, bold: true, size: 10, color: .black)
+            let natural = try inkWidth(ofLine: [probe])
+            let textSize = max(5, min(10 * max(scale, 0.8), 10 * available / max(natural, 1)))
+            let run = tileRun(node.shown, bold: true, size: textSize, color: status.map { Self.tileInk($0) } ?? .black)
+            let textWidth = try inkWidth(ofLine: [run])
+            let centerX = px(boxLeft) + Double(Units.nodeWidth) * scale / 2
+            let centerY = py(boxTop) - boxHeight / 2
+            try drawRuns([run], x: centerX - textWidth / 2, y: centerY - textSize * 0.3)
+        }
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figure)
+        y -= height + figureTrailingSpacing
     }
 
     // MARK: kpi

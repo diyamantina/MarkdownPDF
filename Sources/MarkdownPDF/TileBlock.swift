@@ -10,6 +10,7 @@ enum TileBlock: Equatable {
     case progress(Progress)
     case kpi([KPICard])
     case timeline(Timeline)
+    case flow(Flow)
 
     /// What a parse gives: the tile, or the reason the block cannot be drawn.
     enum ParseResult: Equatable {
