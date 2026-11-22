@@ -7,17 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- `PDFOptions.documentStrings` now defaults to `.unicode`. The outline (the bookmarks in a viewer's sidebar), the Info `/Title` and `/Author`
-  and the alternate text of a tagged PDF were written as 8-bit text: a heading that starts with an emoji and holds an em dash showed in the
-  sidebar with a question mark for the emoji and another letter for the dash. They are written as UTF-16BE text
-  strings now when they hold anything but ASCII, and read back whole. `.winAnsi` is kept for the 8-bit output of versions before 0.16.0.
-
 ## [0.16.0] - 2026-11-22
 
 The PDF of a page now matches the page: the tiles are drawn, formulas use the real math font, emoji are drawn in colour, and the diagrams and
 charts of the blog and the site print. No change breaks the API: `PDFOptions.omitUndrawableEmoji` and `PDFOptions.EmbeddedFonts.emoji` and
-`.math` are additions with defaults.
+`.math` are additions with defaults, with one change of a default, named under Changed.
+
+Known, for 0.16.1: in a narrow table cell a full stop that follows a word that was cut at the end of a line can stand alone on the next line
+(a closing punctuation mark does not yet stay with the word before it). Emoji sequences (flags, keycaps, skin tones, joined emoji) are a later
+step: a single emoji and an emoji with its variation selector are drawn.
 
 ### Added
 - Colour emoji. A single emoji code point, or one followed by the emoji variation selector, is drawn in colour: each layer of its glyph in
@@ -66,6 +64,13 @@ charts of the blog and the site print. No change breaks the API: `PDFOptions.omi
   a card's change is a drawn arrow, the word `up`, `down` or `flat`, and its text. A block the
   engine cannot draw (an unknown type, a missing line, a value above the total) is printed as a
   code block that says why, with its body, and nothing is guessed.
+
+### Changed
+- The default of `PDFOptions.documentStrings` is now `.unicode`. The outline (the bookmarks in a viewer's sidebar), the Info `/Title` and
+  `/Author` and the alternate text of a tagged PDF were written as 8-bit text: a heading that starts with an emoji and holds an em dash showed
+  in the sidebar with a question mark for the emoji and another letter for the dash. They are written as UTF-16BE text strings when they hold
+  anything but ASCII, and read back whole; strings of ASCII only are byte for byte as before. To restore the 8-bit output of versions before
+  0.16.0, pass `documentStrings: .winAnsi`.
 
 ### Fixed
 - A character that the face of a run lacks is drawn with the bundled proportional face when that has it, instead of the missing-glyph box. The
