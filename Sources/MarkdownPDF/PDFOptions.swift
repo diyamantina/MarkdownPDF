@@ -15,6 +15,11 @@ public struct PDFOptions: Equatable, Sendable {
     public var taggedPDF: TaggedPDF
     public var conformance: Conformance
 
+    /// Leaves out an emoji that no embedded face can draw, with the space that set it apart, instead of drawing the face's
+    /// missing-glyph box (the bundled faces have no color glyphs). Off by default, so the text stays as written and extractable;
+    /// a caller that prints articles turns it on. A missing glyph that is not an emoji is still drawn as the box.
+    public var omitUndrawableEmoji: Bool
+
     /// The tallest a standalone image may be drawn, as a fraction of the page height.
     ///
     /// The default of `0.45` keeps a figure from filling a document page and
@@ -110,7 +115,9 @@ public struct PDFOptions: Equatable, Sendable {
         lineHeightScale: Double = Self.defaultLineHeightScale,
         documentStrings: DocumentStrings = .winAnsi,
         keepTogether: KeepTogether = [],
+        omitUndrawableEmoji: Bool = false,
     ) {
+        self.omitUndrawableEmoji = omitUndrawableEmoji
         self.pageSize = pageSize
         self.margins = margins
         self.baseFontSize = baseFontSize

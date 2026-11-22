@@ -22,12 +22,17 @@ struct PDFEmbeddedFontCatalog {
     /// in ``covers(_:font:)`` is unaffected by this and stays strict always.
     private let renderingMissingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy
 
+    /// Whether an emoji no face can draw is left out instead of drawn as the missing-glyph box (``PDFOptions/omitUndrawableEmoji``).
+    private let omitUndrawableEmoji: Bool
+
     init(
         fonts: PDFOptions.EmbeddedFonts,
         parseMathTables: Bool = false,
         renderingMissingGlyphPolicy: TrueTypeGlyphMapper.MissingGlyphPolicy = .useNotdef,
+        omitUndrawableEmoji: Bool = false,
     ) throws {
         self.renderingMissingGlyphPolicy = renderingMissingGlyphPolicy
+        self.omitUndrawableEmoji = omitUndrawableEmoji
         var entries: [StandardFont: Entry] = [:]
         try Self.add(fonts.regular, for: .helvetica, resourceName: "EF1", parseMathTables: parseMathTables, to: &entries)
         try Self.add(fonts.bold, for: .helveticaBold, resourceName: "EF2", parseMathTables: parseMathTables, to: &entries)
@@ -80,7 +85,43 @@ struct PDFEmbeddedFontCatalog {
         return try mapper.map(text: run.text, fontSize: run.size)
     }
 
-    func shapedMapping(for run: PDFTextRun, entry: Entry) throws -> ShapedTextMapping {
+    /// The text without the emoji the face cannot draw, and without the space that set each one apart. A bundled face has
+    /// no color glyphs, so an emoji would print as an empty box (or a question mark); the words around it read as written.
+    /// A missing glyph that is not an emoji (a script the face lacks) is left alone: that one is a fault to see.
+    /// Under a conformance profile (`.reject`) nothing is dropped, so the missing glyph is refused as before.
+    func withoutUndrawableEmoji(_ text: String, entry: Entry) -> String {
+        guard omitUndrawableEmoji, renderingMissingGlyphPolicy == .useNotdef,
+              text.unicodeScalars.contains(where: { $0.value > 0x7F })
+        else {
+            return text
+        }
+        func isEmojiPart(_ scalar: UnicodeScalar) -> Bool {
+            (scalar.properties.isEmoji && scalar.value > 0x7F) || scalar.value == 0xFE0F || scalar.value == 0xFE0E
+                || scalar.value == 0x200D || (0x1F3FB ... 0x1F3FF).contains(scalar.value)
+        }
+        func drawable(_ scalar: UnicodeScalar) -> Bool {
+            (try? entry.mapper.map(text: String(scalar), fontSize: 1)) != nil
+        }
+        var output = String.UnicodeScalarView()
+        var skipSpace = false
+        for scalar in text.unicodeScalars {
+            if isEmojiPart(scalar), !drawable(scalar) {
+                skipSpace = true
+                continue
+            }
+            if skipSpace, scalar == " ", output.isEmpty || output.last == " " || output.last == "\n" {
+                skipSpace = false
+                continue
+            }
+            skipSpace = false
+            output.append(scalar)
+        }
+        return String(output)
+    }
+
+    func shapedMapping(for originalRun: PDFTextRun, entry: Entry) throws -> ShapedTextMapping {
+        var run = originalRun
+        run.text = withoutUndrawableEmoji(originalRun.text, entry: entry)
         if OpenTypeShaper.canShapeLatinIncrement(run.text) {
             var shaper = entry.shaper
             shaper.missingGlyphPolicy = renderingMissingGlyphPolicy

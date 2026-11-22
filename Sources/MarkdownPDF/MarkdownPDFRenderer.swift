@@ -602,6 +602,7 @@ private struct Layout {
             // content, so keep the correct-or-refuse posture there rather than
             // drawing notdef for a scalar the font lacks.
             renderingMissingGlyphPolicy: options.conformance.isEnabled ? .reject : .useNotdef,
+            omitUndrawableEmoji: options.omitUndrawableEmoji,
         )
         taggedContentBuilder = options.taggedPDF.isEnabled || options.conformance.requiresTaggedPDF
             ? PDFTaggedContentBuilder()
