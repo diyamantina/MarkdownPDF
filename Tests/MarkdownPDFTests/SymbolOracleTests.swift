@@ -37,7 +37,9 @@ struct SymbolOracleTests {
     static let configurations: [(name: String, fonts: PDFOptions.EmbeddedFonts)] = {
         var codeNotEmbedded = PDFOptions.EmbeddedFonts.dejaVu
         codeNotEmbedded.monospaced = nil
-        return [("every role embedded", .dejaVu), ("the code face not embedded", codeNotEmbedded)]
+        // The third is what a caller that gives no face gets (a site generator that passes only the math option): the renderer takes the bundled faces
+        // when the document holds text outside WinAnsi, and the page is judged against those.
+        return [("every role embedded", .dejaVu), ("the code face not embedded", codeNotEmbedded), ("no face given, the renderer takes the bundled ones", .disabled)]
     }()
 
     /// Where the character stands: a code fence, a code span, the body.
@@ -120,8 +122,8 @@ struct SymbolOracleTests {
         configuration: (name: String, fonts: PDFOptions.EmbeddedFonts),
     ) throws -> Verdict {
         var verdict = Verdict(configuration: configuration.name, place: place.name, entry: entry.name)
-        let catalog = try PDFEmbeddedFontCatalog(fonts: configuration.fonts)
-        let data = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: configuration.fonts)).render(markdown: place.template(entry.text))
+        let catalog = try PDFEmbeddedFontCatalog(fonts: configuration.fonts.hasNoTextFaces ? .dejaVu : configuration.fonts)
+        let data = try MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: configuration.fonts, mathTypesetting: .enabled)).render(markdown: place.template(entry.text))
         guard faceHas(entry.text, catalog: catalog) else {
             verdict.reported = true
             return verdict
@@ -216,5 +218,6 @@ struct SymbolOracleTests {
     static let expectedReported: [String: [String]] = [
         "every role embedded": ["U+1F5A5", "family, joined", "flag of Germany", "keycap one", "thumbs up, medium skin tone"],
         "the code face not embedded": ["U+1F5A5", "family, joined", "flag of Germany", "keycap one", "thumbs up, medium skin tone"],
+        "no face given, the renderer takes the bundled ones": ["U+1F5A5", "family, joined", "flag of Germany", "keycap one", "thumbs up, medium skin tone"],
     ]
 }
