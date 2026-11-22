@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A display formula now leaves room for the line after it: the next paragraph's baseline lies the ascender of its line plus a visible
+  gap below the formula's lowest ink. Before, a sum's lower limit touched the next line, and a formula that fell at the top of a page
+  touched the paragraph under it.
 - An emoji that no bundled face can draw (they carry no color glyphs) printed as an empty box, or as a question mark, and
   left a gap in the heading or list item it started. It is now left out, with the space that set it apart, so the words
   around it read as written. A missing glyph that is not an emoji (a script the faces lack) is still shown as the face's

@@ -1808,7 +1808,10 @@ private struct Layout {
             currentPage.beginActualText(parsed.linearizedText)
             defer { currentPage.endMarkedContent() }
             try drawMathBox(box, x: x, baselineY: baselineY)
-            y = baselineY - box.depth - bottomSpacing
+            // The cursor is the next line's baseline, and its glyphs rise an ascender above it: the drop carries that ascender, so the
+            // next line does not touch the formula's lowest ink (a sum's lower limit, a fraction's denominator).
+            let nextLineAscender = fontSize(for: listDepth > 0 ? .list : .paragraph) * 0.75
+            y = baselineY - box.depth - bottomSpacing - nextLineAscender
         } catch let error as MarkdownPDFError {
             throw error
         } catch {
