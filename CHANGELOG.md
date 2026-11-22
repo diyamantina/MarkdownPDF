@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Board tiles: a fenced block ` ```tile TYPE ` draws a status pill (`pill`), a progress bar
+  (`progress`) or a row of figure cards (`kpi`). The lines of the body are the lines of the
+  same tile on a TileDown page (`status: running`, `value: 37`, `max: 120`, `kpi: Open issues`),
+  so a page and its print say the same thing. The state of a pill and of a bar is always printed
+  as a word, never by color alone; the bar's fill is exact integer arithmetic in whole hundredths
+  of a percent, rounded down (1 of 3 is 33.33 percent), with the count written as `37 of 120 (30%)`;
+  a card's change is a drawn arrow, the word `up`, `down` or `flat`, and its text. A block the
+  engine cannot draw (an unknown type, a missing line, a value above the total) is printed as a
+  code block that says why, with its body, and nothing is guessed.
+
 ## [0.15.0] - 2026-11-16
 
 ### Added

@@ -899,6 +899,8 @@ private struct Layout {
                 try renderMermaidBlock(code)
             } else if isChartCodeBlock(info) {
                 try renderChartFenceBlock(code)
+            } else if let tileType = tileFenceType(info) {
+                try renderTileBlock(type: tileType, code: code)
             } else if isVerticalCodeBlock(info) {
                 try renderVerticalBlock(code)
             } else {
@@ -5387,5 +5389,241 @@ private extension PDFTextRun {
             inlineMathBox: inlineMathBox,
             isIndexable: isIndexable,
         )
+    }
+}
+
+// MARK: - Board tiles
+
+/// Drawing of the board tiles: a pill, a progress bar and a row of figure cards, in the PDF.
+///
+/// The colors are the hues of the page's status colors in print (blue running, gray waiting, amber blocked, green
+/// done, red failed), and the word of the state is always printed, so no color is ever the only signal. Every figure
+/// is drawn from the exact numbers of ``TileBlock``.
+extension Layout {
+    /// The tile type of a ```` ```tile TYPE ```` fence, or nil when the fence is not a tile fence.
+    private func tileFenceType(_ info: String?) -> String? {
+        let words = info?.split(whereSeparator: \.isWhitespace).map(String.init) ?? []
+        guard words.count == 2, words[0].lowercased() == "tile" else {
+            return nil
+        }
+        return words[1].lowercased()
+    }
+
+    private mutating func renderTileBlock(type: String, code: String) throws {
+        switch TileBlock.parse(type: type, body: code) {
+        case let .tile(tile):
+            switch tile {
+            case let .pill(pill): try drawPill(pill)
+            case let .progress(progress): try drawProgress(progress)
+            case let .kpi(cards): try drawKPI(cards)
+            }
+        case let .unsupported(reason):
+            try renderCodeBlock("Unsupported tile: \(reason)\n\(code)")
+        }
+    }
+
+    private static func tileFill(_ status: TileBlock.Status) -> PDFColor {
+        switch status {
+        case .running: PDFColor(red: 0.86, green: 0.92, blue: 1.0)
+        case .waiting: PDFColor(red: 0.93, green: 0.94, blue: 0.95)
+        case .blocked: PDFColor(red: 1.0, green: 0.93, blue: 0.78)
+        case .done: PDFColor(red: 0.86, green: 0.96, blue: 0.88)
+        case .failed: PDFColor(red: 1.0, green: 0.88, blue: 0.88)
+        }
+    }
+
+    private static func tileInk(_ status: TileBlock.Status) -> PDFColor {
+        switch status {
+        case .running: PDFColor(red: 0.11, green: 0.26, blue: 0.73)
+        case .waiting: PDFColor(red: 0.33, green: 0.37, blue: 0.42)
+        case .blocked: PDFColor(red: 0.57, green: 0.31, blue: 0.04)
+        case .done: PDFColor(red: 0.08, green: 0.46, blue: 0.21)
+        case .failed: PDFColor(red: 0.69, green: 0.13, blue: 0.13)
+        }
+    }
+
+    private static func toneColor(_ tone: TileBlock.Tone) -> PDFColor {
+        switch tone {
+        case .good: PDFColor(red: 0.08, green: 0.46, blue: 0.21)
+        case .bad: PDFColor(red: 0.69, green: 0.13, blue: 0.13)
+        case .neutral: PDFColor(red: 0.33, green: 0.37, blue: 0.42)
+        }
+    }
+
+    private static let tileRule = PDFColor(red: 0.8, green: 0.82, blue: 0.85)
+    private static let tileMuted = PDFColor(red: 0.35, green: 0.38, blue: 0.43)
+
+    private func tileRun(_ text: String, bold: Bool = false, size: Double, color: PDFColor) -> PDFTextRun {
+        PDFTextRun(text: text, font: standardFont(for: bold ? .bold : .regular), size: size, color: color)
+    }
+
+    // MARK: pill
+
+    private mutating func drawPill(_ pill: TileBlock.Pill) throws {
+        let size = fontSize(for: .paragraph)
+        let padding = 5.0
+        let height = size + 2 * padding
+        let label = pill.label.map { tileRun($0 + "  ", size: size, color: .black) }
+        let word = tileRun(pill.status.rawValue, bold: true, size: size, color: Self.tileInk(pill.status))
+        let labelWidth = try label.map { try inkWidth(ofLine: [$0]) } ?? 0
+        let wordWidth = try inkWidth(ofLine: [word])
+        let width = min(contentWidth, labelWidth + wordWidth + 4 * padding)
+        ensureSpace(height)
+        let figure = beginStructureElement(
+            .figure, attributes: PDFTaggedContent.Attributes(alternateDescription: "Status"),
+        )
+        let marked = beginMarkedContentForCurrentElement()
+        markBlockQuoteContentDrawn()
+        let left = options.margins.left
+        currentPage.drawRectangle(
+            x: left, y: y - height, width: width, height: height,
+            stroke: Self.tileInk(pill.status), fill: Self.tileFill(pill.status),
+        )
+        let baseline = y - padding - size * 0.8
+        var x = left + padding * 2
+        if let label {
+            try drawRuns([label], x: x, y: baseline)
+            x += labelWidth
+        }
+        try drawRuns([word], x: x, y: baseline)
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figure)
+        y -= height + figureTrailingSpacing
+    }
+
+    // MARK: progress
+
+    private mutating func drawProgress(_ progress: TileBlock.Progress) throws {
+        let size = fontSize(for: .paragraph)
+        let barHeight = 8.0
+        let textHeight = size * 1.4
+        let height = textHeight + 4 + barHeight
+        ensureSpace(height)
+        let name = progress.label ?? "Progress"
+        let figure = beginStructureElement(
+            .figure, attributes: PDFTaggedContent.Attributes(alternateDescription: "\(name): \(progress.numbers)"),
+        )
+        let marked = beginMarkedContentForCurrentElement()
+        markBlockQuoteContentDrawn()
+        let left = options.margins.left
+        let baseline = y - size
+        var x = left
+        if let label = progress.label {
+            let labelRun = tileRun(label + " ", size: size, color: .black)
+            try drawRuns([labelRun], x: x, y: baseline)
+            x += try inkWidth(ofLine: [labelRun]) + size * 0.3
+        }
+        try drawRuns([tileRun(progress.numbers, bold: true, size: size, color: .black)], x: x, y: baseline)
+        let trackTop = y - textHeight - 4
+        currentPage.drawRectangle(
+            x: left, y: trackTop - barHeight, width: contentWidth, height: barHeight,
+            stroke: Self.tileRule, fill: PDFColor(red: 0.93, green: 0.94, blue: 0.96),
+        )
+        let fillWidth = contentWidth * Double(progress.hundredths) / 10000
+        if fillWidth > 0 {
+            currentPage.drawRectangle(
+                x: left, y: trackTop - barHeight, width: fillWidth, height: barHeight,
+                stroke: nil, fill: Self.tileInk(progress.status),
+            )
+        }
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figure)
+        y -= height + figureTrailingSpacing
+    }
+
+    // MARK: kpi
+
+    private mutating func drawKPI(_ cards: [TileBlock.KPICard]) throws {
+        let size = fontSize(for: .paragraph)
+        let gap = 8.0
+        let padding = 8.0
+        let minimumWidth = 120.0
+        let perRow = max(1, min(cards.count, Int((contentWidth + gap) / (minimumWidth + gap))))
+        let cardWidth = (contentWidth - gap * Double(perRow - 1)) / Double(perRow)
+        let cardHeight = padding * 2 + size * 0.9 + size * 2.0 + size * 1.2 + size * 1.0
+        let rows = stride(from: 0, to: cards.count, by: perRow).map {
+            Array(cards[$0 ..< min($0 + perRow, cards.count)])
+        }
+        for row in rows {
+            ensureSpace(cardHeight)
+            let figure = beginStructureElement(
+                .figure, attributes: PDFTaggedContent.Attributes(alternateDescription: "Figures"),
+            )
+            let marked = beginMarkedContentForCurrentElement()
+            markBlockQuoteContentDrawn()
+            for (index, card) in row.enumerated() {
+                try drawCard(
+                    card, x: options.margins.left + Double(index) * (cardWidth + gap),
+                    width: cardWidth, height: cardHeight, size: size, padding: padding,
+                )
+            }
+            endMarkedContentIfNeeded(marked)
+            endStructureElement(figure)
+            y -= cardHeight + gap
+        }
+        // each row was followed by a gap; the last one is followed by the spacing of a figure instead
+        y += gap - figureTrailingSpacing
+    }
+
+    private mutating func drawCard(
+        _ card: TileBlock.KPICard,
+        x: Double,
+        width: Double,
+        height: Double,
+        size: Double,
+        padding: Double,
+    ) throws {
+        currentPage.drawRectangle(
+            x: x, y: y - height, width: width, height: height,
+            stroke: Self.tileRule, fill: PDFColor(red: 0.97, green: 0.98, blue: 0.99),
+        )
+        let inner = width - 2 * padding
+        var baseline = y - padding - size * 0.75
+        try drawRuns(
+            [tileRun(card.label, size: size * 0.8, color: Self.tileMuted)], x: x + padding, y: baseline, maxWidth: inner,
+        )
+        baseline -= size * 1.8
+        try drawRuns(
+            [tileRun(card.value, bold: true, size: size * 1.6, color: .black)], x: x + padding, y: baseline, maxWidth: inner,
+        )
+        baseline -= size * 1.2
+        if let change = card.change {
+            let tone = Self.toneColor(change.tone)
+            drawArrow(change.trend, x: x + padding, baseline: baseline, size: size * 0.8, color: tone)
+            let text = "\(change.trend.rawValue) \(change.delta)"
+            try drawRuns(
+                [tileRun(text, size: size * 0.8, color: tone)],
+                x: x + padding + size * 1.1, y: baseline, maxWidth: inner - size * 1.1,
+            )
+        }
+        if let note = card.note {
+            baseline -= size * 1.0
+            try drawRuns(
+                [tileRun(note, size: size * 0.7, color: Self.tileMuted)], x: x + padding, y: baseline, maxWidth: inner,
+            )
+        }
+    }
+
+    /// The arrow of a change, drawn as a small triangle (up, down) or a bar (flat), so it needs no glyph of any font.
+    private func drawArrow(_ trend: TileBlock.Trend, x: Double, baseline: Double, size: Double, color: PDFColor) {
+        let half = size * 0.45
+        let midY = baseline + size * 0.3
+        typealias Point = PDFPageCanvas.Point
+        switch trend {
+        case .up:
+            let points = [
+                Point(x: x, y: midY - half), Point(x: x + 2 * half, y: midY - half), Point(x: x + half, y: midY + half),
+            ]
+            currentPage.drawPolygon(points: points, stroke: nil, fill: color)
+        case .down:
+            let points = [
+                Point(x: x, y: midY + half), Point(x: x + 2 * half, y: midY + half), Point(x: x + half, y: midY - half),
+            ]
+            currentPage.drawPolygon(points: points, stroke: nil, fill: color)
+        case .flat:
+            currentPage.drawRectangle(
+                x: x, y: midY - half * 0.4, width: 2 * half, height: half * 0.8, stroke: nil, fill: color,
+            )
+        }
     }
 }
