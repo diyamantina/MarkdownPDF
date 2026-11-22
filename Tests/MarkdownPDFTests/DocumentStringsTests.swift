@@ -9,22 +9,52 @@ struct DocumentStringsTests {
 
     // MARK: The default
 
-    @Test("The default is WinAnsi")
-    func defaultIsWinAnsi() {
-        #expect(PDFOptions().documentStrings == .winAnsi)
+    @Test("The default is Unicode: the strings of the outline and the Info dictionary keep every character")
+    func defaultIsUnicode() {
+        #expect(PDFOptions().documentStrings == .unicode)
     }
 
-    @Test("An explicit WinAnsi render is byte identical to the default render")
-    func explicitWinAnsiMatchesDefault() throws {
+    @Test("An explicit Unicode render is byte identical to the default render")
+    func explicitUnicodeMatchesDefault() throws {
         let markdown = "# \(name)\n\n## Logro\u{00F1}o \u{2192} Skopje\n\nBody."
         let implicit = try MarkdownPDFRenderer(
             options: PDFOptions(title: name, taggedPDF: .enabled, author: name),
         ).render(markdown: markdown)
         let explicit = try MarkdownPDFRenderer(
-            options: PDFOptions(title: name, taggedPDF: .enabled, author: name, documentStrings: .winAnsi),
+            options: PDFOptions(title: name, taggedPDF: .enabled, author: name, documentStrings: .unicode),
         ).render(markdown: markdown)
 
         #expect(implicit == explicit)
+    }
+
+    /// The owner's fault: the outline of a PDF (the bookmarks in a viewer's sidebar) showed `? The Foundation Š ExtremePackaging` for the heading
+    /// that starts with an emoji and holds an em dash: the emoji as `?` and the dash as another letter, because the title was written as 8-bit text.
+    /// Read back with our own reader, the title of each outline entry is the heading text.
+    @Test("The outline reads back with the emoji and the em dash of the headings", arguments: [
+        "\u{1F9E9} The Foundation \u{2014} ExtremePackaging",
+        "\u{1F680} Evolving Toward OpenAPI",
+        "1. OpenAPI Schema & Code Generation",
+        "YAMLMerger \u{2014} Schemas",
+        "Mihaljevi\u{0107} \u{201C}quoted\u{201D} \u{20AC}5",
+    ])
+    func outlineReadsBackWhole(heading: String) throws {
+        let data = try MarkdownPDFRenderer().render(markdown: "# \(heading)\n\nBody.\n")
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.outline.map(\.title) == [heading], Comment(rawValue: "\(document.outline.map(\.title))"))
+    }
+
+    @Test("The Info title and author read back whole too")
+    func infoReadsBackWhole() throws {
+        let data = try MarkdownPDFRenderer(options: PDFOptions(title: "\u{1F9E9} A \u{2014} B", author: name)).render(markdown: "Body.\n")
+        let document = try PDFDocumentReader(data: data)
+        #expect(document.title == "\u{1F9E9} A \u{2014} B")
+        #expect(document.author == name)
+    }
+
+    @Test("WinAnsi, asked for, still writes the old bytes: the em dash is one byte and the emoji a question mark")
+    func winAnsiAskedFor() throws {
+        let data = try MarkdownPDFRenderer(options: PDFOptions(documentStrings: .winAnsi)).render(markdown: "# \u{1F9E9} A \u{2014} B\n\nBody.\n")
+        #expect(try PDFDocumentReader(data: data).outline.map(\.title) != ["\u{1F9E9} A \u{2014} B"])
     }
 
     @Test("WinAnsi still replaces a character it cannot hold")

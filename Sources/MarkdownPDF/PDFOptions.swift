@@ -82,7 +82,8 @@ public struct PDFOptions: Equatable, Sendable {
 
     /// How the Info `/Title` and `/Author`, the outline titles and the alternate
     /// descriptions of a tagged PDF are written. The default is
-    /// ``DocumentStrings/winAnsi``, which preserves existing output byte for byte.
+    /// ``DocumentStrings/unicode``, which keeps every character (an emoji, an em dash);
+    /// ``DocumentStrings/winAnsi`` writes the 8-bit output of versions before 0.16.0.
     public var documentStrings: DocumentStrings
 
     /// What stays on one page when it fits on one: nothing, list items, sections or
@@ -113,7 +114,7 @@ public struct PDFOptions: Equatable, Sendable {
         ignoreHTMLComments: IgnoreHTMLComments = .disabled,
         colophon: Colophon = .disabled,
         lineHeightScale: Double = Self.defaultLineHeightScale,
-        documentStrings: DocumentStrings = .winAnsi,
+        documentStrings: DocumentStrings = .unicode,
         keepTogether: KeepTogether = [],
         omitUndrawableEmoji: Bool = false,
     ) {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `PDFOptions.documentStrings` now defaults to `.unicode`. The outline (the bookmarks in a viewer's sidebar), the Info `/Title` and `/Author`
+  and the alternate text of a tagged PDF were written as 8-bit text: a heading that starts with an emoji and holds an em dash showed in the
+  sidebar with a question mark for the emoji and another letter for the dash. They are written as UTF-16BE text
+  strings now when they hold anything but ASCII, and read back whole. `.winAnsi` is kept for the 8-bit output of versions before 0.16.0.
+
 ## [0.16.0] - 2026-11-22
 
 The PDF of a page now matches the page: the tiles are drawn, formulas use the real math font, emoji are drawn in colour, and the diagrams and
