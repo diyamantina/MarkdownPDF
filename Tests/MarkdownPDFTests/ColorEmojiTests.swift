@@ -2,12 +2,15 @@ import Foundation
 @testable import MarkdownPDF
 import Testing
 
-/// Drawing emoji from a COLR/CPAL colour face. The face file is not in the repository until it is approved: these tests run when the variable
-/// `TWEMOJI_FONT` names a Twemoji.Mozilla.ttf, and are reported as not run otherwise.
+/// Drawing emoji from a COLR/CPAL colour face. The face is bundled with the package; the variable
+/// `TWEMOJI_FONT` can name another Twemoji.Mozilla.ttf to try.
 private enum EmojiFixture {
     static let source: PDFOptions.EmbeddedFontSource? = {
-        guard let path = ProcessInfo.processInfo.environment["TWEMOJI_FONT"], let data = FileManager.default.contents(atPath: path) else { return nil }
-        return try? PDFOptions.EmbeddedFontSource(data: data, baseName: "Twemoji")
+        // The bundled face, unless the variable `TWEMOJI_FONT` names another file (a newer release to try).
+        if let path = ProcessInfo.processInfo.environment["TWEMOJI_FONT"], let data = FileManager.default.contents(atPath: path) {
+            return try? PDFOptions.EmbeddedFontSource(data: data, baseName: "Twemoji")
+        }
+        return BundledFonts.twemoji
     }()
 
     static var available: Bool {

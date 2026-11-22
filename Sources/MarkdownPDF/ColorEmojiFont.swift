@@ -4,7 +4,10 @@ import Foundation
 /// glyph, each layer's outline filled as a vector path in its palette colour, the first at the bottom. The text of the emoji is carried by one
 /// invisible glyph, the base glyph, whose `/ToUnicode` entry is the emoji itself: a reader that ignores `/ActualText` (PDFKit, so Preview) finds
 /// the emoji there, and the layers, being paths, are no text at all.
-struct ColorEmojiFont {
+///
+/// Immutable after `init` (every stored property is a `let` value type read only), so the one bundled instance is shared between threads:
+/// `@unchecked Sendable` because the font parser types it holds are not declared `Sendable`.
+struct ColorEmojiFont: @unchecked Sendable {
     /// One layer of a drawn emoji: its outline in font units and its colour.
     struct Layer: Equatable {
         var segments: [TrueTypeGlyphOutline.Segment]

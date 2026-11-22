@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Colour emoji. A single emoji code point, or one followed by the emoji variation selector, is drawn in colour: each layer of its glyph in
+  the bundled Twemoji.Mozilla face is filled as a vector path in its palette colour, and the emoji is also one invisible glyph with its own
+  `/ToUnicode` entry inside an `/ActualText` span, so copying and searching an emoji work in readers that ignore `/ActualText` (PDFKit, so
+  Preview) as well as in those that use it. The line layout, its width and its height, is unchanged. `PDFOptions.EmbeddedFonts.emoji` takes
+  another colour face (a TrueType font with `COLR` version 0 and `CPAL` tables). The `COLR`, `CPAL` and `glyf` tables are read by the package
+  (Pure Swift). The face is Twemoji.Mozilla 0.7.0: the artwork is Twemoji by Twitter, Inc. and other contributors under CC BY 4.0, the build
+  code is Mozilla's under the Apache License 2.0; both licenses are in `Sources/MarkdownPDF/Fonts` and credited in the README. Under a
+  conformance profile no colour face is used. Sequences (flags, keycaps, skin tones, joined sequences) are a later step.
 - The doughnut chart: `type: doughnut` (or `donut`) in a `chart` fence draws a pie with a hole, with the same `slice:` entries or one
   value series, the same legend and the same limits as a pie. The slices sweep `2 * pi * value / total`, clockwise from twelve
   o'clock; the hole radius is 0.55 of the outer radius. It was refused before, and the fence was printed as source.
@@ -72,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list item it started. The new option `PDFOptions.omitUndrawableEmoji` (off by default, so the text stays as written and
   extractable) leaves such an emoji out, with the space that set it apart, so the words around it read as written. A missing
   glyph that is not an emoji (a script the faces lack) is still shown as the face's missing-glyph box, and under a
-  conformance profile nothing is dropped.
+  conformance profile nothing is dropped. An emoji the bundled colour face can draw is drawn, not left out: the option affects only an emoji no face can draw.
 - A typeset formula with a symbol the base fonts lack (an integral, an infinity, a Greek letter, a relation, a sum) was
   spelled out in words ("int", "infinity", "pi") in a document that had no other text outside WinAnsi. Formulas are now
   drawn with the Latin Modern Math face bundled with the package (the math font the TileDown site draws its formulas

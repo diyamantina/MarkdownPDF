@@ -16,7 +16,7 @@ public struct PDFOptions: Equatable, Sendable {
     public var conformance: Conformance
 
     /// Leaves out an emoji that no embedded face can draw, with the space that set it apart, instead of drawing the face's
-    /// missing-glyph box (the bundled faces have no color glyphs). Off by default, so the text stays as written and extractable;
+    /// missing-glyph box (an emoji the bundled colour face cannot draw either: one it can draw is drawn). Off by default, so the text stays as written and extractable;
     /// a caller that prints articles turns it on. A missing glyph that is not an emoji is still drawn as the box.
     public var omitUndrawableEmoji: Bool
 

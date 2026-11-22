@@ -820,3 +820,14 @@ building something that cannot comply with the AGPL terms, a
 [commercial license](COMMERCIAL.md) is available that exempts you from them.
 
 See [COMMERCIAL.md](COMMERCIAL.md) for commercial licensing.
+
+## Bundled fonts and credits
+
+The package bundles three font sets, each with its exact upstream license beside it in `Sources/MarkdownPDF/Fonts`:
+
+- DejaVu Sans, for text outside WinAnsi (`LICENSE-DejaVu.txt`).
+- Latin Modern Math, for typeset formulas (`LICENSE-LatinModernMath-GUST.txt`, GUST Font License).
+- Twemoji.Mozilla, for colour emoji (`LICENSE-Twemoji-Mozilla.txt`). The emoji graphics are Twemoji by Twitter, Inc. and other
+  contributors, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the font is the COLR/CPAL build of
+  [Mozilla's twemoji-colr](https://github.com/mozilla/twemoji-colr) (version 0.7.0, build code under the Apache License 2.0). The
+  package reads the font's outlines and draws them as vector paths; no change is made to the artwork.

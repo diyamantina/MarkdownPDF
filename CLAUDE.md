@@ -27,7 +27,9 @@ also builds on Windows and WebAssembly (WASI).
 - PDF output is serialized by hand.
 - Bundle only the approved faces, each with its exact upstream license: the
   DejaVu faces, and Latin Modern Math (GUST Font License, approved by the owner
-  on 2026-11-22, for typeset formulas only). Keep WinAnsi-only documents on PDF
+  on 2026-11-22, for typeset formulas only), and Twemoji.Mozilla (CC BY 4.0 art,
+  Apache License 2.0 build code, approved by the owner on 2026-11-22, for colour
+  emoji only). Keep WinAnsi-only documents on PDF
   base fonts, select the DejaVu faces when parsed content needs glyphs outside
   WinAnsi, and draw a formula with a symbol the base fonts lack with Latin
   Modern Math.

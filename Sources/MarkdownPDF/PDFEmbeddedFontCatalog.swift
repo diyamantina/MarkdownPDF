@@ -37,7 +37,9 @@ struct PDFEmbeddedFontCatalog {
     ) throws {
         self.renderingMissingGlyphPolicy = renderingMissingGlyphPolicy
         self.omitUndrawableEmoji = omitUndrawableEmoji
-        colorEmoji = try fonts.emoji.map { try ColorEmojiFont(source: $0) }
+        // With no emoji face given, the bundled colour face draws emoji.
+        // Under a conformance profile (`.reject`) no colour face is used: a missing glyph is refused as before, so a conformance claim is unchanged.
+        colorEmoji = renderingMissingGlyphPolicy == .reject ? nil : try fonts.emoji.map { try ColorEmojiFont(source: $0) } ?? BundledFonts.colorEmoji
         var entries: [StandardFont: Entry] = [:]
         try Self.add(fonts.regular, for: .helvetica, resourceName: "EF1", parseMathTables: parseMathTables, to: &entries)
         try Self.add(fonts.bold, for: .helveticaBold, resourceName: "EF2", parseMathTables: parseMathTables, to: &entries)

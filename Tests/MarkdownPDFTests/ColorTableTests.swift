@@ -149,10 +149,9 @@ struct ColorTableTests {
 
     @Test("the Twemoji COLR font: its COLR and CPAL parse, and the lightbulb is a base glyph with layers whose palette indices exist")
     func twemojiTables() throws {
-        guard let path = ProcessInfo.processInfo.environment["TWEMOJI_FONT"], let data = FileManager.default.contents(atPath: path) else {
-            // The font file is not in the repository until the owner approves it: this witness runs when it is named.
-            return
-        }
+        // The bundled face, unless the variable `TWEMOJI_FONT` names another file.
+        let named = ProcessInfo.processInfo.environment["TWEMOJI_FONT"].flatMap { FileManager.default.contents(atPath: $0) }
+        let data = try #require(named ?? BundledFonts.twemoji?.data, "no colour face to read")
         let bytes = [UInt8](data)
         let tables = try TrueTypeFontParser().parse(data).tables
         func slice(_ tag: String) throws -> [UInt8] {

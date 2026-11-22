@@ -35,6 +35,18 @@ enum BundledFonts {
         return try? source(named: "latinmodern-math", extension: "otf", in: bundle)
     }()
 
+    /// The Twemoji.Mozilla colour face bundled with MarkdownPDF (Mozilla's COLR/CPAL build of the Twemoji art: the art is CC BY 4.0, the build code
+    /// Apache License 2.0). It draws emoji only, and is nil if an installation omits the resource.
+    static let twemoji: PDFOptions.EmbeddedFontSource? = {
+        guard let bundle = resourceBundle else {
+            return nil
+        }
+        return try? source(named: "Twemoji.Mozilla", in: bundle)
+    }()
+
+    /// The bundled colour emoji face, read once for the process (nil if the resource is absent or unreadable).
+    static let colorEmoji: ColorEmojiFont? = twemoji.flatMap { try? ColorEmojiFont(source: $0) }
+
     /// The synthesized `Bundle.module` accessor terminates when its resource
     /// bundle is absent. Use it only after proving its preferred path exists, then
     /// fall back to the exact bundle beside a SwiftPM test executable. Loading the
