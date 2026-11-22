@@ -406,7 +406,7 @@ struct MermaidDiagramTests {
             ("subgraph G\n a\n end\nG --> G", "itself or its own node"),
             ("subgraph G\n a\n end\nG ~~~ a", "itself or its own node"),
             ("subgraph\n x\n end", "needs an id"),
-            ("subgraph A B\n x\n end", "subgraph"),
+            ("subgraph A((B))\n x\n end", "subgraph"),
         ],
     )
     func subgraphMisuseIsReported(_ body: String, _ expected: String) {

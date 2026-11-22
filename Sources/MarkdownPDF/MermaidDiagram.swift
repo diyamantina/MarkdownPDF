@@ -382,11 +382,18 @@ struct MermaidDiagram: Equatable {
                 return .failure("`subgraph` needs an id, as in `subgraph id[\"Title\"]`")
             }
             let endpoint: Endpoint
-            switch parseEndpoint(header) {
-            case let .success(parsed):
-                endpoint = parsed
-            case let .failure(reason):
-                return .failure("invalid subgraph header: \(reason)")
+            let words = header.split(whereSeparator: \.isWhitespace)
+            if words.count > 1, !header.contains(where: { "[({\"".contains($0) }) {
+                // A bare title of several words, `subgraph After 1.6.5`: the title is the whole text, and it names the group.
+                let title = words.joined(separator: " ")
+                endpoint = Endpoint(id: title, label: title)
+            } else {
+                switch parseEndpoint(header) {
+                case let .success(parsed):
+                    endpoint = parsed
+                case let .failure(reason):
+                    return .failure("invalid subgraph header: \(reason)")
+                }
             }
             guard !groups.contains(where: { $0.id == endpoint.id }) else {
                 return .failure("subgraph `\(endpoint.id)` is declared twice")

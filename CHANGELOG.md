@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rectangle.
 
 ### Fixed
+- A Mermaid `subgraph` whose header is a bare title of several words (`subgraph After 1.6.5`) is drawn with that title. It was refused
+  ("invalid subgraph header"). A header with a shape that is not drawn is still refused by name.
 - A Mermaid link whose straight line would run through other nodes (a back edge over a row) bends around them as an arc, and its label
   sits on the arc, with the diagram made taller by what the arc reaches. A label wider than the gap between two neighbouring nodes lifts
   its link into an arc until the label clears both. Before, such a diagram was given up as source ("edge label ... collides with a diagram
