@@ -73,6 +73,9 @@ step: a single emoji and an emoji with its variation selector are drawn.
   0.16.0, pass `documentStrings: .winAnsi`.
 
 ### Fixed
+- An emoji face given by the caller (`PDFOptions.EmbeddedFonts.emoji`) is kept when the document needs the bundled text faces (no text face
+  given and a character outside WinAnsi). The caller's math face was carried over to the bundled faces and the emoji face was not, so the
+  bundled Twemoji face silently replaced it.
 - A character that the face of a run lacks is drawn with the bundled proportional face when that has it, instead of the missing-glyph box. The
   monospaced face has no Braille patterns, so the spinner of a command line tool (`U+2839`, `U+2827`) in a code block, a code span or a table
   cell was drawn as `.notdef`; the other characters of the run stay in their own face. A character that no bundled face has is still the

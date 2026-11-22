@@ -90,9 +90,12 @@ public struct MarkdownPDFRenderer: Sendable {
         // which would otherwise be spelled out ("int", "infinity", "pi").
         var resolvedOptions = options
         if options.embeddedFonts.hasNoTextFaces, document.containsNonWinAnsiText {
+            // The faces the caller gave for the formulas and the emoji are kept; only the text faces are the bundled ones.
             let math = options.embeddedFonts.math
+            let emoji = options.embeddedFonts.emoji
             resolvedOptions.embeddedFonts = .dejaVu
             resolvedOptions.embeddedFonts.math = math
+            resolvedOptions.embeddedFonts.emoji = emoji
         }
         // A formula with a symbol the base fonts lack is drawn with the math face, not spelled out ("int", "infinity", "pi").
         if options.mathTypesetting.isEnabled, resolvedOptions.embeddedFonts.math == nil, document.containsMathNeedingSymbols {
