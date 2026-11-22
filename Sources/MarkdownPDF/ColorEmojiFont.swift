@@ -1,18 +1,27 @@
 import Foundation
 
-/// A colour emoji face: a TrueType font with a `COLR` (version 0) and a `CPAL` table, such as Twemoji. An emoji is drawn as its base glyph's
-/// layers, each layer glyph shown in its palette colour at the same pen position, the first at the bottom.
+/// A colour emoji face: a TrueType font with a `COLR` (version 0) and a `CPAL` table, such as Twemoji. An emoji is drawn as the layers of its base
+/// glyph, each layer's outline filled as a vector path in its palette colour, the first at the bottom. The text of the emoji is carried by one
+/// invisible glyph, the base glyph, whose `/ToUnicode` entry is the emoji itself: a reader that ignores `/ActualText` (PDFKit, so Preview) finds
+/// the emoji there, and the layers, being paths, are no text at all.
 struct ColorEmojiFont {
-    /// One layer of a drawn emoji.
+    /// One layer of a drawn emoji: its outline in font units and its colour.
     struct Layer: Equatable {
-        var glyph: ShapedTextMapping.Glyph
+        var segments: [TrueTypeGlyphOutline.Segment]
         /// The palette colour, nil for the foreground colour of the text.
         var color: PDFColor?
     }
 
+    /// What a cluster is drawn as.
+    struct Drawing: Equatable {
+        /// The invisible base glyph that carries the emoji as text.
+        var base: ShapedTextMapping
+        var layers: [Layer]
+        var unitsPerEm: Double
+    }
+
     enum ColorEmojiFontError: Error, Equatable {
         case missingTable(String)
-        case glyphOutOfRange(UInt16)
     }
 
     let resource: PDFEmbeddedFontResource
@@ -20,6 +29,7 @@ struct ColorEmojiFont {
     private let metadata: TrueTypeFontParser.Metadata
     private let colr: COLRTable
     private let cpal: CPALTable
+    private let outlines: TrueTypeGlyphOutline
 
     init(source: PDFOptions.EmbeddedFontSource, resourceName: String = "EF6") throws {
         let metadata = try TrueTypeFontParser().parse(source.data, faceIndex: source.faceIndex, preferFullUnicodeCMap: true)
@@ -31,6 +41,9 @@ struct ColorEmojiFont {
         }
         colr = try COLRTable(bytes: table("COLR"))
         cpal = try CPALTable(bytes: table("CPAL"))
+        outlines = try TrueTypeGlyphOutline(
+            glyf: table("glyf"), loca: table("loca"), longOffsets: metadata.head.indexToLocFormat != 0, glyphCount: Int(metadata.maxp.numGlyphs),
+        )
         self.metadata = metadata
         mapper = TrueTypeGlyphMapper(data: source.data, metadata: metadata)
         resource = PDFEmbeddedFontResource(resourceName: resourceName, fontProgram: source.data, metadata: metadata, baseName: source.baseName)
@@ -50,45 +63,30 @@ struct ColorEmojiFont {
         return Double(metadata.hmtx.advanceWidths[Int(base)]) / Double(metadata.head.unitsPerEm) * fontSize
     }
 
-    /// The layers to draw for a cluster, bottom first; nil when the font cannot draw it. A base glyph with no colour layers is drawn as itself,
-    /// in the foreground colour.
-    func layers(of cluster: EmojiSegmenter.Cluster, fontSize: Double) -> [Layer]? {
-        guard let base = baseGlyph(of: cluster) else { return nil }
+    /// The drawing of a cluster; nil when the font cannot draw it. A base glyph with no colour layers is drawn as its own outline, in the
+    /// foreground colour.
+    func drawing(of cluster: EmojiSegmenter.Cluster, fontSize: Double) -> Drawing? {
+        guard let base = baseGlyph(of: cluster), Int(base) < metadata.hmtx.advanceWidths.count else { return nil }
         let records = colr.layers(forBaseGlyph: base) ?? [COLRTable.Layer(glyphID: base, paletteIndex: COLRTable.foregroundPaletteIndex)]
         var layers: [Layer] = []
         for record in records {
-            guard record.glyphID < metadata.maxp.numGlyphs, Int(record.glyphID) < metadata.hmtx.advanceWidths.count,
-                  Self.privateScalar(forGlyph: record.glyphID) != nil
-            else { return nil }
-            let advanceWidth = metadata.hmtx.advanceWidths[Int(record.glyphID)]
-            let cid = metadata.compositeCID(forGlyph: record.glyphID)
-            let glyph = ShapedTextMapping.Glyph(
-                glyphID: record.glyphID, cid: cid, pdfCharacterCode: cid, advanceWidth: advanceWidth,
-                advance: Double(advanceWidth) / Double(metadata.head.unitsPerEm) * fontSize,
-            )
+            guard let segments = try? outlines.segments(forGlyph: record.glyphID) else { return nil }
             let color = cpal.color(palette: 0, entry: record.paletteIndex).map {
                 PDFColor(red: Double($0.red) / 255, green: Double($0.green) / 255, blue: Double($0.blue) / 255)
             }
-            layers.append(Layer(glyph: glyph, color: color))
+            layers.append(Layer(segments: segments, color: color))
         }
-        return layers
-    }
-
-    /// The scalar a layer glyph's code stands for in the font's `/ToUnicode` map: a private-use scalar of plane 15 named by the glyph, so that two
-    /// layer glyphs never claim the same text (a code maps to one scalar) and one glyph always keeps its scalar. The extracted text of a drawn emoji
-    /// is the emoji itself, given by the `/ActualText` span around its layers, not these.
-    static func privateScalar(forGlyph glyph: UInt16) -> Unicode.Scalar? {
-        Unicode.Scalar(0xF0000 + UInt32(glyph))
-    }
-
-    /// The one-glyph text mapping of a layer.
-    func mapping(of layer: Layer) throws -> ShapedTextMapping {
-        guard let scalar = Self.privateScalar(forGlyph: layer.glyph.glyphID) else {
-            throw ColorEmojiFontError.glyphOutOfRange(layer.glyph.glyphID)
-        }
-        return try ShapedTextMapping(
-            sourceText: String(scalar),
-            clusters: [ShapedTextMapping.Cluster(sourceScalarRange: 0 ..< 1, normalizedText: String(scalar), glyphs: [layer.glyph], toUnicodeScalars: [scalar])],
+        let cid = metadata.compositeCID(forGlyph: base)
+        let advanceWidth = metadata.hmtx.advanceWidths[Int(base)]
+        let glyph = ShapedTextMapping.Glyph(
+            glyphID: base, cid: cid, pdfCharacterCode: cid, advanceWidth: advanceWidth,
+            advance: Double(advanceWidth) / Double(metadata.head.unitsPerEm) * fontSize,
         )
+        let scalar = cluster.base
+        guard let mapping = try? ShapedTextMapping(
+            sourceText: String(scalar),
+            clusters: [ShapedTextMapping.Cluster(sourceScalarRange: 0 ..< 1, normalizedText: String(scalar), glyphs: [glyph], toUnicodeScalars: [scalar])],
+        ) else { return nil }
+        return Drawing(base: mapping, layers: layers, unitsPerEm: Double(metadata.head.unitsPerEm))
     }
 }

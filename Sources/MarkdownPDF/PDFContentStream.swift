@@ -58,6 +58,8 @@ struct PDFContentStream {
         case showText(PDFSyntax.LiteralString)
         case showCIDText([UInt16])
         case endText
+        /// `Tr`: how the glyphs of the text are painted (0 fill, 3 invisible).
+        case setTextRenderingMode(Int)
         case setFillColor(PDFColor)
         case setStrokeColor(PDFColor)
         case setLineWidth(Double)
@@ -103,6 +105,8 @@ struct PDFContentStream {
                 "\(PDFSyntax.HexString(twoByteCodes: codes).serialized) Tj"
             case .endText:
                 "ET"
+            case let .setTextRenderingMode(mode):
+                "\(mode) Tr"
             case let .setFillColor(color):
                 "\(pdfNumber(color.red)) \(pdfNumber(color.green)) \(pdfNumber(color.blue)) rg"
             case let .setStrokeColor(color):

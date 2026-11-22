@@ -133,20 +133,57 @@ final class PDFPageCanvas {
             switch piece {
             case let .text(pieceRun, mapping):
                 try drawCIDText(mapping: mapping, fontResource: entry.resource, fontSize: pieceRun.size, x: penX, y: baselineY, color: pieceRun.color)
-            case let .emoji(cluster, layers, _):
+            case let .emoji(cluster, drawing, _):
+                // One `/ActualText` span holds the emoji: the invisible base glyph, whose `/ToUnicode` entry is the emoji, and the layers as paths.
                 let utf16: [UInt16] = [0xFEFF] + Array(cluster.text.utf16)
                 contentStream.append([.beginActualTextUTF16(PDFSyntax.HexString(twoByteCodes: utf16))])
-                for layer in layers {
-                    try drawCIDText(
-                        mapping: colorEmoji.mapping(of: layer), fontResource: colorEmoji.resource, fontSize: run.size,
-                        x: penX, y: baselineY, color: layer.color ?? run.color,
-                    )
+                try drawInvisibleCIDText(mapping: drawing.base, fontResource: colorEmoji.resource, fontSize: run.size, x: penX, y: baselineY)
+                let scale = run.size / drawing.unitsPerEm
+                for layer in drawing.layers {
+                    drawOutline(layer.segments, color: layer.color ?? run.color, scale: scale, x: penX, y: baselineY)
                 }
                 contentStream.append([.endMarkedContent])
             }
             penX += piece.advance
         }
         drawDecorations(for: run, x: x, y: baselineY, width: penX - x)
+    }
+
+    /// Text that is in the page and not on it (render mode 3): the glyph is registered with the font and carries its text for extraction, and paints
+    /// nothing.
+    private func drawInvisibleCIDText(
+        mapping: ShapedTextMapping,
+        fontResource: PDFEmbeddedFontResource,
+        fontSize: Double,
+        x: Double,
+        y: Double,
+    ) throws {
+        try resourceUsage.useEmbeddedFont(fontResource, mapping: mapping)
+        contentStream.append([
+            .beginText,
+            .setTextRenderingMode(3),
+            .setFont(PDFSyntax.Name(fontResource.resourceName), size: fontSize),
+            .moveText(x: x, y: y),
+            .showCIDText(mapping.clusters.flatMap(\.pdfCharacterCodes)),
+            .setTextRenderingMode(0),
+            .endText,
+        ])
+    }
+
+    /// A glyph outline (font units) filled in `color`, scaled by `scale` and placed with its origin at `x`, `y`.
+    private func drawOutline(_ segments: [TrueTypeGlyphOutline.Segment], color: PDFColor, scale: Double, x: Double, y: Double) {
+        guard !segments.isEmpty else { return }
+        var operators: [PDFContentStream.Operator] = [.saveGraphicsState, .setFillColor(color), .concatenateMatrix(a: scale, b: 0, c: 0, d: scale, e: x, f: y)]
+        for segment in segments {
+            switch segment {
+            case let .move(point): operators.append(.moveTo(x: point.x, y: point.y))
+            case let .line(point): operators.append(.lineTo(x: point.x, y: point.y))
+            case let .curve(c1, c2, end): operators.append(.curveTo(x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y, x3: end.x, y3: end.y))
+            case .close: operators.append(.closePath)
+            }
+        }
+        operators += [.fill, .restoreGraphicsState]
+        contentStream.append(operators)
     }
 
     func drawCIDText(

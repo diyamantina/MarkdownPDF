@@ -71,7 +71,7 @@ struct PDFEmbeddedFontCatalog {
     /// One piece of a laid-out run: plain text shaped by the run's own face, or an emoji drawn from the colour face.
     enum Piece {
         case text(run: PDFTextRun, mapping: ShapedTextMapping)
-        case emoji(cluster: EmojiSegmenter.Cluster, layers: [ColorEmojiFont.Layer], advance: Double)
+        case emoji(cluster: EmojiSegmenter.Cluster, drawing: ColorEmojiFont.Drawing, advance: Double)
 
         var advance: Double {
             switch self {
@@ -100,9 +100,9 @@ struct PDFEmbeddedFontCatalog {
             case let .text(text):
                 pending += text
             case let .emoji(cluster):
-                if let layers = colorEmoji.layers(of: cluster, fontSize: run.size), let advance = colorEmoji.advance(of: cluster, fontSize: run.size) {
+                if let drawing = colorEmoji.drawing(of: cluster, fontSize: run.size), let advance = colorEmoji.advance(of: cluster, fontSize: run.size) {
                     try flushText()
-                    pieces.append(.emoji(cluster: cluster, layers: layers, advance: advance))
+                    pieces.append(.emoji(cluster: cluster, drawing: drawing, advance: advance))
                     drewAny = true
                 } else {
                     pending += cluster.text

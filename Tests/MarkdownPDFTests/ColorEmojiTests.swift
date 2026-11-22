@@ -34,9 +34,11 @@ struct ColorEmojiTests {
         let font = try ColorEmojiFont(source: #require(EmojiFixture.source))
         for text in EmojiFixture.census {
             let cluster = try #require(EmojiSegmenter.cluster(of: Character(text)), "\(text) is not a cluster")
-            let layers = try #require(font.layers(of: cluster, fontSize: 12), "no layers for \(cluster.text.unicodeScalars.map(\.value))")
-            #expect(!layers.isEmpty && layers.allSatisfy { $0.glyph.glyphID != 0 })
-            #expect(layers.contains { $0.color != nil }, "no palette colour for \(text)")
+            let drawing = try #require(font.drawing(of: cluster, fontSize: 12), "no drawing for \(cluster.text.unicodeScalars.map(\.value))")
+            #expect(!drawing.layers.isEmpty && drawing.layers.allSatisfy { !$0.segments.isEmpty })
+            #expect(drawing.layers.contains { $0.color != nil }, "no palette colour for \(text)")
+            // The text of the drawing is one invisible base glyph, mapped to the emoji's base scalar: never a private-use scalar.
+            #expect(drawing.base.glyphs.count == 1 && drawing.base.glyphs[0].glyphID != 0 && drawing.base.toUnicodeText == String(cluster.base))
             #expect(font.advance(of: cluster, fontSize: 12).map { $0 > 6 && $0 < 24 } == true)
         }
     }
@@ -45,7 +47,7 @@ struct ColorEmojiTests {
     func lacking() throws {
         let font = try ColorEmojiFont(source: #require(EmojiFixture.source))
         let cluster = try EmojiSegmenter.Cluster(scalars: [#require(Unicode.Scalar(0x10FFFD))], base: #require(Unicode.Scalar(0x10FFFD)))
-        #expect(font.layers(of: cluster, fontSize: 12) == nil && font.advance(of: cluster, fontSize: 12) == nil)
+        #expect(font.drawing(of: cluster, fontSize: 12) == nil && font.advance(of: cluster, fontSize: 12) == nil)
     }
 
     @Test("a run's width is its text pieces plus the emoji advance: nothing is lost or added", .enabled(if: EmojiFixture.available))
@@ -92,11 +94,11 @@ struct ColorEmojiTests {
             let laidOut = try catalog.pieces(of: run, entry: entry)
             let pieces = try #require(laidOut, "\(text) is not laid out as pieces")
             #expect(pieces.count == 3, "\(text): \(pieces.count) pieces")
-            guard pieces.count == 3, case let .emoji(cluster, layers, advance) = pieces[1] else {
+            guard pieces.count == 3, case let .emoji(cluster, drawing, advance) = pieces[1] else {
                 Issue.record("the middle piece of \(text) is not an emoji piece")
                 continue
             }
-            #expect(cluster.text == text && !layers.isEmpty && advance > 0)
+            #expect(cluster.text == text && !drawing.layers.isEmpty && advance > 0)
             if case let .text(_, mapping) = pieces[0] {
                 #expect(!mapping.glyphs.contains { $0.glyphID == 0 })
             }
@@ -109,10 +111,17 @@ struct ColorEmojiTests {
         let text = String(decoding: pdf, as: UTF8.self)
         #expect(text.contains("/EF6"))
         // The rocket has several layers, each its own palette colour.
-        let colours = text.components(separatedBy: " rg\n").count - 1
+        let colours = text.components(separatedBy: " rg").count - 1
         #expect(colours >= 4, "\(colours) fill colour operators")
         // The /ActualText of the emoji span is the rocket, UTF-16BE with a byte order mark.
         #expect(text.contains("FEFFD83DDE80"), "no /ActualText for U+1F680")
+        // The text of the emoji is also in the page itself, for a reader that ignores /ActualText: one invisible glyph (render mode 3) whose
+        // /ToUnicode entry is the rocket. The layers are filled paths, not text.
+        #expect(text.contains(" 3 Tr") || text.contains("\n3 Tr"), "no invisible glyph")
+        #expect(text.contains("<D83DDE80>"), "the /ToUnicode map has no entry for U+1F680")
+        #expect(text.components(separatedBy: "\nf\n").count - 1 >= 4, "the layers are not filled paths")
+        // No private-use scalar of plane 15 in any map.
+        #expect(!["D8BC", "D8BD", "D8BE", "D8BF"].contains { text.contains("<\($0)") })
     }
 
     @Test("a run with no emoji draws exactly as before: the same bytes with and without the colour face")
