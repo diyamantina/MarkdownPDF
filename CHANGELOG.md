@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ` ```tile callout `, ` ```tile cta `, ` ```tile hero ` and ` ```tile cards ` draw the tiles that are text in a box,
+  with the lines of the same tile on a TileDown page. The text of each is inline Markdown (emphasis, code, links
+  are kept). A callout is a tinted box with an accent bar, a title (Note by default) and a body; a call to action a
+  bordered box with title, body and up to two buttons; a hero an eyebrow, a large title (a rolling word `{a|b|c}`
+  shows its first word), a body and buttons; the cards a grid of one to three columns, each card with a badge, a
+  title (a link when the card has one) and a body. A button is a rounded box whose label is a link (`[Label](url)`),
+  the first filled and the second outlined. The pictures of a hero and of cards are not printed. A mistake is a
+  refusal printed as a code block that says why.
 - ` ```tile flow ` draws a dependency graph: rounded boxes in columns, outlined and tinted by their state
   (`running`, `waiting`, `blocked`, `done`, `failed`), joined by curved arrows with arrowheads, with the
   title above when one is written. The lines are those of the tile on a TileDown page (`title`, `edge: a -> b`,

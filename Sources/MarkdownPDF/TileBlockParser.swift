@@ -15,6 +15,10 @@ enum TileBlockParser {
             case "kpi": return try .tile(.kpi(kpi(lines)))
             case "timeline": return try .tile(.timeline(timeline(lines)))
             case "flow": return try .tile(.flow(flow(lines)))
+            case "callout": return try .tile(.callout(callout(lines)))
+            case "cta": return try .tile(.cta(cta(lines)))
+            case "hero": return try .tile(.hero(hero(lines)))
+            case "cards": return try .tile(.cards(cards(lines)))
             default: throw Refusal("the tile type \(type) is not drawn in the PDF")
             }
         } catch let refusal as Refusal {
@@ -109,6 +113,116 @@ enum TileBlockParser {
             label: nonEmpty(values["label"]),
             status: status(values["status"], tile: "progress") ?? .running,
         )
+    }
+
+    // MARK: panels
+
+    private static func callout(_ lines: [Line]) throws -> TileBlock.Callout {
+        let values = try values(lines, allowed: ["title", "body"], tile: "callout")
+        let title = nonEmpty(values["title"])
+        let body = nonEmpty(values["body"])
+        guard title != nil || body != nil else {
+            throw Refusal("the callout tile needs a title or a body line")
+        }
+        return .init(title: title ?? "Note", body: body)
+    }
+
+    private static let buttonLines = ["primary", "secondary"]
+
+    /// The buttons written as `[Label](url)`, the second needing the first.
+    private static func buttons(_ values: [String: String], tile: String) throws -> [TileBlock.Button] {
+        guard values["primary"] != nil || values["secondary"] == nil else {
+            throw Refusal("the \(tile) tile has a secondary line without a primary line: write the primary button first")
+        }
+        return try buttonLines.compactMap { key in
+            guard let value = values[key] else {
+                return nil
+            }
+            guard value.hasPrefix("["), let close = value.range(of: "]("), value.hasSuffix(")"), close.upperBound < value.endIndex else {
+                throw Refusal("the \(tile) tile's \(key) is a link written [Label](url), not \(value)")
+            }
+            let label = String(value[value.index(after: value.startIndex) ..< close.lowerBound])
+            let destination = String(value[close.upperBound ..< value.index(before: value.endIndex)])
+            return .init(label: label, destination: destination)
+        }
+    }
+
+    private static func cta(_ lines: [Line]) throws -> TileBlock.CTA {
+        let values = try values(lines, allowed: ["title", "body", "primary", "secondary"], tile: "cta")
+        guard let title = nonEmpty(values["title"]) else {
+            throw Refusal("the cta tile needs a title line")
+        }
+        return try .init(title: title, body: nonEmpty(values["body"]), buttons: buttons(values, tile: "cta"))
+    }
+
+    /// Lines the page's hero takes that the print has no use for: the picture and the layout.
+    private static let heroLines = [
+        "eyebrow", "kicker", "title", "body", "lede", "primary", "secondary",
+        "image", "imageDark", "imageAlt", "imageLink", "layout", "width", "headingLevel", "wheel",
+    ]
+
+    private static func hero(_ lines: [Line]) throws -> TileBlock.Hero {
+        let values = try values(lines, allowed: heroLines, tile: "hero")
+        guard let title = nonEmpty(values["title"]) else {
+            throw Refusal("the hero tile needs a title line")
+        }
+        return try .init(
+            eyebrow: nonEmpty(values["eyebrow"] ?? values["kicker"]),
+            title: firstWordOfWheel(title),
+            body: nonEmpty(values["body"] ?? values["lede"]),
+            buttons: buttons(values, tile: "hero"),
+        )
+    }
+
+    /// A title with a rolling word, `Docs for {a|b|c}`, shows its first word in print, as the page does with reduced motion. Braces without a bar are text.
+    private static func firstWordOfWheel(_ title: String) -> String {
+        guard let open = title.firstIndex(of: "{"), let close = title[open...].firstIndex(of: "}"), title[open ... close].contains("|") else {
+            return title
+        }
+        let words = title[title.index(after: open) ..< close].split(separator: "|", omittingEmptySubsequences: false)
+        return title[..<open] + (words.first.map(String.init) ?? "") + title[title.index(after: close)...]
+    }
+
+    private static func cards(_ lines: [Line]) throws -> TileBlock.Cards {
+        var columns = 2
+        var cards: [TileBlock.Card] = []
+        var seen = Set<String>()
+        for line in lines {
+            switch line.key {
+            case "columns" where cards.isEmpty:
+                guard let number = Int(line.value), (1 ... 3).contains(number) else {
+                    throw Refusal("the cards tile's columns is 1, 2 or 3, not \(line.value)")
+                }
+                columns = number
+            case "width", "headingLevel":
+                continue
+            case "card":
+                guard !line.value.isEmpty else {
+                    throw Refusal("a card line has an empty title: write the title of the card")
+                }
+                cards.append(.init(title: line.value, badge: nil, body: nil, link: nil))
+                seen = []
+            case "badge", "eyebrow", "body", "link", "image", "imageDark":
+                guard !cards.isEmpty else {
+                    throw Refusal("the line \(line.key) comes before any card line")
+                }
+                guard seen.insert(line.key).inserted else {
+                    throw Refusal("the card \(cards[cards.count - 1].title) has the line \(line.key) twice")
+                }
+                switch line.key {
+                case "badge", "eyebrow": cards[cards.count - 1].badge = nonEmpty(line.value)
+                case "body": cards[cards.count - 1].body = nonEmpty(line.value)
+                case "link": cards[cards.count - 1].link = nonEmpty(line.value)
+                default: break
+                }
+            default:
+                throw Refusal("the cards tile has no line \(line.key): use columns, card, badge, body and link")
+            }
+        }
+        guard !cards.isEmpty else {
+            throw Refusal("the cards tile has no card: start each with a card line")
+        }
+        return .init(columns: columns, cards: cards)
     }
 
     // MARK: flow

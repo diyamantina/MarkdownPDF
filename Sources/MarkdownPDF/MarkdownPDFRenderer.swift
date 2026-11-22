@@ -5418,6 +5418,10 @@ extension Layout {
             case let .kpi(cards): try drawKPI(cards)
             case let .timeline(timeline): try drawTimeline(timeline)
             case let .flow(flow): try drawFlow(flow)
+            case let .callout(callout): try drawCallout(callout)
+            case let .cta(cta): try drawCTA(cta)
+            case let .hero(hero): try drawHero(hero)
+            case let .cards(cards): try drawCards(cards)
             }
         case let .unsupported(reason):
             try renderCodeBlock("Unsupported tile: \(reason)\n\(code)")
@@ -5574,6 +5578,185 @@ extension Layout {
             endStructureElement(figure)
             y -= height + (isLast ? figureTrailingSpacing : gap)
         }
+    }
+
+    // MARK: callout, cta, hero, cards
+
+    private static let tileAccent = PDFColor(red: 0.11, green: 0.26, blue: 0.73)
+
+    /// Inline Markdown as wrapped lines of runs: emphasis, code and links are kept, a link run carries its destination.
+    private func panelLines(
+        _ markdown: String,
+        bold: Bool = false,
+        size: Double,
+        color: PDFColor = .black,
+        width: Double,
+    ) throws -> [[PDFTextRun]] {
+        let font = standardFont(for: bold ? .bold : .regular)
+        let runs = try flatten(InlineParser().parse(markdown), font: font, size: size, color: color)
+        return try wrappedLines(runs, maxWidth: width)
+    }
+
+    /// Draws the lines from `top`, one below the other, and returns the baseline of the last one.
+    private mutating func drawPanelLines(_ lines: [[PDFTextRun]], x: Double, top: Double, lineHeight: Double) throws -> Double {
+        var baseline = top
+        for line in lines {
+            baseline -= lineHeight
+            try drawRuns(line, x: x, y: baseline + lineHeight * 0.22)
+        }
+        return baseline
+    }
+
+    private mutating func drawCallout(_ callout: TileBlock.Callout) throws {
+        let size = fontSize(for: .paragraph)
+        let padding = 10.0
+        let lineHeight = size * 1.35
+        let inner = contentWidth - 2 * padding - 4
+        let title = try panelLines(callout.title, bold: true, size: size, width: inner)
+        let body = try callout.body.map { try panelLines($0, size: size, width: inner) } ?? []
+        let height = 2 * padding + lineHeight * Double(title.count + body.count)
+        ensureSpace(height)
+        let figure = beginStructureElement(.figure, attributes: PDFTaggedContent.Attributes(alternateDescription: "Note"))
+        let marked = beginMarkedContentForCurrentElement()
+        markBlockQuoteContentDrawn()
+        let left = options.margins.left
+        currentPage.drawRectangle(
+            x: left, y: y - height, width: contentWidth, height: height,
+            stroke: Self.tileRule, fill: PDFColor(red: 0.94, green: 0.96, blue: 1.0),
+        )
+        currentPage.drawRectangle(x: left, y: y - height, width: 3.5, height: height, stroke: nil, fill: Self.tileAccent)
+        let last = try drawPanelLines(title + body, x: left + padding + 4, top: y - padding, lineHeight: lineHeight)
+        _ = last
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figure)
+        y -= height + figureTrailingSpacing
+    }
+
+    /// A row of buttons: the label is a link, the first button is filled and the others outlined. Returns the height of the row.
+    private mutating func drawButtons(_ buttons: [TileBlock.Button], x: Double, top: Double, size: Double) throws -> Double {
+        let height = size + 10
+        var cursor = x
+        for (index, button) in buttons.enumerated() {
+            let fill = index == 0
+            let label = PDFTextRun(
+                text: button.label, font: standardFont(for: .bold), size: size,
+                color: fill ? .white : Self.tileAccent, linkDestination: button.destination,
+            )
+            let width = try inkWidth(ofLine: [label]) + 20
+            currentPage.drawRoundedRectangle(
+                x: cursor, y: top - height, width: width, height: height, radius: 5,
+                stroke: Self.tileAccent, fill: fill ? Self.tileAccent : .white, lineWidth: 1,
+            )
+            try drawRuns([label], x: cursor + 10, y: top - height + 5 + size * 0.2)
+            cursor += width + 8
+        }
+        return height
+    }
+
+    private mutating func drawCTA(_ cta: TileBlock.CTA) throws {
+        let size = fontSize(for: .paragraph)
+        let padding = 12.0
+        let lineHeight = size * 1.35
+        let inner = contentWidth - 2 * padding
+        let title = try panelLines(cta.title, bold: true, size: size * 1.2, width: inner)
+        let body = try cta.body.map { try panelLines($0, size: size, width: inner) } ?? []
+        let buttonsHeight = cta.buttons.isEmpty ? 0 : size + 10 + 8
+        let height = 2 * padding + lineHeight * 1.2 * Double(title.count) + lineHeight * Double(body.count) + buttonsHeight
+        ensureSpace(height)
+        let figure = beginStructureElement(.figure, attributes: PDFTaggedContent.Attributes(alternateDescription: cta.title))
+        let marked = beginMarkedContentForCurrentElement()
+        markBlockQuoteContentDrawn()
+        let left = options.margins.left
+        currentPage.drawRoundedRectangle(
+            x: left, y: y - height, width: contentWidth, height: height, radius: 8,
+            stroke: Self.tileRule, fill: PDFColor(red: 0.97, green: 0.98, blue: 0.99), lineWidth: 1,
+        )
+        var cursor = try drawPanelLines(title, x: left + padding, top: y - padding, lineHeight: lineHeight * 1.2)
+        cursor = try drawPanelLines(body, x: left + padding, top: cursor, lineHeight: lineHeight)
+        if !cta.buttons.isEmpty {
+            _ = try drawButtons(cta.buttons, x: left + padding, top: cursor - 8, size: size)
+        }
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figure)
+        y -= height + figureTrailingSpacing
+    }
+
+    private mutating func drawHero(_ hero: TileBlock.Hero) throws {
+        let size = fontSize(for: .paragraph)
+        let lineHeight = size * 1.35
+        let eyebrow = try hero.eyebrow.map { try panelLines($0, size: size * 0.85, color: Self.tileMuted, width: contentWidth) } ?? []
+        let title = try hero.title.map { try panelLines($0, bold: true, size: size * 1.9, width: contentWidth) } ?? []
+        let body = try hero.body.map { try panelLines($0, size: size * 1.1, width: contentWidth) } ?? []
+        let buttonsHeight = hero.buttons.isEmpty ? 0 : size + 10 + 10
+        let height = lineHeight * 0.9 * Double(eyebrow.count) + lineHeight * 2.2 * Double(title.count)
+            + lineHeight * 1.15 * Double(body.count) + buttonsHeight + 6
+        ensureSpace(height)
+        let figure = beginStructureElement(.figure, attributes: PDFTaggedContent.Attributes(alternateDescription: hero.title ?? "Introduction"))
+        let marked = beginMarkedContentForCurrentElement()
+        markBlockQuoteContentDrawn()
+        let left = options.margins.left
+        var cursor = try drawPanelLines(eyebrow, x: left, top: y, lineHeight: lineHeight * 0.9)
+        cursor = try drawPanelLines(title, x: left, top: cursor - 2, lineHeight: lineHeight * 2.2)
+        cursor = try drawPanelLines(body, x: left, top: cursor - 2, lineHeight: lineHeight * 1.15)
+        if !hero.buttons.isEmpty {
+            _ = try drawButtons(hero.buttons, x: left, top: cursor - 10, size: size)
+        }
+        endMarkedContentIfNeeded(marked)
+        endStructureElement(figure)
+        y -= height + figureTrailingSpacing
+    }
+
+    private mutating func drawCards(_ grid: TileBlock.Cards) throws {
+        let size = fontSize(for: .paragraph)
+        let gap = 10.0
+        let padding = 10.0
+        let lineHeight = size * 1.3
+        let columns = Double(grid.columns)
+        let width = (contentWidth - gap * (columns - 1)) / columns
+        let inner = width - 2 * padding
+        let rows = stride(from: 0, to: grid.cards.count, by: grid.columns).map {
+            Array(grid.cards[$0 ..< min($0 + grid.columns, grid.cards.count)])
+        }
+        for row in rows {
+            struct Prepared {
+                var badge: [[PDFTextRun]]
+                var title: [[PDFTextRun]]
+                var body: [[PDFTextRun]]
+            }
+            var prepared: [Prepared] = []
+            for card in row {
+                let titleRuns = try panelLines(card.title, bold: true, size: size * 1.05, color: card.link == nil ? .black : Self.tileAccent, width: inner)
+                    .map { line in card.link.map { destination in line.map { var run = $0
+                        run.linkDestination = destination
+                        return run
+                    } } ?? line }
+                try prepared.append(Prepared(
+                    badge: card.badge.map { try panelLines($0, size: size * 0.8, color: Self.tileMuted, width: inner) } ?? [],
+                    title: titleRuns,
+                    body: card.body.map { try panelLines($0, size: size, width: inner) } ?? [],
+                ))
+            }
+            let lines = prepared.map { $0.badge.count + $0.title.count + $0.body.count }.max() ?? 1
+            let height = 2 * padding + lineHeight * Double(lines)
+            ensureSpace(height)
+            let figure = beginStructureElement(.figure, attributes: PDFTaggedContent.Attributes(alternateDescription: "Cards"))
+            let marked = beginMarkedContentForCurrentElement()
+            markBlockQuoteContentDrawn()
+            for (index, item) in prepared.enumerated() {
+                let left = options.margins.left + Double(index) * (width + gap)
+                currentPage.drawRoundedRectangle(
+                    x: left, y: y - height, width: width, height: height, radius: 6,
+                    stroke: Self.tileRule, fill: PDFColor(red: 0.99, green: 0.99, blue: 1.0), lineWidth: 1,
+                )
+                var cursor = try drawPanelLines(item.badge, x: left + padding, top: y - padding, lineHeight: lineHeight)
+                cursor = try drawPanelLines(item.title, x: left + padding, top: cursor, lineHeight: lineHeight)
+                _ = try drawPanelLines(item.body, x: left + padding, top: cursor, lineHeight: lineHeight)
+            }
+            endMarkedContentIfNeeded(marked)
+            endStructureElement(figure)
+            y -= height + gap
+        }
+        y += gap - figureTrailingSpacing - 4
     }
 
     // MARK: flow
