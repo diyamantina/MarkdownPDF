@@ -45,6 +45,19 @@ struct PDFDocumentWriter {
             )
         })
 
+        // One graphics state object for each fill alpha any page selects (a translucent layer of a colour emoji): `/ca` for fills, `/CA` for strokes.
+        let usedAlphas = Set(pages.flatMap(\.resourceUsage.usedFillAlphas))
+        var alphaStates: [Int: PDFPageResources.Entry] = [:]
+        for alpha in usedAlphas.sorted() {
+            let opacity = PDFSyntax.Value.number(Double(alpha) / 255)
+            let ref = builder.addDictionary(PDFSyntax.Dictionary([
+                .init("Type", .name(PDFSyntax.Name("ExtGState"))),
+                .init("ca", opacity),
+                .init("CA", opacity),
+            ]))
+            alphaStates[alpha] = PDFPageResources.Entry(name: PDFPageResourceUsage.fillAlphaResourceName(alpha), objectRef: ref)
+        }
+
         func resources(for page: PDFPageCanvas) -> PDFPageResources {
             let pageFonts = page.resourceUsage.usedFonts.compactMap { font in
                 fontResources[font]
@@ -55,7 +68,8 @@ struct PDFDocumentWriter {
             let pageXObjects = images.compactMap { image in
                 page.resourceUsage.usesImageXObject(named: image.name) ? imageResources[image.name] : nil
             }
-            return PDFPageResources(fonts: pageFonts + pageEmbeddedFonts, imageXObjects: pageXObjects)
+            let pageAlphaStates = page.resourceUsage.usedFillAlphas.compactMap { alphaStates[$0] }
+            return PDFPageResources(fonts: pageFonts + pageEmbeddedFonts, imageXObjects: pageXObjects, extGStates: pageAlphaStates)
         }
 
         let knownDestinationNames = Set(pages.flatMap { page in

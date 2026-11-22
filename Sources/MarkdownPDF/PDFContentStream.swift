@@ -73,6 +73,8 @@ struct PDFContentStream {
         case fill
         case fillAndStroke
         case saveGraphicsState
+        /// `gs`: selects a graphics state parameter dictionary of the page's `ExtGState` resources (a fill alpha, here).
+        case setExtGState(PDFSyntax.Name)
         case restoreGraphicsState
         case beginMarkedContent(PDFSyntax.Name, mcid: Int)
         case beginActualText(PDFSyntax.LiteralString)
@@ -97,6 +99,8 @@ struct PDFContentStream {
                 "BT"
             case let .setFont(name, size):
                 "\(name.serialized) \(pdfNumber(size)) Tf"
+            case let .setExtGState(name):
+                "\(name.serialized) gs"
             case let .moveText(x, y):
                 "\(pdfNumber(x)) \(pdfNumber(y)) Td"
             case let .showText(text):

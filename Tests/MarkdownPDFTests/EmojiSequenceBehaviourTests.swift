@@ -61,7 +61,10 @@ struct EmojiSequenceBehaviourTests {
             let read = essential(words)
             let wanted = essential(sample.text)
             #expect(read.contains(wanted.first ?? 0), Comment(rawValue: "\(sample.name): \(read.map { String($0, radix: 16) })"))
-            #expect(Array(read.dropFirst().dropLast()) == wanted, Comment(rawValue: "\(sample.name): \(read.map { String($0, radix: 16) }) is not a, \(wanted.map { String($0, radix: 16) }), b"))
+            #expect(
+                Array(read.dropFirst().dropLast()) == wanted,
+                Comment(rawValue: "\(sample.name): \(read.map { String($0, radix: 16) }) is not a, \(wanted.map { String($0, radix: 16) }), b"),
+            )
         }
     }
 }

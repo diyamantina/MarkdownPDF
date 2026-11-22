@@ -73,6 +73,9 @@ step: a single emoji and an emoji with its variation selector are drawn.
   0.16.0, pass `documentStrings: .winAnsi`.
 
 ### Fixed
+- A layer of a colour emoji whose palette colour is translucent (a shadow, a highlight: 15 of the 1063 colours of the bundled face, alpha 38 to
+  230) is filled with that alpha. The alpha was read and dropped, so such a layer covered the layers under it. The page selects a graphics
+  state with the fill alpha (`ExtGState` `/ca`) for it; a page of opaque emoji has none.
 - An emoji face given by the caller (`PDFOptions.EmbeddedFonts.emoji`) is kept when the document needs the bundled text faces (no text face
   given and a character outside WinAnsi). The caller's math face was carried over to the bundled faces and the emoji face was not, so the
   bundled Twemoji face silently replaced it.

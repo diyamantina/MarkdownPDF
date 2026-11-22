@@ -13,6 +13,8 @@ struct ColorEmojiFont: @unchecked Sendable {
         var segments: [TrueTypeGlyphOutline.Segment]
         /// The palette colour, nil for the foreground colour of the text.
         var color: PDFColor?
+        /// The alpha of the palette entry, 0 to 255 (255 for the foreground colour): a shadow or a highlight is filled with it, not opaque.
+        var alpha: Int = 255
     }
 
     /// What a cluster is drawn as.
@@ -74,10 +76,11 @@ struct ColorEmojiFont: @unchecked Sendable {
         var layers: [Layer] = []
         for record in records {
             guard let segments = try? outlines.segments(forGlyph: record.glyphID) else { return nil }
-            let color = cpal.color(palette: 0, entry: record.paletteIndex).map {
+            let entry = cpal.color(palette: 0, entry: record.paletteIndex)
+            let color = entry.map {
                 PDFColor(red: Double($0.red) / 255, green: Double($0.green) / 255, blue: Double($0.blue) / 255)
             }
-            layers.append(Layer(segments: segments, color: color))
+            layers.append(Layer(segments: segments, color: color, alpha: entry.map { Int($0.alpha) } ?? 255))
         }
         let cid = metadata.compositeCID(forGlyph: base)
         let advanceWidth = metadata.hmtx.advanceWidths[Int(base)]

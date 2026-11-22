@@ -143,7 +143,7 @@ final class PDFPageCanvas {
                 try drawInvisibleCIDText(mapping: drawing.base, fontResource: colorEmoji.resource, fontSize: run.size, x: penX, y: baselineY)
                 let scale = run.size / drawing.unitsPerEm
                 for layer in drawing.layers {
-                    drawOutline(layer.segments, color: layer.color ?? run.color, scale: scale, x: penX, y: baselineY)
+                    drawOutline(layer.segments, color: layer.color ?? run.color, alpha: layer.alpha, scale: scale, x: penX, y: baselineY)
                 }
                 contentStream.append([.endMarkedContent])
             }
@@ -174,9 +174,17 @@ final class PDFPageCanvas {
     }
 
     /// A glyph outline (font units) filled in `color`, scaled by `scale` and placed with its origin at `x`, `y`.
-    private func drawOutline(_ segments: [TrueTypeGlyphOutline.Segment], color: PDFColor, scale: Double, x: Double, y: Double) {
+    private func drawOutline(_ segments: [TrueTypeGlyphOutline.Segment], color: PDFColor, alpha: Int = 255, scale: Double, x: Double, y: Double) {
         guard !segments.isEmpty else { return }
         var operators: [PDFContentStream.Operator] = [.saveGraphicsState, .setFillColor(color), .concatenateMatrix(a: scale, b: 0, c: 0, d: scale, e: x, f: y)]
+        // A layer with an alpha below 255 (a shadow, a highlight) is filled under a graphics state with that fill alpha; alpha 0 paints nothing.
+        if alpha <= 0 {
+            return
+        }
+        if alpha < 255 {
+            resourceUsage.useFillAlpha(alpha)
+            operators.insert(.setExtGState(PDFSyntax.Name(PDFPageResourceUsage.fillAlphaResourceName(alpha))), at: 1)
+        }
         for segment in segments {
             switch segment {
             case let .move(point): operators.append(.moveTo(x: point.x, y: point.y))

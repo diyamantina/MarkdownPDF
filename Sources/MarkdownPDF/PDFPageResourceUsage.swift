@@ -2,6 +2,21 @@ struct PDFPageResourceUsage {
     private var fonts: Set<StandardFont> = []
     private var imageXObjectNames: Set<String> = []
     private var embeddedFontsByResourceName: [String: PDFEmbeddedFontUsage] = [:]
+    private var fillAlphas: Set<Int> = []
+
+    /// The fill alphas (1 to 254, out of 255) the page selects with a graphics state, ascending.
+    var usedFillAlphas: [Int] {
+        fillAlphas.sorted()
+    }
+
+    /// The name of the graphics state resource for a fill alpha out of 255.
+    static func fillAlphaResourceName(_ alpha: Int) -> String {
+        "GS\(alpha)"
+    }
+
+    mutating func useFillAlpha(_ alpha: Int) {
+        fillAlphas.insert(alpha)
+    }
 
     var usedFonts: [StandardFont] {
         StandardFont.allCases.filter { fonts.contains($0) }
