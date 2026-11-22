@@ -42,15 +42,17 @@ struct MermaidDiagram: Equatable {
 
             if processedNodes.count < nodes.count {
                 // Cyclic input: release the unprocessed node with the fewest remaining
-                // incoming edges, which breaks a back-edge so layering can proceed. The
-                // back-edge itself is still drawn later, so cycles render rather than fail.
-                guard let next = nodes
-                    .filter({ !processedNodes.contains($0.id) })
+                // incoming edges, which breaks a back-edge so layering can proceed. Among
+                // equals the node declared first goes first, where the author starts the
+                // loop, so the edge back to it is the one drawn backwards. The back-edge
+                // itself is still drawn later, so cycles render rather than fail.
+                guard let next = nodes.enumerated()
+                    .filter({ !processedNodes.contains($0.element.id) })
                     .min(by: { lhs, rhs in
-                        let left = indegree[lhs.id] ?? 0
-                        let right = indegree[rhs.id] ?? 0
-                        return left != right ? left < right : lhs.id < rhs.id
-                    })
+                        let left = indegree[lhs.element.id] ?? 0
+                        let right = indegree[rhs.element.id] ?? 0
+                        return left != right ? left < right : lhs.offset < rhs.offset
+                    })?.element
                 else {
                     break
                 }
