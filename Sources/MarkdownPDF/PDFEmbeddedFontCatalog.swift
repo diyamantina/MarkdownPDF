@@ -25,6 +25,10 @@ struct PDFEmbeddedFontCatalog {
     /// Whether an emoji no face can draw is left out instead of drawn as the missing-glyph box (``PDFOptions/omitUndrawableEmoji``).
     private let omitUndrawableEmoji: Bool
 
+    /// The colour emoji face, when the options carry one: a run that holds emoji it can draw is laid out and drawn piece by piece
+    /// (``pieces(of:entry:)``), plain text through the run's own face and each emoji as coloured layers.
+    let colorEmoji: ColorEmojiFont?
+
     init(
         fonts: PDFOptions.EmbeddedFonts,
         parseMathTables: Bool = false,
@@ -33,6 +37,7 @@ struct PDFEmbeddedFontCatalog {
     ) throws {
         self.renderingMissingGlyphPolicy = renderingMissingGlyphPolicy
         self.omitUndrawableEmoji = omitUndrawableEmoji
+        colorEmoji = try fonts.emoji.map { try ColorEmojiFont(source: $0) }
         var entries: [StandardFont: Entry] = [:]
         try Self.add(fonts.regular, for: .helvetica, resourceName: "EF1", parseMathTables: parseMathTables, to: &entries)
         try Self.add(fonts.bold, for: .helveticaBold, resourceName: "EF2", parseMathTables: parseMathTables, to: &entries)
@@ -63,11 +68,60 @@ struct PDFEmbeddedFontCatalog {
         return (try? entry.mapper.map(text: text, fontSize: 1)) != nil
     }
 
+    /// One piece of a laid-out run: plain text shaped by the run's own face, or an emoji drawn from the colour face.
+    enum Piece {
+        case text(run: PDFTextRun, mapping: ShapedTextMapping)
+        case emoji(cluster: EmojiSegmenter.Cluster, layers: [ColorEmojiFont.Layer], advance: Double)
+
+        var advance: Double {
+            switch self {
+            case let .text(_, mapping): mapping.totalAdvance
+            case let .emoji(_, _, advance): advance
+            }
+        }
+    }
+
+    /// The pieces of a run that holds colour emoji the colour face can draw, nil when it holds none (the run is then laid out as one). Width and
+    /// drawing both go through this, so they cannot disagree. An emoji the face cannot draw stays in the text around it, as before.
+    func pieces(of run: PDFTextRun, entry: Entry) throws -> [Piece]? {
+        guard let colorEmoji, EmojiSegmenter.containsColorEmoji(run.text) else { return nil }
+        var pieces: [Piece] = []
+        var pending = ""
+        func flushText() throws {
+            guard !pending.isEmpty else { return }
+            var piece = run
+            piece.text = pending
+            try pieces.append(.text(run: piece, mapping: shapedMapping(for: piece, entry: entry)))
+            pending = ""
+        }
+        var drewAny = false
+        for segment in EmojiSegmenter.segments(of: run.text) {
+            switch segment {
+            case let .text(text):
+                pending += text
+            case let .emoji(cluster):
+                if let layers = colorEmoji.layers(of: cluster, fontSize: run.size), let advance = colorEmoji.advance(of: cluster, fontSize: run.size) {
+                    try flushText()
+                    pieces.append(.emoji(cluster: cluster, layers: layers, advance: advance))
+                    drewAny = true
+                } else {
+                    pending += cluster.text
+                }
+            }
+        }
+        guard drewAny else { return nil }
+        try flushText()
+        return pieces
+    }
+
     func width(of run: PDFTextRun, fallbackFontSet: PDFOptions.FontSet) throws -> Double {
         guard let entry = entry(for: run.font) else {
             return run.width(fontSet: fallbackFontSet)
         }
 
+        if let pieces = try pieces(of: run, entry: entry) {
+            return pieces.reduce(0) { $0 + $1.advance }
+        }
         return try shapedMapping(for: run, entry: entry).totalAdvance
     }
 
@@ -121,7 +175,7 @@ struct PDFEmbeddedFontCatalog {
 
     func shapedMapping(for originalRun: PDFTextRun, entry: Entry) throws -> ShapedTextMapping {
         var run = originalRun
-        run.text = withoutUndrawableEmoji(originalRun.text, entry: entry)
+        run.text = PDFTextEncoding.strippingVariationSelectors(withoutUndrawableEmoji(originalRun.text, entry: entry))
         if OpenTypeShaper.canShapeLatinIncrement(run.text) {
             var shaper = entry.shaper
             shaper.missingGlyphPolicy = renderingMissingGlyphPolicy

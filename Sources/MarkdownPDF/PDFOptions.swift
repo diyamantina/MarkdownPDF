@@ -301,6 +301,9 @@ public struct PDFOptions: Equatable, Sendable {
         /// The face of typeset formulas only, with a MATH table. With none, a document whose formulas need symbols the
         /// base fonts lack (an integral, an infinity, a Greek letter) uses the bundled Latin Modern Math for them.
         public var math: EmbeddedFontSource?
+        /// The face of colour emoji (a `COLR` version 0 and `CPAL` font such as Twemoji): an emoji the text faces cannot draw is drawn from it as
+        /// stacked layers in palette colours. With none, an emoji is drawn by the text face or left out under ``PDFOptions/omitUndrawableEmoji``.
+        public var emoji: EmbeddedFontSource?
 
         public init(
             regular: EmbeddedFontSource? = nil,
@@ -308,12 +311,14 @@ public struct PDFOptions: Equatable, Sendable {
             italic: EmbeddedFontSource? = nil,
             monospaced: EmbeddedFontSource? = nil,
             math: EmbeddedFontSource? = nil,
+            emoji: EmbeddedFontSource? = nil,
         ) {
             self.regular = regular
             self.bold = bold
             self.italic = italic
             self.monospaced = monospaced
             self.math = math
+            self.emoji = emoji
         }
 
         /// True when no face is embedded for any role of text (a math face does not count: it is for formulas only).

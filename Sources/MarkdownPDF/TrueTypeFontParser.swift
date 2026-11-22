@@ -149,6 +149,7 @@ struct TrueTypeFontParser {
         parseMathTable: Bool = false,
         faceIndex: Int = 0,
         validateChecksums: Bool = false,
+        preferFullUnicodeCMap: Bool = false,
     ) throws -> Metadata {
         let bytes = [UInt8](data)
         guard !bytes.isEmpty else {
@@ -202,7 +203,7 @@ struct TrueTypeFontParser {
             numberOfHMetrics: hhea.numberOfHMetrics,
             numGlyphs: maxp.numGlyphs,
         )
-        let cmap = try parseCharacterMap(table(named: "cmap", recordsByTag: recordsByTag, bytes: bytes))
+        let cmap = try parseCharacterMap(table(named: "cmap", recordsByTag: recordsByTag, bytes: bytes), preferFullUnicode: preferFullUnicodeCMap)
         let names = try parseNameTable(table(named: "name", recordsByTag: recordsByTag, bytes: bytes))
         let os2 = try parseOS2Metrics(
             table(named: "OS/2", recordsByTag: recordsByTag, bytes: bytes),
@@ -410,7 +411,9 @@ struct TrueTypeFontParser {
         return HorizontalMetrics(advanceWidths: widths)
     }
 
-    private func parseCharacterMap(_ bytes: [UInt8]) throws -> CharacterMap {
+    /// `preferFullUnicode` takes the first Unicode format 12 subtable (every scalar, astral ones included) over an earlier format 4 one (the
+    /// basic plane only): a colour emoji face is drawn through it. The default keeps the first supported Unicode subtable, as before.
+    private func parseCharacterMap(_ bytes: [UInt8], preferFullUnicode: Bool = false) throws -> CharacterMap {
         let reader = TrueTypeByteReader(table: "cmap", bytes: bytes)
         try reader.requireRange(offset: 0, count: 4)
         let version = try reader.uint16(at: 0)
@@ -426,6 +429,7 @@ struct TrueTypeFontParser {
 
         var records: [EncodingRecord] = []
         var selectedRecord: EncodingRecord?
+        var fullUnicodeRecord: EncodingRecord?
         for index in 0 ..< recordCount {
             let recordOffset = 4 + index * 8
             let platformID = try reader.uint16(at: recordOffset)
@@ -465,8 +469,14 @@ struct TrueTypeFontParser {
             {
                 selectedRecord = record
             }
+            if fullUnicodeRecord == nil, format == 12, Self.isUnicodeEncoding(platformID: platformID, encodingID: encodingID) {
+                fullUnicodeRecord = record
+            }
         }
 
+        if preferFullUnicode, let fullUnicodeRecord {
+            selectedRecord = fullUnicodeRecord
+        }
         guard let selectedRecord else {
             throw TrueTypeFontError.unsupportedCMap(
                 reason: "no Unicode subtable uses format 4 or 12",

@@ -100,6 +100,10 @@ final class PDFPageCanvas {
             return
         }
 
+        if let pieces = try embeddedFonts.pieces(of: run, entry: entry), let colorEmoji = embeddedFonts.colorEmoji {
+            try drawPieces(pieces, of: run, colorEmoji: colorEmoji, entry: entry, x: x, baselineY: y + run.baselineOffset)
+            return
+        }
         let mapping = try embeddedFonts.shapedMapping(for: run, entry: entry)
         let baselineY = y + run.baselineOffset
         try drawCIDText(
@@ -111,6 +115,38 @@ final class PDFPageCanvas {
             color: run.color,
         )
         drawDecorations(for: run, x: x, y: baselineY, width: mapping.totalAdvance)
+    }
+
+    /// Draws the pieces of a run that holds colour emoji, left to right from `x`: plain text through its own face, each emoji as its layers
+    /// (each layer glyph shown in its palette colour at the same pen position, the first at the bottom) inside one `/ActualText` span, so a
+    /// text extractor reads the emoji and not the layer glyphs. Decorations (underline, strikethrough) cover the whole run once.
+    private func drawPieces(
+        _ pieces: [PDFEmbeddedFontCatalog.Piece],
+        of run: PDFTextRun,
+        colorEmoji: ColorEmojiFont,
+        entry: PDFEmbeddedFontCatalog.Entry,
+        x: Double,
+        baselineY: Double,
+    ) throws {
+        var penX = x
+        for piece in pieces {
+            switch piece {
+            case let .text(pieceRun, mapping):
+                try drawCIDText(mapping: mapping, fontResource: entry.resource, fontSize: pieceRun.size, x: penX, y: baselineY, color: pieceRun.color)
+            case let .emoji(cluster, layers, _):
+                let utf16: [UInt16] = [0xFEFF] + Array(cluster.text.utf16)
+                contentStream.append([.beginActualTextUTF16(PDFSyntax.HexString(twoByteCodes: utf16))])
+                for layer in layers {
+                    try drawCIDText(
+                        mapping: colorEmoji.mapping(of: layer), fontResource: colorEmoji.resource, fontSize: run.size,
+                        x: penX, y: baselineY, color: layer.color ?? run.color,
+                    )
+                }
+                contentStream.append([.endMarkedContent])
+            }
+            penX += piece.advance
+        }
+        drawDecorations(for: run, x: x, y: baselineY, width: penX - x)
     }
 
     func drawCIDText(

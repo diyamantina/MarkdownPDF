@@ -13,7 +13,7 @@ enum PDFTextEncoding {
     /// faithful means the two consumers each normalize once and the value stays the
     /// authored text.
     static func portableText(for text: String) -> String {
-        text
+        strippingVariationSelectors(text)
     }
 
     /// Removes the Unicode default-ignorable format controls that must render
@@ -49,7 +49,28 @@ enum PDFTextEncoding {
         guard text.unicodeScalars.contains(where: isInvisibleFormatControl) else {
             return text
         }
-        return String(String.UnicodeScalarView(text.unicodeScalars.filter { !isInvisibleFormatControl($0) }))
+        // The emoji variation selector U+FE0F right after an emoji-capable scalar is kept: it asks for the colour presentation, which a colour
+        // emoji face draws. Every path that does not draw a colour emoji removes it again (``strippingVariationSelectors(_:)``).
+        var kept = String.UnicodeScalarView()
+        var previous: UnicodeScalar?
+        for scalar in text.unicodeScalars {
+            if !isInvisibleFormatControl(scalar) || (scalar.value == 0xFE0F && previous.map(isEmojiCapable) == true) {
+                kept.append(scalar)
+            }
+            previous = scalar
+        }
+        return String(kept)
+    }
+
+    /// Whether the scalar can take the emoji variation selector: an emoji scalar outside ASCII (digits, `#` and `*` form keycaps, a later phase).
+    static func isEmojiCapable(_ scalar: UnicodeScalar) -> Bool {
+        scalar.value > 0x7F && scalar.properties.isEmoji
+    }
+
+    /// The text without its variation selectors (U+FE00 to U+FE0F): for a face that draws no colour emoji, a selector is not a glyph.
+    static func strippingVariationSelectors(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: { (0xFE00 ... 0xFE0F).contains($0.value) }) else { return text }
+        return String(String.UnicodeScalarView(text.unicodeScalars.filter { !(0xFE00 ... 0xFE0F).contains($0.value) }))
     }
 
     /// Whether `scalar` is a genuinely-invisible, semantically-inert
@@ -86,7 +107,7 @@ enum PDFTextEncoding {
     /// painted. Normalizing here keeps the measured advance in step with the drawn
     /// bytes for a decomposed diacritic that folds to one WinAnsi code point.
     static func portableScalars(for text: String) -> [UnicodeScalar] {
-        text.precomposedStringWithCanonicalMapping.unicodeScalars.map { scalar in
+        strippingVariationSelectors(text).precomposedStringWithCanonicalMapping.unicodeScalars.map { scalar in
             // Measure the glyph that is actually drawn: the scalar itself, or its ASCII
             // stand-in, or the "?" fallback, so the advance matches the painted byte.
             if isRepresentable(scalar) {
