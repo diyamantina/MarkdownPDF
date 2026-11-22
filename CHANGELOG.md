@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ` ```tile timeline ` draws dated events down a rail: `order` (ascending or descending), then
+  `event`, `date` (a real calendar date, `YYYY-MM-DD`), `time` (`HH:MM`) and `body` for each
+  event. Events are sorted by date and time, the written order holds for one moment, an event with
+  no time sorts first on its day, at most 200 events; every mistake is a refusal printed as a code
+  block that says why.
 - Board tiles: a fenced block ` ```tile TYPE ` draws a status pill (`pill`), a progress bar
   (`progress`) or a row of figure cards (`kpi`). The lines of the body are the lines of the
   same tile on a TileDown page (`status: running`, `value: 37`, `max: 120`, `kpi: Open issues`),

@@ -9,6 +9,7 @@ enum TileBlock: Equatable {
     case pill(Pill)
     case progress(Progress)
     case kpi([KPICard])
+    case timeline(Timeline)
 
     /// What a parse gives: the tile, or the reason the block cannot be drawn.
     enum ParseResult: Equatable {
@@ -99,6 +100,56 @@ enum TileBlock: Equatable {
         case good
         case bad
         case neutral
+    }
+
+    /// Dated events down a rail, already sorted by date and time (the written order holds for one moment), in the
+    /// direction asked for.
+    struct Timeline: Equatable {
+        var descending: Bool
+        var events: [Event]
+
+        struct Event: Equatable {
+            var title: String
+            var date: String
+            var time: String?
+            var body: String?
+        }
+
+        /// The most events in a timeline.
+        static let mostEvents = 200
+
+        /// A real calendar date written `YYYY-MM-DD`.
+        static func isDate(_ text: String) -> Bool {
+            let parts = text.split(separator: "-", omittingEmptySubsequences: false)
+            guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
+                  text.utf8.allSatisfy({ $0 == 0x2D || (0x30 ... 0x39).contains($0) }),
+                  let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]),
+                  year >= 1, (1 ... 12).contains(month)
+            else {
+                return false
+            }
+            return (1 ... daysIn(month: month, year: year)).contains(day)
+        }
+
+        /// A time written `HH:MM`, from 00:00 to 23:59.
+        static func isTime(_ text: String) -> Bool {
+            let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2, parts[0].count == 2, parts[1].count == 2,
+                  text.utf8.allSatisfy({ $0 == 0x3A || (0x30 ... 0x39).contains($0) }),
+                  let hour = Int(parts[0]), let minute = Int(parts[1])
+            else {
+                return false
+            }
+            return (0 ... 23).contains(hour) && (0 ... 59).contains(minute)
+        }
+
+        private static func daysIn(month: Int, year: Int) -> Int {
+            switch month {
+            case 2: (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 ? 29 : 28
+            case 4, 6, 9, 11: 30
+            default: 31
+            }
+        }
     }
 
     /// The most cards in a KPI row.

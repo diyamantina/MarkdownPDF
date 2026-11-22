@@ -5416,6 +5416,7 @@ extension Layout {
             case let .pill(pill): try drawPill(pill)
             case let .progress(progress): try drawProgress(progress)
             case let .kpi(cards): try drawKPI(cards)
+            case let .timeline(timeline): try drawTimeline(timeline)
             }
         case let .unsupported(reason):
             try renderCodeBlock("Unsupported tile: \(reason)\n\(code)")
@@ -5530,6 +5531,48 @@ extension Layout {
         endMarkedContentIfNeeded(marked)
         endStructureElement(figure)
         y -= height + figureTrailingSpacing
+    }
+
+    // MARK: timeline
+
+    /// Dated events down a rail: a dot on the rail at each event, the date (and time) small above the title, then the body.
+    /// An event is kept in one piece on a page; the rail is drawn for the length of each event and the gap after it.
+    private mutating func drawTimeline(_ timeline: TileBlock.Timeline) throws {
+        let size = fontSize(for: .paragraph)
+        let railX = options.margins.left + 5
+        let textX = options.margins.left + 20
+        let textWidth = contentWidth - 20
+        let gap = size * 0.9
+        let accent = PDFColor(red: 0.11, green: 0.26, blue: 0.73)
+        for (index, event) in timeline.events.enumerated() {
+            let stamp = event.time.map { event.date + " " + $0 } ?? event.date
+            let titleLines = try wrappedLines([tileRun(event.title, bold: true, size: size, color: .black)], maxWidth: textWidth)
+            let bodyLines = try event.body.map {
+                try wrappedLines([tileRun($0, size: size, color: .black)], maxWidth: textWidth)
+            } ?? []
+            let lineHeight = size * 1.35
+            let height = lineHeight * Double(1 + titleLines.count + bodyLines.count)
+            ensureSpace(height)
+            let figure = beginStructureElement(
+                .figure, attributes: PDFTaggedContent.Attributes(alternateDescription: "Timeline event"),
+            )
+            let marked = beginMarkedContentForCurrentElement()
+            markBlockQuoteContentDrawn()
+            let isLast = index == timeline.events.count - 1
+            let railBottom = y - height - (isLast ? 0 : gap)
+            let railTop = index == 0 ? y - lineHeight * 0.6 : y + gap
+            currentPage.drawLine(x1: railX, y1: railTop, x2: railX, y2: railBottom, width: 1.2, color: Self.tileRule)
+            var baseline = y - size * 0.8
+            currentPage.drawCircle(x: railX, y: baseline + size * 0.3, radius: 3.2, stroke: nil, fill: accent)
+            try drawRuns([tileRun(stamp, size: size * 0.85, color: Self.tileMuted)], x: textX, y: baseline)
+            for line in titleLines + bodyLines {
+                baseline -= lineHeight
+                try drawRuns(line, x: textX, y: baseline)
+            }
+            endMarkedContentIfNeeded(marked)
+            endStructureElement(figure)
+            y -= height + (isLast ? figureTrailingSpacing : gap)
+        }
     }
 
     // MARK: kpi
