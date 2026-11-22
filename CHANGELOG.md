@@ -15,43 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rectangle `A[label]`. A diamond is laid out twice the size of its padded text, so the text stays inside the outline. A shape that is not
   drawn (`((` circle, `{{` hexagon, `[[` subroutine, `[(` cylinder, `[/` slanted, `>` flag) is reported by its brackets and not drawn as a
   rectangle.
-
-### Fixed
-- A table column is never narrower than its widest word when the widest words of all the columns fit the page together. A narrow column had been
-  capped at an equal share of the page, so a long identifier such as `CALayer.anchorPoint` in a five-column table broke inside the word
-  (`CALayer.anchorPo` and `int`). Only a word wider than its share when they do not all fit is broken by character, as before.
-- A Mermaid `subgraph` whose header is a bare title of several words (`subgraph After 1.6.5`) is drawn with that title. It was refused
-  ("invalid subgraph header"). A header with a shape that is not drawn is still refused by name.
-- A Mermaid link whose straight line would run through other nodes (a back edge over a row) bends around them as an arc, and its label
-  sits on the arc, with the diagram made taller by what the arc reaches. A label wider than the gap between two neighbouring nodes lifts
-  its link into an arc until the label clears both. Before, such a diagram was given up as source ("edge label ... collides with a diagram
-  node").
-- A quoted link label, `A -->|"text"| B`, is printed without its quotes, and may hold a `|` or a link.
-- A Mermaid loop (`s --> g --> p --> l -.-> s`) is laid out from the node declared first. Layering started at the node with the smallest id, which
-  scrambled the order of the steps.
-- A Mermaid diagram whose left-to-right row is still wider than the page at the smallest scale is drawn top to bottom (right to left becomes
-  bottom to top) instead of being given up as source.
-- The text of a Mermaid node is centred in its box. A one-line label in a node of the minimum height sat about 4 pt high in a plain rectangle.
-- A chart's y-axis title is now drawn above the plot, in a row of its own between the legend and the top gridline. It was drawn inside
-  the plot, where the first bar and the axis line ran through it.
-- A display formula now leaves room for the line after it: the next paragraph's baseline lies the ascender of its line plus a visible
-  gap below the formula's lowest ink. Before, a sum's lower limit touched the next line, and a formula that fell at the top of a page
-  touched the paragraph under it.
-- An emoji that no bundled face can draw (they carry no color glyphs) printed as an empty box, or as a question mark, and
-  left a gap in the heading or list item it started. It is now left out, with the space that set it apart, so the words
-  around it read as written. A missing glyph that is not an emoji (a script the faces lack) is still shown as the face's
-  missing-glyph box, and under a conformance profile nothing is dropped.
-
-### Fixed
-- A typeset formula with a symbol the base fonts lack (an integral, an infinity, a Greek letter, a relation, a sum) was
-  spelled out in words ("int", "infinity", "pi") in a document that had no other text outside WinAnsi. Formulas are now
-  drawn with the Latin Modern Math face bundled with the package (the math font the TileDown site draws its formulas
-  with, GUST Font License), used for formulas only: the text stays on its own faces. A formula that needs no symbol keeps
-  the base fonts, and a document that does not typeset math is unchanged. A caller can give its own math face with
-  `PDFOptions.EmbeddedFonts.math`.
-- The draft issue file `issues/new-draw-an-svg-picture-...md` committed by mistake with the tile tests is removed.
-
-### Added
 - ` ```tile callout `, ` ```tile cta `, ` ```tile hero ` and ` ```tile cards ` draw the tiles that are text in a box,
   with the lines of the same tile on a TileDown page. The text of each is inline Markdown (emphasis, code, links
   are kept). A callout is a tinted box with an accent bar, a title (Note by default) and a body; a call to action a
@@ -83,6 +46,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a card's change is a drawn arrow, the word `up`, `down` or `flat`, and its text. A block the
   engine cannot draw (an unknown type, a missing line, a value above the total) is printed as a
   code block that says why, with its body, and nothing is guessed.
+
+### Fixed
+- A table column is never narrower than its widest word when the widest words of all the columns fit the page together. A narrow column had been
+  capped at an equal share of the page, so a long identifier such as `CALayer.anchorPoint` in a five-column table broke inside the word
+  (`CALayer.anchorPo` and `int`). Only a word wider than its share when they do not all fit is broken by character, as before.
+- A Mermaid `subgraph` whose header is a bare title of several words (`subgraph After 1.6.5`) is drawn with that title. It was refused
+  ("invalid subgraph header"). A header with a shape that is not drawn is still refused by name.
+- A Mermaid link whose straight line would run through other nodes (a back edge over a row) bends around them as an arc, and its label
+  sits on the arc, with the diagram made taller by what the arc reaches. A label wider than the gap between two neighbouring nodes lifts
+  its link into an arc until the label clears both. Before, such a diagram was given up as source ("edge label ... collides with a diagram
+  node").
+- A quoted link label, `A -->|"text"| B`, is printed without its quotes, and may hold a `|` or a link.
+- A Mermaid loop (`s --> g --> p --> l -.-> s`) is laid out from the node declared first. Layering started at the node with the smallest id, which
+  scrambled the order of the steps.
+- A Mermaid diagram whose left-to-right row is still wider than the page at the smallest scale is drawn top to bottom (right to left becomes
+  bottom to top) instead of being given up as source.
+- The text of a Mermaid node is centred in its box. A one-line label in a node of the minimum height sat about 4 pt high in a plain rectangle.
+- A chart's y-axis title is now drawn above the plot, in a row of its own between the legend and the top gridline. It was drawn inside
+  the plot, where the first bar and the axis line ran through it.
+- A display formula now leaves room for the line after it: the next paragraph's baseline lies the ascender of its line plus a visible
+  gap below the formula's lowest ink. Before, a sum's lower limit touched the next line, and a formula that fell at the top of a page
+  touched the paragraph under it.
+- An emoji that no embedded face can draw printed as an empty box, or as a question mark, and left a gap in the heading or
+  list item it started. The new option `PDFOptions.omitUndrawableEmoji` (off by default, so the text stays as written and
+  extractable) leaves such an emoji out, with the space that set it apart, so the words around it read as written. A missing
+  glyph that is not an emoji (a script the faces lack) is still shown as the face's missing-glyph box, and under a
+  conformance profile nothing is dropped.
+- A typeset formula with a symbol the base fonts lack (an integral, an infinity, a Greek letter, a relation, a sum) was
+  spelled out in words ("int", "infinity", "pi") in a document that had no other text outside WinAnsi. Formulas are now
+  drawn with the Latin Modern Math face bundled with the package (the math font the TileDown site draws its formulas
+  with, GUST Font License), used for formulas only: the text stays on its own faces. A formula that needs no symbol keeps
+  the base fonts, and a document that does not typeset math is unchanged. A caller can give its own math face with
+  `PDFOptions.EmbeddedFonts.math`.
+- The draft issue file `issues/new-draw-an-svg-picture-...md` committed by mistake with the tile tests is removed.
 
 ## [0.15.0] - 2026-11-16
 
