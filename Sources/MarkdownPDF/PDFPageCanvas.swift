@@ -415,6 +415,49 @@ final class PDFPageCanvas {
         drawPath(operators: operators, stroke: stroke, fill: fill, lineWidth: lineWidth)
     }
 
+    /// One slice of a doughnut: the area between the circles of `innerRadius` and `outerRadius` inside the sweep. The path
+    /// runs along the outer arc, across to the inner circle, back along the inner arc and closes. A whole turn is two
+    /// half turns without a seam line, because one closed ring path cannot leave the hole open under the nonzero rule.
+    func drawRingSlice(
+        centerX: Double,
+        centerY: Double,
+        innerRadius: Double,
+        outerRadius: Double,
+        startAngle: Double,
+        endAngle: Double,
+        stroke: PDFColor? = .white,
+        fill: PDFColor,
+        lineWidth: Double = 0.5,
+    ) {
+        let sweep = endAngle - startAngle
+        if abs(abs(sweep) - Double.pi * 2) < 0.0001 {
+            let middle = startAngle + sweep / 2
+            for (from, to) in [(startAngle, middle), (middle, endAngle)] {
+                drawRingSlice(
+                    centerX: centerX,
+                    centerY: centerY,
+                    innerRadius: innerRadius,
+                    outerRadius: outerRadius,
+                    startAngle: from,
+                    endAngle: to,
+                    stroke: nil,
+                    fill: fill,
+                    lineWidth: lineWidth,
+                )
+            }
+            return
+        }
+
+        let outerStart = arcPoint(centerX: centerX, centerY: centerY, radius: outerRadius, angle: startAngle)
+        let innerEnd = arcPoint(centerX: centerX, centerY: centerY, radius: innerRadius, angle: endAngle)
+        var operators: [PDFContentStream.Operator] = [.moveTo(x: outerStart.x, y: outerStart.y)]
+        operators += arcOperators(centerX: centerX, centerY: centerY, radius: outerRadius, startAngle: startAngle, endAngle: endAngle)
+        operators.append(.lineTo(x: innerEnd.x, y: innerEnd.y))
+        operators += arcOperators(centerX: centerX, centerY: centerY, radius: innerRadius, startAngle: endAngle, endAngle: startAngle)
+        operators.append(.closePath)
+        drawPath(operators: operators, stroke: stroke, fill: fill, lineWidth: lineWidth)
+    }
+
     func drawRectangle(
         x: Double,
         y: Double,

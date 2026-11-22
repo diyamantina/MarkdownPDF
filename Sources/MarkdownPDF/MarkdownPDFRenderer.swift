@@ -2116,6 +2116,8 @@ private struct Layout {
         return switch chart.kind {
         case .pie:
             "Pie chart"
+        case .doughnut:
+            "Doughnut chart"
         case .bar:
             "Bar chart"
         case .line:
@@ -2154,7 +2156,7 @@ private struct Layout {
         }
 
         switch chart.kind {
-        case .pie:
+        case .pie, .doughnut:
             return try pieChartRenderPlan(for: chart, height: height)
         case .bar, .line, .scatter:
             return try cartesianChartRenderPlan(for: chart, height: height)
@@ -2247,7 +2249,7 @@ private struct Layout {
             if let reason = try chartTickOverlapReason(ticks: xTicks, domain: xDomain, plotFrame: plotFrame) {
                 return .fallback(reason)
             }
-        case .pie:
+        case .pie, .doughnut:
             xTicks = []
             xDomain = (0, 0)
         }
@@ -2309,7 +2311,7 @@ private struct Layout {
         }
 
         switch plan.chart.kind {
-        case .pie:
+        case .pie, .doughnut:
             try drawPieChart(plan, topY: topY)
         case .bar:
             try drawBarChart(plan, topY: topY)
@@ -2337,14 +2339,26 @@ private struct Layout {
         for (index, point) in series.points.enumerated() {
             let sweep = -Double.pi * 2 * point.y / total
             let nextAngle = angle + sweep
-            currentPage.drawPieSlice(
-                centerX: centerX,
-                centerY: centerY,
-                radius: radius,
-                startAngle: angle,
-                endAngle: nextAngle,
-                fill: chartPalette[index % chartPalette.count],
-            )
+            if plan.chart.kind == .doughnut {
+                currentPage.drawRingSlice(
+                    centerX: centerX,
+                    centerY: centerY,
+                    innerRadius: ChartBlock.DoughnutGeometry.holeRadius(outer: radius),
+                    outerRadius: radius,
+                    startAngle: angle,
+                    endAngle: nextAngle,
+                    fill: chartPalette[index % chartPalette.count],
+                )
+            } else {
+                currentPage.drawPieSlice(
+                    centerX: centerX,
+                    centerY: centerY,
+                    radius: radius,
+                    startAngle: angle,
+                    endAngle: nextAngle,
+                    fill: chartPalette[index % chartPalette.count],
+                )
+            }
             angle = nextAngle
         }
 

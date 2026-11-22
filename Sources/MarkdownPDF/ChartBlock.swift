@@ -28,6 +28,8 @@ struct ChartBlock: Equatable {
 
     enum Kind: Equatable {
         case pie
+        /// A pie with a hole (`type: doughnut`, or `donut`); the same slices, see `DoughnutGeometry`.
+        case doughnut
         case bar
         case line
         case scatter
@@ -132,7 +134,7 @@ struct ChartBlock: Equatable {
                 slices.append(SliceInput(number: line.number, label: sanitizedLabel(split.key), value: value))
             }
 
-            return chartFromPie(title: title, slices: slices)
+            return chartFromPie(kind: .pie, title: title, slices: slices)
         }
 
         mutating func parseChartFence() -> ParseResult {
@@ -190,8 +192,8 @@ struct ChartBlock: Equatable {
             }
 
             switch kind {
-            case .pie:
-                return parsePieChartFence(title: title, categories: categories, seriesInputs: seriesInputs, slices: sliceInputs)
+            case .pie, .doughnut:
+                return parsePieChartFence(kind: kind, title: title, categories: categories, seriesInputs: seriesInputs, slices: sliceInputs)
             case .bar, .line:
                 return parseValueSeriesChart(
                     kind: kind,
@@ -215,13 +217,14 @@ struct ChartBlock: Equatable {
         }
 
         private func parsePieChartFence(
+            kind: Kind,
             title: String?,
             categories: [String],
             seriesInputs: [SeriesInput],
             slices: [SliceInput],
         ) -> ParseResult {
             if !slices.isEmpty {
-                return chartFromPie(title: title, slices: slices)
+                return chartFromPie(kind: kind, title: title, slices: slices)
             }
 
             guard seriesInputs.count == 1 else {
@@ -237,7 +240,7 @@ struct ChartBlock: Equatable {
             let pieSlices = zip(categories, values).map {
                 SliceInput(number: input.number, label: $0.0, value: $0.1)
             }
-            return chartFromPie(title: title, slices: pieSlices)
+            return chartFromPie(kind: kind, title: title, slices: pieSlices)
         }
 
         private func parseValueSeriesChart(
@@ -351,7 +354,7 @@ struct ChartBlock: Equatable {
             ))
         }
 
-        private func chartFromPie(title: String?, slices: [SliceInput]) -> ParseResult {
+        private func chartFromPie(kind: Kind, title: String?, slices: [SliceInput]) -> ParseResult {
             guard !slices.isEmpty else {
                 return .unsupported("pie chart has no slices")
             }
@@ -367,7 +370,7 @@ struct ChartBlock: Equatable {
             }
 
             return .chart(ChartBlock(
-                kind: .pie,
+                kind: kind,
                 title: title,
                 xLabel: nil,
                 yLabel: nil,
@@ -387,6 +390,8 @@ struct ChartBlock: Equatable {
             switch sanitizedLabel(text).lowercased() {
             case "pie":
                 .pie
+            case "doughnut", "donut":
+                .doughnut
             case "bar":
                 .bar
             case "line":
