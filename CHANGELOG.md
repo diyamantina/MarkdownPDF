@@ -13,9 +13,17 @@ The PDF of a page now matches the page: the tiles are drawn, formulas use the re
 charts of the blog and the site print. No change breaks the API: `PDFOptions.omitUndrawableEmoji` and `PDFOptions.EmbeddedFonts.emoji` and
 `.math` are additions with defaults, with one change of a default, named under Changed.
 
-Known, for 0.16.1: in a narrow table cell a full stop that follows a word that was cut at the end of a line can stand alone on the next line
-(a closing punctuation mark does not yet stay with the word before it). Emoji sequences (flags, keycaps, skin tones, joined emoji) are a later
-step: a single emoji and an emoji with its variation selector are drawn.
+Known, for 0.16.1:
+- Emoji sequences. A single emoji and an emoji with its variation selector are drawn. A joined emoji (zero width joiner) is drawn as its separate
+  emoji, and the text read back from the page, or copied, has no joiner. Flags, keycaps and skin-tone pairs are not drawn yet: they show as the
+  missing-glyph box, or are left out when `PDFOptions.omitUndrawableEmoji` is on (the enclosing keycap mark of a keycap stays a box even then).
+- In a narrow table cell a full stop that follows a word cut at the end of a line can stand alone on the next line (a closing punctuation mark does
+  not yet stay with the word before it).
+- A character cut off a base letter in the glyph fallback (a combining mark the own face lacks) is drawn in the proportional face on its own; after a
+  Braille glyph in a code block the following characters keep their own face but the column advance is that of the proportional face.
+- An emoji face of the caller whose colour table is version 1 with no version 0 records draws as a gap; a Mermaid link that grazes the end of a node
+  can need an arc too large to fit, and the diagram is then printed as source as before; the variation selector can reach the Arabic and Hebrew
+  shapers in a mixed run; a composite glyph with scaled component offsets is not placed by the scale.
 
 ### Added
 - Colour emoji. A single emoji code point, or one followed by the emoji variation selector, is drawn in colour: each layer of its glyph in
