@@ -4542,12 +4542,19 @@ private struct Layout {
                 fit = count
             }
             fit = max(fit, 1)
-            let cut = softBreaks ? ((1 ... fit).reversed().first { Self.isSoftBreak(after: $0, in: rest) } ?? fit) : fit
+            var cut = softBreaks ? ((1 ... fit).reversed().first { Self.isSoftBreak(after: $0, in: rest) } ?? fit) : fit
+            // A closing mark (a full stop, a comma, a closing bracket) never stands alone on a line: when the cut would leave only such marks, the
+            // last letter before them goes to the next line with them. Only when the part to cut is a single character is nothing to give.
+            if cut > 1, rest[cut...].allSatisfy({ Self.closingMarks.contains($0) }) {
+                cut -= 1
+            }
             parts.append(token.withText(String(rest.prefix(cut))))
             rest.removeFirst(cut)
         }
         return parts
     }
+
+    private static let closingMarks: Set<Character> = [".", ",", ";", ":", "!", "?", ")", "]", "}"]
 
     /// Whether a long word may be cut after its first `count` characters: after a separator, or before a capital that follows a lower-case letter or digit.
     private static func isSoftBreak(after count: Int, in characters: [Character]) -> Bool {

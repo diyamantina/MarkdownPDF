@@ -55,7 +55,8 @@ struct BundledEmojiFaceTests {
                 }
             }
         }
-        #expect(palette.entryCount == 1063)
+        // MEASURED: the Twemoji 17.0.3 build has 1141 palette entries (the face of 0.17.0, Twemoji Mozilla, had 1063).
+        #expect(palette.entryCount == 1141)
         #expect(alphas.count == 15, "\(alphas.count) translucent entries")
         #expect(alphas.min() == 38 && alphas.max() == 230, "alphas \(alphas.min() ?? 0) to \(alphas.max() ?? 0)")
     }

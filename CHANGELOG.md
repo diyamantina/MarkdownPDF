@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The bundled colour emoji face is Twemoji 17.0.3 (a COLR version 0 build, Emoji 17.0; the art is CC BY 4.0, text in `Fonts/LICENSE-Twemoji.txt`),
+  replacing the older Twemoji.Mozilla face. Of the 7210 entries of the whole-set oracle, 6708 are drawn (93.0 percent, 85.8 before), none is replaced by
+  a wrong character, and the rest is named in `whole-set-report.txt`: 24 emoji of Unicode 18.0 that no open face has yet, and 478 symbols.
+- A sequence is looked up in the face as written, fully qualified, and without its variation selectors, because faces key their ligatures on different
+  spellings (the keycap, for one).
+
+### Fixed
+
+- A closing mark (a full stop, a comma, a closing bracket) no longer stands alone on a line after a word cut by character in a narrow table cell: the last
+  letter goes to the next line with it.
+
 ## [0.17.0] - 2026-11-22
 
 A minor release: a character that no face draws is reported and never replaced silently, and the emoji sequences are drawn. Both are additions with

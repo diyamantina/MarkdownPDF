@@ -35,13 +35,13 @@ enum BundledFonts {
         return try? source(named: "latinmodern-math", extension: "otf", in: bundle)
     }()
 
-    /// The Twemoji.Mozilla colour face bundled with MarkdownPDF (Mozilla's COLR/CPAL build of the Twemoji art: the art is CC BY 4.0, the build code
-    /// Apache License 2.0). It draws emoji only, and is nil if an installation omits the resource.
+    /// The Twemoji colour face bundled with MarkdownPDF (a COLR/CPAL version 0 build of the Twemoji 17.0.3 art, Emoji 17.0; the art is CC BY 4.0, see
+    /// `LICENSE-Twemoji.txt`). It draws emoji only, and is nil if an installation omits the resource.
     static let twemoji: PDFOptions.EmbeddedFontSource? = {
         guard let bundle = resourceBundle else {
             return nil
         }
-        return try? source(named: "Twemoji.Mozilla", in: bundle)
+        return try? source(named: "Twemoji", in: bundle)
     }()
 
     /// The bundled colour emoji face, read once for the process (nil if the resource is absent or unreadable).

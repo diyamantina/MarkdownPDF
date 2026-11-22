@@ -82,13 +82,19 @@ struct ColorEmojiFont: @unchecked Sendable {
     /// that leaves exactly one glyph (a flag, a keycap, a skin tone, a joined emoji have one in the bundled face). Nil otherwise: a scalar the cmap lacks, no
     /// substitution table, or a result of several glyphs, which would be the parts of the sequence drawn one by one.
     private func sequenceGlyph(of cluster: EmojiSegmenter.Cluster) -> UInt16? {
-        // The spelling as written first, then the fully qualified one (the variation selector after each text-default emoji of the sequence): unicode.org
-        // lists both and the face carries the ligatures of the qualified form.
-        if let glyph = sequenceGlyph(of: cluster.scalars) {
-            return glyph
+        // The ligatures of a face are keyed on one spelling of each sequence, and the faces differ (the older face keyed the keycap with its selector, the
+        // newer one keys it without): the spelling as written, the fully qualified one (the variation selector after each text-default emoji of the
+        // sequence; unicode.org lists both), then the one with every variation selector taken off.
+        var spellings: [[Unicode.Scalar]] = [cluster.scalars]
+        for spelling in [Self.fullyQualified(cluster.scalars), cluster.scalars.filter { $0.value != 0xFE0F }] where !spellings.contains(spelling) {
+            spellings.append(spelling)
         }
-        let qualified = Self.fullyQualified(cluster.scalars)
-        return qualified == cluster.scalars ? nil : sequenceGlyph(of: qualified)
+        for spelling in spellings {
+            if let glyph = sequenceGlyph(of: spelling) {
+                return glyph
+            }
+        }
+        return nil
     }
 
     /// The scalars with the emoji variation selector after every text-default emoji (an emoji that is not drawn as an emoji by default) and after a

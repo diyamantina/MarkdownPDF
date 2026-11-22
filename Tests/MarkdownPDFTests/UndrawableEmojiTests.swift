@@ -7,10 +7,25 @@ import Testing
 /// (a script the faces lack) is still shown as the face's missing-glyph box: that is a fault to see, not to hide.
 @Suite("Emoji the faces cannot draw are left out")
 struct UndrawableEmojiTests {
-    /// Emoji that neither the bundled text faces nor the bundled colour face can draw (newer than the colour face), found from the faces
+    /// The colour face of these tests: an OLDER emoji face (the face bundled before Twemoji 17.0.3, kept as a fixture), given as the caller's face. The
+    /// bundled face now draws every emoji the platform's Unicode data knows, so an emoji "no face can draw" needs a face that is older than the data; the
+    /// feature (omitting an emoji nothing draws) is the same for a caller's face of any age.
+    private static let olderFace: PDFOptions.EmbeddedFontSource? = {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/OlderEmojiFace/Twemoji.Mozilla.ttf")
+        return (try? Data(contentsOf: url)).flatMap { try? PDFOptions.EmbeddedFontSource(data: $0, baseName: "Twemoji") }
+    }()
+
+    private static var fonts: PDFOptions.EmbeddedFonts {
+        var fonts = PDFOptions.EmbeddedFonts.dejaVu
+        fonts.emoji = olderFace
+        return fonts
+    }
+
+    /// Emoji that neither the bundled text faces nor the older colour face can draw (newer than the colour face), found from the faces
     /// themselves so the tests do not depend on a hand-picked code point.
     private static let missing: [String] = {
-        guard let catalog = try? PDFEmbeddedFontCatalog(fonts: .dejaVu) else { return [] }
+        guard let catalog = try? PDFEmbeddedFontCatalog(fonts: fonts) else { return [] }
         var found: [String] = []
         for value in 0x1F300 ... 0x1FAFF {
             guard let scalar = Unicode.Scalar(UInt32(value)), scalar.properties.isEmojiPresentation else { continue }
@@ -23,7 +38,7 @@ struct UndrawableEmojiTests {
     }()
 
     private func words(_ markdown: String, omit: Bool = true) throws -> [PDFDocumentReader.Word] {
-        let renderer = MarkdownPDFRenderer(options: PDFOptions(omitUndrawableEmoji: omit))
+        let renderer = MarkdownPDFRenderer(options: PDFOptions(embeddedFonts: Self.fonts, omitUndrawableEmoji: omit))
         return try PDFDocumentReader(data: renderer.render(markdown: markdown)).pages.flatMap(\.words)
     }
 

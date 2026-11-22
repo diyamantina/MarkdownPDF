@@ -122,7 +122,8 @@ struct ColorEmojiTests {
         // /ToUnicode entry is the rocket. The layers are filled paths, not text.
         #expect(text.contains(" 3 Tr") || text.contains("\n3 Tr"), "no invisible glyph")
         #expect(text.contains("<D83DDE80>"), "the /ToUnicode map has no entry for U+1F680")
-        #expect(text.components(separatedBy: "\nf\n").count - 1 >= 4, "the layers are not filled paths")
+        // MEASURED: the rocket of the Twemoji 17.0.3 build is drawn as 3 filled layers (4 in the face of 0.17.0).
+        #expect(text.components(separatedBy: "\nf\n").count - 1 >= 3, "the layers are not filled paths")
         // No private-use scalar of plane 15 in any map.
         #expect(!["D8BC", "D8BD", "D8BE", "D8BF"].contains { text.contains("<\($0)") })
     }
