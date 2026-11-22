@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A chart's y-axis title is now drawn above the plot, in a row of its own between the legend and the top gridline. It was drawn inside
+  the plot, where the first bar and the axis line ran through it.
 - A display formula now leaves room for the line after it: the next paragraph's baseline lies the ascender of its line plus a visible
   gap below the formula's lowest ink. Before, a sum's lower limit touched the next line, and a formula that fell at the top of a page
   touched the paragraph under it.

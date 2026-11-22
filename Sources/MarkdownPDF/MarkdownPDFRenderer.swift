@@ -2202,11 +2202,13 @@ private struct Layout {
         let titleHeight = chart.title == nil ? 8.0 : 26.0
         let legendHeight = 30.0
         let bottomAxisHeight = chart.xLabel == nil ? 34.0 : 48.0
+        // The y-axis title has a row of its own between the legend and the plot, over the top gridline, so it never runs through the first bar.
+        let yTitleHeight = chart.yLabel == nil ? 0.0 : chartLabelSize + 6
         let plotFrame = ChartFrame(
             left: options.margins.left + leftAxisWidth,
-            top: y - titleHeight - legendHeight,
+            top: y - titleHeight - legendHeight - yTitleHeight,
             width: contentWidth - leftAxisWidth - 12,
-            height: height - titleHeight - legendHeight - bottomAxisHeight,
+            height: height - titleHeight - legendHeight - yTitleHeight - bottomAxisHeight,
         )
         guard plotFrame.width >= 96, plotFrame.height >= 72 else {
             return .fallback("chart plot area is too small")
@@ -2498,7 +2500,7 @@ private struct Layout {
             try drawChartText(
                 yLabel,
                 x: plotFrame.left,
-                y: plotFrame.top - chartLabelSize - 5,
+                y: plotFrame.top + 6,
                 size: chartLabelSize,
                 color: .gray,
             )
