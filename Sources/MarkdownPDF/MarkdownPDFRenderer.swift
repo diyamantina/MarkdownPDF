@@ -2170,7 +2170,11 @@ private struct Layout {
             return .fallback("pie chart has no slices")
         }
         let titleHeight = chart.title == nil ? 8.0 : 26.0
-        let legendWidth = try max(92, min(150, widestChartLabelWidth(chart.categories) + 24))
+        // The legend draws `label value`, so the column is sized from those entries, not from the labels alone: a long label and its number
+        // ran past the chart box and the right margin. The 24 is the swatch, its gap and the right inset; the cap keeps the plot, and a label
+        // longer than the cap is shortened in `drawPieChart`, never its number.
+        let entries = series.points.map { "\($0.label ?? "") \(formatChartNumber($0.y))" }
+        let legendWidth = try max(92, min(150, widestChartLabelWidth(entries) + 24))
         let plotWidth = contentWidth - legendWidth - 18
         let radius = min(plotWidth / 2 - 8, (height - titleHeight - 18) / 2)
         guard radius >= 42 else {
@@ -2369,8 +2373,13 @@ private struct Layout {
         for (index, point) in series.points.enumerated() {
             let color = chartPalette[index % chartPalette.count]
             currentPage.drawRectangle(x: legendX, y: legendY - 8, width: 9, height: 9, stroke: nil, fill: color)
+            // The entry must end inside the legend column: the text starts 14 points right of the swatch, and the column ends 4 points past the
+            // swatch's origin plus 24 minus the swatch and its gap. A label too long for what is left of the column is shortened; its number is not.
+            let value = formatChartNumber(point.y)
+            let room = try legendWidth - 18 - chartTextWidth(" \(value)")
+            let label = try truncatedChartLabel(point.label ?? "", maxWidth: max(0, room))
             try drawChartText(
-                "\(point.label ?? "") \(formatChartNumber(point.y))",
+                "\(label) \(value)",
                 x: legendX + 14,
                 y: legendY - 7,
                 size: chartLabelSize,

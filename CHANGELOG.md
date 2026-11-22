@@ -62,6 +62,10 @@ charts of the blog and the site print. No change breaks the API: `PDFOptions.omi
   code block that says why, with its body, and nothing is guessed.
 
 ### Fixed
+- The legend of a pie and of a doughnut stays inside the chart box and the right margin. It draws `label value` but its column was sized from the
+  labels alone, so a long label and its number ran past the box (the doughnut of the cupertino 1.6.5 article, a pie in the site's diagrams page: the
+  entry ended 5 to 7 points beyond the margin). The column is now sized from the whole entries, and a label longer than the column (capped as before)
+  is shortened with an ellipsis; its number never is.
 - A table column is never narrower than its widest word when the widest words of all the columns fit the page together. A narrow column had been
   capped at an equal share of the page, so a long identifier such as `CALayer.anchorPoint` in a five-column table broke inside the word
   (`CALayer.anchorPo` and `int`). Only a word wider than its share when they do not all fit is broken by character, as before.
