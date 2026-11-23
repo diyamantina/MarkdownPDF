@@ -2646,7 +2646,10 @@ private struct Layout {
 
         let y = topY - (labels.count > 1 ? 39 : 33)
         let textX = options.margins.left + 18
-        let spacer = "   "
+        // The swatch of an entry sits in the space before its name, from 14 to 4 points left of it: the space between two names holds the swatch and
+        // a gap of 2 points before it, so it is at least 16 points of spaces (three spaces, 7 or 8 points, left the swatch over the name before it).
+        let spaceWidth = try chartTextWidth(" ")
+        let spacer = String(repeating: " ", count: max(3, spaceWidth > 0 ? Int((16 / spaceWidth).rounded(.up)) : 3))
         let spacerWidth = try chartTextWidth(spacer)
         var textCursor = textX
         var legendText = ""
@@ -3351,7 +3354,16 @@ private struct Layout {
 
         switch route.path {
         case .straight:
-            drawArrow(from: endpoints.start, to: endpoints.end, dashed: edge.dashed, arrowhead: edge.hasArrowhead)
+            // Into a rounded node on a diagonal the edge meets the outline before the middle of the side: it ends there, so its arrowhead is seen.
+            var end = endpoints.end
+            if let target = boxes.first(where: { $0.frame(topY: topY) == targetFrame }) {
+                let clipped = MermaidDiagram.Node.Shape.clippedEnd(
+                    from: (x: endpoints.start.x, y: endpoints.start.y), to: (x: end.x, y: end.y), shape: target.shape,
+                    left: targetFrame.left, bottom: targetFrame.bottom, width: targetFrame.width, height: targetFrame.height,
+                )
+                end = MermaidPoint(x: clipped.x, y: clipped.y)
+            }
+            drawArrow(from: endpoints.start, to: end, dashed: edge.dashed, arrowhead: edge.hasArrowhead)
         case let .arc(control1, control2):
             drawArcArrow(
                 from: endpoints.start,

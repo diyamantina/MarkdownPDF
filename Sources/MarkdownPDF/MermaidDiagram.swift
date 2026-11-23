@@ -158,6 +158,64 @@ struct MermaidDiagram: Equatable {
                 }
             }
 
+            /// Whether the point lies inside the outline of this shape drawn in the box `left, bottom, width, height` (rounded corners of radius 6, the
+            /// ends of a stadium a half circle each, the diamond of ``diamondOutline(left:bottom:width:height:)``).
+            func contains(x: Double, y: Double, left: Double, bottom: Double, width: Double, height: Double) -> Bool {
+                guard x >= left, x <= left + width, y >= bottom, y <= bottom + height else {
+                    return false
+                }
+                switch self {
+                case .rectangle:
+                    return true
+                case .rounded, .stadium:
+                    let radius = min(self == .stadium ? height / 2 : 6, width / 2, height / 2)
+                    let nearestX = min(max(x, left + radius), left + width - radius)
+                    let nearestY = min(max(y, bottom + radius), bottom + height - radius)
+                    return hypot(x - nearestX, y - nearestY) <= radius
+                case .diamond:
+                    return abs(x - (left + width / 2)) / (width / 2) + abs(y - (bottom + height / 2)) / (height / 2) <= 1
+                }
+            }
+
+            /// Where an edge from `start` that was to end at `end` (on the border of the box) meets the OUTLINE of this shape: the first point of the
+            /// way from `start` that lies inside it. An edge to the middle of the side of a rounded node that comes in on a diagonal runs inside the
+            /// outline before it reaches that point, where the node's fill paints over it and over its arrowhead. A rectangle's outline is its box:
+            /// `end` itself, unchanged.
+            static func clippedEnd(
+                from start: (x: Double, y: Double),
+                to end: (x: Double, y: Double),
+                shape: Shape,
+                left: Double,
+                bottom: Double,
+                width: Double,
+                height: Double,
+            ) -> (x: Double, y: Double) {
+                func inside(_ t: Double) -> Bool {
+                    shape.contains(
+                        x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t,
+                        left: left, bottom: bottom, width: width, height: height,
+                    )
+                }
+                guard shape != .rectangle, !inside(0) else {
+                    return end
+                }
+                let steps = 64
+                guard let first = (1 ... steps).first(where: { inside(Double($0) / Double(steps)) }) else {
+                    return end
+                }
+                var low = Double(first - 1) / Double(steps)
+                var high = Double(first) / Double(steps)
+                for _ in 0 ..< 40 {
+                    let middle = (low + high) / 2
+                    if inside(middle) {
+                        high = middle
+                    } else {
+                        low = middle
+                    }
+                }
+                return (x: start.x + (end.x - start.x) * high, y: start.y + (end.y - start.y) * high)
+            }
+
             /// The corners of a diamond that fills the box `left, bottom, width, height`: the midpoints of its four sides, clockwise from the top.
             static func diamondOutline(left: Double, bottom: Double, width: Double, height: Double) -> [PDFPageCanvas.Point] {
                 [

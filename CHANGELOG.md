@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.4] - 2026-11-23
+
+A patch release: two drawing faults found in the pictures of a published article.
+
+### Fixed
+
+- A Mermaid edge into a rounded node (a stadium, a rounded box, a decision) that comes in on a diagonal now ends where it meets the node's outline, not at
+  the middle of the side of the node's box. Before, the last part of the edge ran inside the outline, and the node's fill painted over it and over its
+  arrowhead: the arrowhead of the last edges of two diagrams was missing. The cause is older than 0.18.3 (it needs a rounded shape and a diagonal edge, and
+  the highlight colours only made it plain). An edge into a rectangle is drawn exactly as before.
+- In a chart with several series the swatch of an entry no longer paints over the end of the name before it: the space between two legend entries holds the
+  swatch and its gap (at least 16 points; three spaces left it over the previous name by about 7 points in the chart "What the feed costs at 100,000 rows").
+
 ## [0.18.3] - 2026-11-23
 
 A minor release: Mermaid `classDef` and `class` are drawn, and what the engine does not draw is reported by name.
