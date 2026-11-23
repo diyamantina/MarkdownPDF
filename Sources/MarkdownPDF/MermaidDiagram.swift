@@ -5,6 +5,8 @@ struct MermaidDiagram: Equatable {
     var nodes: [Node]
     var edges: [Edge]
     var groups: [Group] = []
+    /// What the `classDef` and `class` lines asked for and the engine did not draw as written (see ``MarkdownPDF/Render/Report/DiagramNote``).
+    var notes: [MarkdownPDF.Render.Report.DiagramNote] = []
 
     static func parse(_ source: String) -> ParseResult {
         var parser = Parser(source: source)
@@ -116,6 +118,22 @@ struct MermaidDiagram: Equatable {
         var label: String
         var hasExplicitLabel: Bool
         var shape: Shape = .rectangle
+        /// What the classes of the node set (`classDef` and `class`), nil for a node with none.
+        var style: Style?
+
+        /// The properties of a `classDef` that the engine draws, as the author gave them (colours are drawn as given; the widths are in CSS pixels).
+        struct Style: Equatable {
+            var fill: PDFColor?
+            var stroke: PDFColor?
+            var strokeWidth: Double?
+            var textColor: PDFColor?
+
+            /// What a node with no class (or no such property) is drawn with.
+            static let defaultFill = PDFColor(red: 0.90, green: 0.94, blue: 0.98)
+            static let defaultStroke = PDFColor(red: 0.18, green: 0.31, blue: 0.48)
+            /// One CSS pixel in points.
+            static let pointsPerPixel = 0.75
+        }
 
         /// The outline a node is drawn with, named by the brackets around its label.
         enum Shape: Equatable, Sendable {
@@ -277,6 +295,9 @@ struct MermaidDiagram: Equatable {
         private var groupOfNode: [String: Int] = [:]
         private var openGroup: Int?
         private var currentLine = 0
+        private var classDefs: [String: Node.Style] = [:]
+        private var classAssignments: [(nodes: [String], className: String, line: Int)] = []
+        private var notes: [MarkdownPDF.Render.Report.DiagramNote] = []
 
         init(source: String) {
             lines = source
@@ -304,6 +325,9 @@ struct MermaidDiagram: Equatable {
             for line in lines.dropFirst() {
                 currentLine = line.number
                 let text = stripTrailingSemicolon(line.text)
+                if parseStyleStatement(text) {
+                    continue
+                }
                 if let keyword = parseKeywordStatement(text) {
                     if case let .failure(reason) = keyword {
                         return .unsupported("line \(line.number): \(reason)")
@@ -336,7 +360,127 @@ struct MermaidDiagram: Equatable {
                 return .unsupported("flowchart has no nodes")
             }
 
-            return .diagram(MermaidDiagram(direction: direction, nodes: nodes, edges: edges, groups: groups))
+            applyClasses()
+            return .diagram(MermaidDiagram(direction: direction, nodes: nodes, edges: edges, groups: groups, notes: notes))
+        }
+
+        // MARK: classDef and class
+
+        /// Reads `classDef NAME[,NAME] prop:value,...` and `class A,B NAME`; returns whether the line was one. A node that merely starts with `class`
+        /// (`class --> x`) is not one.
+        private mutating func parseStyleStatement(_ text: String) -> Bool {
+            let words = text.split(whereSeparator: \.isWhitespace)
+            guard words.count >= 3, words[0] == "classDef" || words[0] == "class", Self.link(startingAt: words[1]) == nil else {
+                return false
+            }
+            if words[0] == "class" {
+                guard words.count == 3 else { return false }
+                let names = words[1].split(separator: ",").map(String.init)
+                classAssignments.append((nodes: names, className: String(words[2]), line: currentLine))
+                return true
+            }
+            let names = words[1].split(separator: ",").map(String.init)
+            let properties = text.dropFirst("classDef".count).trimmingCharacters(in: .whitespaces).dropFirst(words[1].count)
+            var style = Node.Style()
+            for property in properties.split(separator: ",") {
+                let parts = property.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+                guard parts.count == 2 else {
+                    note(.invalidValue, property.trimmingCharacters(in: .whitespaces))
+                    continue
+                }
+                apply(property: parts[0], value: parts[1], to: &style)
+            }
+            for name in names {
+                classDefs[name] = style
+            }
+            return true
+        }
+
+        private mutating func apply(property: String, value: String, to style: inout Node.Style) {
+            switch property {
+            case "fill", "stroke", "color":
+                guard let color = Self.color(from: value) else {
+                    note(.invalidValue, property, detail: value)
+                    return
+                }
+                switch property {
+                case "fill": style.fill = color
+                case "stroke": style.stroke = color
+                default: style.textColor = color
+                }
+            case "stroke-width":
+                let digits = value.hasSuffix("px") ? String(value.dropLast(2)) : value
+                guard let width = Double(digits.trimmingCharacters(in: .whitespaces)), width >= 0, width.isFinite else {
+                    note(.invalidValue, property, detail: value)
+                    return
+                }
+                style.strokeWidth = width
+            default:
+                note(.unknownProperty, property, detail: value)
+            }
+        }
+
+        private mutating func note(_ kind: MarkdownPDF.Render.Report.DiagramNote.Kind, _ name: String, detail: String = "") {
+            notes.append(MarkdownPDF.Render.Report.DiagramNote(kind: kind, name: name, line: currentLine, detail: detail))
+        }
+
+        /// `#rgb` or `#rrggbb`.
+        private static func color(from value: String) -> PDFColor? {
+            guard value.hasPrefix("#") else { return nil }
+            let digits = Array(value.dropFirst())
+            guard digits.count == 3 || digits.count == 6, digits.allSatisfy(\.isHexDigit) else { return nil }
+            let full = digits.count == 3 ? digits.flatMap { [$0, $0] } : digits
+            func channel(_ offset: Int) -> Double {
+                Double(Int(String(full[offset ..< offset + 2]), radix: 16) ?? 0) / 255
+            }
+            return PDFColor(red: channel(0), green: channel(2), blue: channel(4))
+        }
+
+        /// Puts the classes of the `class` lines on the nodes, in the order of the lines (a later class wins a property an earlier one set), and notes
+        /// what names nothing and the text colours that are hard to read on their fill.
+        private mutating func applyClasses() {
+            for assignment in classAssignments {
+                currentLine = assignment.line
+                guard let style = classDefs[assignment.className] else {
+                    note(.undefinedClass, assignment.className)
+                    continue
+                }
+                for id in assignment.nodes {
+                    guard let index = nodeIndexes[id] else {
+                        note(.undefinedNode, id)
+                        continue
+                    }
+                    var merged = nodes[index].style ?? Node.Style()
+                    merged.fill = style.fill ?? merged.fill
+                    merged.stroke = style.stroke ?? merged.stroke
+                    merged.strokeWidth = style.strokeWidth ?? merged.strokeWidth
+                    merged.textColor = style.textColor ?? merged.textColor
+                    nodes[index].style = merged
+                }
+            }
+            currentLine = 0
+            for node in nodes {
+                guard let style = node.style, style.fill != nil || style.textColor != nil else { continue }
+                let ratio = Self.contrastRatio(style.textColor ?? .black, style.fill ?? Node.Style.defaultFill)
+                if ratio < Self.minimumContrast {
+                    note(.lowContrast, node.id, detail: String(format: "%.2f", ratio))
+                }
+            }
+        }
+
+        /// WCAG 2 level AA for normal text.
+        static let minimumContrast = 4.5
+
+        /// The WCAG 2 contrast ratio of two colours, from 1 to 21.
+        static func contrastRatio(_ first: PDFColor, _ second: PDFColor) -> Double {
+            func luminance(_ color: PDFColor) -> Double {
+                func linear(_ value: Double) -> Double {
+                    value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+                }
+                return 0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue)
+            }
+            let (lighter, darker) = (max(luminance(first), luminance(second)), min(luminance(first), luminance(second)))
+            return (lighter + 0.05) / (darker + 0.05)
         }
 
         /// Reads `subgraph`, `direction` and `end`. Returns `nil` for any other line. A node

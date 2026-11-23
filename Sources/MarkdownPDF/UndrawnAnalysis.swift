@@ -35,7 +35,22 @@ enum UndrawnAnalysis {
                 }
             }
         }
-        return MarkdownPDF.Render.Report(undrawn: order.compactMap { found[$0] })
+        return MarkdownPDF.Render.Report(undrawn: order.compactMap { found[$0] }, diagramNotes: diagramNotes(of: document))
+    }
+
+    /// The notes of every Mermaid diagram of the document, in order: each diagram is parsed as the renderer parses it, and the notes it carries are
+    /// numbered by the diagram's position among the Mermaid diagrams.
+    private static func diagramNotes(of document: MarkdownDocument) -> [MarkdownPDF.Render.Report.DiagramNote] {
+        var notes: [MarkdownPDF.Render.Report.DiagramNote] = []
+        for (index, source) in document.blocks.flatMap(\.mermaidSources).enumerated() {
+            guard case let .diagram(diagram) = MermaidDiagram.parse(source) else { continue }
+            notes += diagram.notes.map { note in
+                var numbered = note
+                numbered.diagram = index + 1
+                return numbered
+            }
+        }
+        return notes
     }
 
     /// Whether an embedded face draws the character: the colour face for an emoji it has, a text face for every scalar of it.
@@ -60,6 +75,20 @@ enum UndrawnAnalysis {
 }
 
 private extension MarkdownBlock {
+    /// The sources of the Mermaid fences of the block, in reading order (a fence inside a quote, a list or a footnote counts).
+    var mermaidSources: [String] {
+        switch self {
+        case let .blockQuote(blocks), let .footnoteDefinition(_, blocks):
+            blocks.flatMap(\.mermaidSources)
+        case let .unorderedList(items), let .orderedList(_, items):
+            items.flatMap { $0.blocks.flatMap(\.mermaidSources) }
+        case let .codeBlock(info, code):
+            info?.split(separator: " ").first?.lowercased() == "mermaid" ? [code] : []
+        case .heading, .paragraph, .displayMath, .table, .thematicBreak, .pageBreak, .html:
+            []
+        }
+    }
+
     /// The texts of the block that the text path draws, in reading order. Diagrams and charts (a Mermaid or chart fence) and the source of formulas have
     /// their own paths and are not read.
     var drawnTexts: [String] {

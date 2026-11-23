@@ -2864,7 +2864,11 @@ private struct Layout {
             // A newline in a label is a line break the author wrote (`<br/>`); each line is
             // then wrapped to the node width on its own.
             let labelLines = try node.label.split(separator: "\n", omittingEmptySubsequences: false).flatMap { segment in
-                try wrappedLines([PDFTextRun(text: String(segment), font: .helvetica, size: fontSize)], maxWidth: labelWidthLimit)
+                var run = PDFTextRun(text: String(segment), font: .helvetica, size: fontSize)
+                if let textColor = node.style?.textColor {
+                    run.color = textColor
+                }
+                return try wrappedLines([run], maxWidth: labelWidthLimit)
             }
             let lineWidths = try labelLines.map { line in
                 try inkWidth(ofLine: line)
@@ -2893,6 +2897,7 @@ private struct Layout {
                 verticalPadding: verticalPadding,
                 shape: node.shape,
                 textHeight: Double(labelLines.count) * lineHeight,
+                style: node.style,
             )
         }
 
@@ -3581,24 +3586,30 @@ private struct Layout {
 
     private mutating func drawMermaidNode(_ box: MermaidNodeBox, topY: Double) throws {
         let frame = box.frame(topY: topY)
-        let stroke = PDFColor(red: 0.18, green: 0.31, blue: 0.48)
-        let fill = PDFColor(red: 0.90, green: 0.94, blue: 0.98)
+        // The colours and the width of the author's class, as given; a node with none keeps the colours and the 0.5 point line it always had.
+        let stroke = box.style?.stroke ?? MermaidDiagram.Node.Style.defaultStroke
+        let fill = box.style?.fill ?? MermaidDiagram.Node.Style.defaultFill
+        let lineWidth = box.style?.strokeWidth.map { $0 * MermaidDiagram.Node.Style.pointsPerPixel } ?? 0.5
         switch box.shape {
         case .rectangle:
-            currentPage.drawRectangle(x: frame.left, y: frame.bottom, width: box.width, height: box.height, stroke: stroke, fill: fill)
+            currentPage.drawRectangle(
+                x: frame.left, y: frame.bottom, width: box.width, height: box.height, stroke: stroke, fill: fill, lineWidth: lineWidth,
+            )
         case .rounded:
             currentPage.drawRoundedRectangle(
-                x: frame.left, y: frame.bottom, width: box.width, height: box.height, radius: 6, stroke: stroke, fill: fill,
+                x: frame.left, y: frame.bottom, width: box.width, height: box.height, radius: 6, stroke: stroke, fill: fill, lineWidth: lineWidth,
             )
         case .stadium:
             currentPage.drawRoundedRectangle(
                 x: frame.left, y: frame.bottom, width: box.width, height: box.height, radius: box.height / 2, stroke: stroke, fill: fill,
+                lineWidth: lineWidth,
             )
         case .diamond:
             currentPage.drawPolygon(
                 points: MermaidDiagram.Node.Shape.diamondOutline(left: frame.left, bottom: frame.bottom, width: box.width, height: box.height),
                 stroke: stroke,
                 fill: fill,
+                lineWidth: lineWidth,
             )
         }
 
@@ -5691,11 +5702,13 @@ private struct Layout {
         var shape: MermaidDiagram.Node.Shape = .rectangle
         /// The height of the text block; the box is taller than it for a diamond, so the text sits in the middle of it.
         var textHeight: Double = 0
+        var style: MermaidDiagram.Node.Style?
     }
 
     private struct MermaidNodeBox {
         var id: String
         var shape: MermaidDiagram.Node.Shape
+        var style: MermaidDiagram.Node.Style?
         var textHeight: Double
         var labelLines: [[PDFTextRun]]
         var x: Double
@@ -5709,6 +5722,7 @@ private struct Layout {
         init(measurement: MermaidNodeMeasurement, x: Double, topOffset: Double) {
             id = measurement.id
             shape = measurement.shape
+            style = measurement.style
             textHeight = measurement.textHeight
             labelLines = measurement.labelLines
             self.x = x

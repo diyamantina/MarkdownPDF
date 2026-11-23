@@ -57,6 +57,11 @@ public enum MarkdownPDFError: Error, Equatable, LocalizedError, Sendable {
         if reasons.contains(.bundledFacesUnavailable) {
             text += " The bundled faces are unavailable: the resource bundle MarkdownPDF_MarkdownPDF.bundle is missing from the deployment."
         }
+        if !report.diagramNotes.isEmpty {
+            let notes = report.diagramNotes.prefix(8).map { "diagram \($0.diagram), line \($0.line): \($0.kind) `\($0.name)`" }
+            let more = report.diagramNotes.count > notes.count ? " and \(report.diagramNotes.count - notes.count) more" : ""
+            text = (report.undrawn.isEmpty ? "" : text + " ") + "\(report.diagramNotes.count) diagram note(s): \(notes.joined(separator: "; "))\(more)."
+        }
         return text
     }
 

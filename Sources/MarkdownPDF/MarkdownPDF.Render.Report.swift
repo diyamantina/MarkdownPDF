@@ -11,14 +11,17 @@ public extension MarkdownPDF.Render {
     struct Report: Equatable, Sendable {
         /// The characters that were not drawn, in the order of first appearance.
         public var undrawn: [Character]
+        /// What a Mermaid diagram asked for and the engine did not draw as written (see ``DiagramNote``), in the order of the diagrams and their lines.
+        public var diagramNotes: [DiagramNote]
 
-        public init(undrawn: [Character] = []) {
+        public init(undrawn: [Character] = [], diagramNotes: [DiagramNote] = []) {
             self.undrawn = undrawn
+            self.diagramNotes = diagramNotes
         }
 
-        /// True when every character of the page is drawn from a face.
+        /// True when every character of the page is drawn from a face and no diagram has a note.
         public var isEmpty: Bool {
-            undrawn.isEmpty
+            undrawn.isEmpty && diagramNotes.isEmpty
         }
     }
 }

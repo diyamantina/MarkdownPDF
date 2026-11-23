@@ -585,6 +585,7 @@ final class PDFPageCanvas {
         height: Double,
         stroke: PDFColor? = .black,
         fill: PDFColor? = nil,
+        lineWidth: Double = 0.5,
     ) {
         if let fill {
             setFillColor(fill)
@@ -596,7 +597,7 @@ final class PDFPageCanvas {
         if let stroke {
             setStrokeColor(stroke)
             contentStream.append([
-                .setLineWidth(0.5),
+                .setLineWidth(lineWidth),
                 .rectangle(x: x, y: y, width: width, height: height),
                 .stroke,
             ])

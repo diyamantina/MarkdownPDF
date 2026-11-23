@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.3] - 2026-11-23
+
+A minor release: Mermaid `classDef` and `class` are drawn, and what the engine does not draw is reported by name.
+
+### Added
+
+- `classDef NAME fill:#rrggbb,stroke:#rrggbb,stroke-width:Npx,color:#rrggbb` and `class A,B NAME` (also `#rgb`, several class names, several classes on a
+  node, the later one winning a property): the fill, the stroke colour, the stroke width (one CSS pixel is 0.75 point) and the text colour are drawn on the
+  nodes of the class as the author gave them. A node with no class is drawn exactly as before.
+- `MarkdownPDF.Render.Report.diagramNotes` and `MarkdownPDF.Render.Report.DiagramNote`: a `classDef` property the engine does not draw (`font-weight`), a
+  value it cannot read, a class or a node that a `class` line names and that does not exist, and a text colour below the contrast ratio of 4.5 on its fill
+  (WCAG 2 level AA) are reported by name, with the diagram and the line. The diagram is still drawn and the author's colours are never changed. With
+  `undrawnCharacters` set to `.fail` a note throws, naming it: the report is empty only when no character is undrawn and no diagram has a note.
+
 ## [0.18.2] - 2026-11-23
 
 A patch release: the closing-mark fix of 0.18.1 cut a whole identifier in a narrow cell; the mark now hangs instead.
