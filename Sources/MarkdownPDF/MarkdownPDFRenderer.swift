@@ -600,6 +600,17 @@ private struct Layout {
     var y: Double
     var listDepth = 0
 
+    /// How many block quotes and list items hold the block being laid out.
+    var containerDepth = 0
+
+    /// How deep block quotes and list items are laid out before the rest is drawn as plain text.
+    ///
+    /// Laying out a container takes three or more stack frames and 24 points of indent for each level. The parser keeps
+    /// 32 levels (``MarkdownParser/maximumNestingDepth``), but a list of 33 levels already overflowed the stack of a
+    /// pool thread, and 16 levels of indent leave a page about a third of its width. Past this depth the container is
+    /// drawn as one paragraph of its text, so a hostile document degrades to prose instead of ending the process.
+    static let maximumContainerDepth = 16
+
     /// True while a block is being laid out only to learn whether it fits. See
     /// ``fits(onFreshPage:_:)``.
     var isMeasuring = false
@@ -859,6 +870,11 @@ private struct Layout {
     }
 
     private mutating func render(_ block: MarkdownBlock) throws {
+        if containerDepth >= Self.maximumContainerDepth, isContainer(block) {
+            // The depth guard of the layout: the text of the container, as one paragraph, and no further recursion.
+            try render(.paragraph([.text(plainText(block))]))
+            return
+        }
         switch block {
         case let .heading(level, content):
             let element = beginStructureElement(.heading(level: level))
@@ -905,6 +921,8 @@ private struct Layout {
         case let .blockQuote(blocks):
             let element = beginStructureElement(.blockQuote)
             defer { endStructureElement(element) }
+            containerDepth += 1
+            defer { containerDepth -= 1 }
             ensureSpace(24)
             let savedLeft = options.margins.left
             indentLeftMargin(by: 14)
@@ -1585,6 +1603,8 @@ private struct Layout {
                 endStructureElement(labelElement)
             }
         }
+        containerDepth += 1
+        defer { containerDepth -= 1 }
         let savedLeft = options.margins.left
         indentLeftMargin(by: 24)
         let bodyElement = beginStructureElement(.listBody)
@@ -5403,6 +5423,16 @@ private struct Layout {
             "[^\(label)]"
         case .indexMarker:
             ""
+        }
+    }
+
+    /// Whether the block holds other blocks that the layout lays out by recursion: a block quote or a list.
+    private func isContainer(_ block: MarkdownBlock) -> Bool {
+        switch block {
+        case .blockQuote, .unorderedList, .orderedList:
+            true
+        default:
+            false
         }
     }
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A document with block quotes or lists nested deeply no longer ends the process (#88). The parser keeps 32 levels, but a list of 33 levels overflowed the stack of a pool thread in the layout. The layout now lays out 16 levels of quotes and lists; a quote or list deeper than that is drawn as one paragraph of its text, with its words kept. The test renders on a thread of 384 KB: the unfixed layout ends the process there, the guard does not.
+
 ## [0.18.5] - 2026-11-24
 
 A patch release: a chart label that stuck out of the page. The limits of the library stay as listed in `Docs/NOT-VERIFIED.md` and in
