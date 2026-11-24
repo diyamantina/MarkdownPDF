@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.5] - 2026-11-24
+
+A patch release: a chart label that stuck out of the page. The limits of the library stay as listed in `Docs/NOT-VERIFIED.md` and in
+`whole-set-report.txt`.
+
 ### Fixed
 
 - A tick label of a chart's axis no longer leaves the chart or the page (issue 64). The x axis of a line chart with numeric x values drew the ticks of
@@ -16,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that end, and a label that then comes within 4 points of the moved one is not drawn (its gridline stays); and the column of the y axis grows past its
   68 points for a label that would otherwise start left of the frame. A chart whose tick labels lay inside the frame and whose ticks lay inside the plot
   is drawn byte for byte as before.
+- The note of 0.18.0 on the 24 emoji entries that no open face has yet now says what they are: 9 new single emoji of Unicode 18.0, 10 skin tone
+  variants of them and the 5 bare skin tone components. Only the wording changed.
 
 ## [0.18.4] - 2026-11-23
 
