@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T11:09:29+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:30:03+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/73
-synced: 2026-11-24T12:19:19+01:00 40ea8c4cd5e2
+synced: 2026-11-24T13:30:03+01:00 4d3d609dc016
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ The reference is the list produced by searching the tests for the disabled trait
 ## Acceptance
 
 Each of the fourteen is enabled or is a named limit, a check fails when a disabled test has no row, and the README status text links the section.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:30:03+01:00
+
+Correction after reading the code on 2026-11-24. The count splits: of the 14 disabled tests, 9 need a rasterizer and 5 need a PDF/A and PDF/UA validator (one suite, CoverPageTests, is in both groups). This issue owns the 9 and issue 74 owns the 5; read fourteen as nine here. Docs/NOT-VERIFIED.md names all 14 and the README links that file (not a section).

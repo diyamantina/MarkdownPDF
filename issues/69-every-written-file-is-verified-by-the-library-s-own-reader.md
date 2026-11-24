@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T10:58:22+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:28:41+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/69
-synced: 2026-11-24T12:19:19+01:00 1ffd1d36ec53
+synced: 2026-11-24T13:28:41+01:00 70e3cd842bba
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ The reference is the independent byte inspection of the test target compared wit
 ## Acceptance
 
 One check walks every test document, the two readers agree on all of them, and planted faults (an offset off by one, a dangling reference, a wrong width) are each caught.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:28:41+01:00
+
+Correction after reading the code on 2026-11-24. One of the three byte inspectors of the test target (PDFImageObjects) imports the library and calls its deflate coder, so it does not share nothing with the writer; the check must say which inspectors are independent. The reader exposes only a font name and whether it is embedded, not widths, so a check that a width equals the font's own needs the reader (or the inspector) to expose widths first.

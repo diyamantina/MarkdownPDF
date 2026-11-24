@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T11:42:47+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:35:31+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/85
-synced: 2026-11-24T12:19:19+01:00 c55c9001257a
+synced: 2026-11-24T13:35:31+01:00 f770efe42fa4
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ The reference is a clean checkout on each platform: build, test and the release 
 ## Acceptance
 
 Both platforms pass from a clean checkout, the documented release steps work on a dry run, and the README and CHANGELOG match the tag.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:35:31+01:00
+
+Correction after reading the code on 2026-11-24. The README has no install line to update (add one). The command line tool and the resume tool both live in one separate repository, MarkdownPDFCli. Besides the macOS and Linux workflows there are WebAssembly, style, documentation and rules-freshness workflows. The README claims Windows and WebAssembly builds while the manifest declares only macOS 13: decide what is claimed.

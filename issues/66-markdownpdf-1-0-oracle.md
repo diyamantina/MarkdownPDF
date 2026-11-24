@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T10:56:50+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:26:38+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/66
-synced: 2026-11-24T12:19:19+01:00 89be6f995ef9
+synced: 2026-11-24T13:26:38+01:00 7ba948429530
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ This issue is the oracle: one document with one section per surface and a test t
 ## Acceptance
 
 A document names the surfaces above (and any the review adds) with every field listed, a test fails when a section is missing or empty, and the issues blocked on it say so in a comment.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:26:38+01:00
+
+Correction after reading the code on 2026-11-24. Surfaces the list left out: images (PNGDecoder, PDFImage), the deflate coder (PDFDeflate), the cover, colophon, page numbers and page labels, the undrawn-character report and its policy, the merge render, and the resume template. Add each as a surface or state why it is covered by another.

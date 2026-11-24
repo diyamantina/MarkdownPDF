@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T11:29:35+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:32:48+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/77
-synced: 2026-11-24T12:19:19+01:00 5294c0ff8240
+synced: 2026-11-24T13:32:48+01:00 1dd5347612f3
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ The reference is the licence text of each font and the embedding flags (the fsTy
 ## Acceptance
 
 A table lists each face with licence, source, version and fsType, every licence is checked in or named as open with its owner, and the README links it.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:32:48+01:00
+
+Correction after reading the code on 2026-11-24. The package builds no font and has no font build script: Twemoji.ttf is a prebuilt third-party file (twemoji-colr, release 17.0.3). The open point is the licence of that builder as the issue says, not a tool of this repository. There is no separate symbol face; symbols come from DejaVu. The README font section is prose with no version, source or embedding flag per face.

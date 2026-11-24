@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T10:57:21+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:27:19+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/67
-synced: 2026-11-24T12:19:19+01:00 f9eb1061c7f1
+synced: 2026-11-24T13:27:19+01:00 b3adaf6e7bd5
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ The reference is the compiler's symbol list for each product compared with the r
 ## Acceptance
 
 Every public symbol is nested under MarkdownPDF, one type per file named after the full nested name, the reviewed list is in the repository, the CHANGELOG carries the old to new table, and a check fails on a flat public name.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:27:19+01:00
+
+Correction after reading the code on 2026-11-24. MarkdownPDFDocumentation is a target, not a product, and has no public symbol; MarkdownPDFMac is a product only on a macOS host. Twelve file-scope public types are flat today (MarkdownBlock, MarkdownInline, MarkdownPDF, MarkdownPDFError, MarkdownDocument, MarkdownMath, MarkdownParser, MarkdownPDFRenderer, MarkdownSource, PDFColor, PDFDocumentReader, PDFOptions); the public enum MarkdownPDF already exists with Render, Render.Report, Render.UndrawnPolicy and Render.Output, so the target is the rest. The namespacing check today only counts file-scope types per file; the check on flat public names is new work.

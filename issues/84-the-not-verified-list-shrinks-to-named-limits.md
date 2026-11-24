@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T11:42:16+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:34:50+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/84
-synced: 2026-11-24T12:19:19+01:00 98888feb0c9b
+synced: 2026-11-24T13:34:50+01:00 befe94552908
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ The reference is the list of every disabled, skipped or conditional test and eve
 ## Acceptance
 
 One section lists every remaining limit with a name and a reason, and a check fails when a disabled test or an assumption is missing from it.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:34:50+01:00
+
+Correction after reading the code on 2026-11-24. Read the two items above as issues 73 and 74. Conditional tests missing from Docs/NOT-VERIFIED.md: ArabicRenderIntegrationTests also needs HarfBuzz but the list names three suites; the 7 tests that need the colour emoji fixture and the 3 that need the open TrueType fixture are not listed. The check must cover every disabled or conditional test, not only the disabled ones.

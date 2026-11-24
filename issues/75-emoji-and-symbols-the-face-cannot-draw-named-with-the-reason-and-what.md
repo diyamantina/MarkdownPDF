@@ -5,9 +5,9 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T11:10:31+01:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-24T13:31:26+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/75
-synced: 2026-11-24T12:19:19+01:00 b8bfd7d25621
+synced: 2026-11-24T13:31:26+01:00 2f4d0ccd515a
 neutralized: 1
 ---
 
@@ -26,3 +26,9 @@ The reference is the Unicode data files (emoji-test and the assigned code points
 ## Acceptance
 
 One section lists every undrawn set with the reason and the substitute, the report regenerates byte for byte, and a check fails when a code point is reported but not in the section.
+
+## Comments
+
+### Mihaela, 2026-11-24T13:31:26+01:00
+
+Correction after reading the code on 2026-11-24. The reason for the 5 skin tone components is not proved to be no glyph in any face: the CHANGELOG records that the same reason was once applied to them wrongly. Give each set its own measured reason. Name the existing report reasons and the omitUndrawableEmoji option, and what is drawn instead (a stand-in letter under the base fonts, the missing-glyph box under an embedded face). The report regenerates only in the whole-set test's write mode.
