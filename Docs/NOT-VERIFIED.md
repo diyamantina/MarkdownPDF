@@ -85,11 +85,14 @@ rendu (ms)" has x values 1 to 16, and its x axis draws the tick labels 0, 5, 10,
 15 and 20. The label "20" is placed at x 639 on a page 612 points wide, and the
 label "0" lands left of the y axis labels. The reader reports the word box
 outside the page. The extractor used before drops text outside the page, so the
-old test never saw it. The test records this as a known issue
-(`withKnownIssue`) scoped to that fixture and that word. It was not fixed here
-because this change does not touch rendering. When the renderer keeps tick labels
-inside the plot, the known issue stops being recorded and the test reports that,
-so the marker has to be removed.
+old test never saw it. The test recorded this as a known issue
+(`withKnownIssue`) scoped to that fixture and that word.
+
+Fixed since (issue 64): the axis of a line chart draws only the ticks inside its
+range, here 5, 10 and 15, and no tick label of a chart leaves the chart's frame.
+The known issue marker is removed and the test holds every chart label of the
+showcase inside its chart's frame. `ChartTickLabelTests` compares the drawn
+labels with an answer key over enumerated and seeded charts.
 
 ## What was migrated
 

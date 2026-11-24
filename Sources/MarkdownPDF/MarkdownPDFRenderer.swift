@@ -2261,8 +2261,11 @@ private struct Layout {
         guard let yFirst = yTicks.first, let yLast = yTicks.last, yLast > yFirst else {
             return .fallback("chart y axis could not be scaled")
         }
-        let yLabelWidth = try max(34, yTicks.map { try chartTextWidth(formatChartNumber($0)) }.max() ?? 34)
-        let leftAxisWidth = min(max(38, yLabelWidth + 10), 68)
+        let widestYLabel = try yTicks.map { try chartTextWidth(formatChartNumber($0)) }.max() ?? 0
+        let yLabelWidth = max(34, widestYLabel)
+        // The y labels end 6 points left of the plot. The column is 68 points at most, unless the widest label would then start left of the chart's
+        // frame: the column is as wide as that label needs. The plot gets narrower, and a plot that is too narrow is reported below.
+        let leftAxisWidth = max(min(max(38, yLabelWidth + 10), 68), widestYLabel + 6 + chartLabelBounds.lowerBound - options.margins.left)
         let titleHeight = chart.title == nil ? 8.0 : 26.0
         let legendHeight = 30.0
         let bottomAxisHeight = chart.xLabel == nil ? 34.0 : 48.0
@@ -2296,7 +2299,11 @@ private struct Layout {
         case .line:
             let values = allPoints.map(\.x)
             xDomain = expandedDomain(min: values.min() ?? 0, max: values.max() ?? 1)
-            xTicks = chart.categories.isEmpty ? niceChartTicks(min: xDomain.min, max: xDomain.max, targetCount: 5) : chart.series[0].points.map(\.x)
+            // The plot spans the x values themselves, not the rounded range the ticks are taken from: a tick below the least x or above the greatest
+            // maps to a point outside the plot, and its label left the chart and the page. Only the ticks inside the range belong to the axis.
+            xTicks = chart.categories.isEmpty
+                ? ChartBlock.TickLabelLayout.ticks(niceChartTicks(min: xDomain.min, max: xDomain.max, targetCount: 5), inside: xDomain)
+                : chart.series[0].points.map(\.x)
             if !chart.categories.isEmpty {
                 let bandWidth = plotFrame.width / Double(chart.categories.count)
                 for category in chart.categories where try chartTextWidth(category) > bandWidth * 0.92 {
@@ -2618,8 +2625,16 @@ private struct Layout {
         domain: (min: Double, max: Double),
         plotFrame: ChartFrame,
     ) throws {
-        for tick in ticks {
-            let tickX = chartX(tick, domain: domain, frame: plotFrame)
+        // A label is centred under its tick and stays inside the chart's frame: one that would pass an end of the frame is moved inward, and a label
+        // that then comes too close to a moved one is not drawn (`ChartBlock.TickLabelLayout`). Every tick keeps its gridline.
+        let centers = ticks.map { chartX($0, domain: domain, frame: plotFrame) }
+        let labels = ticks.map { formatChartNumber($0) }
+        let lefts = try ChartBlock.TickLabelLayout.lefts(
+            centers: centers,
+            widths: labels.map { try chartTextWidth($0) },
+            bounds: chartLabelBounds,
+        )
+        for (index, tickX) in centers.enumerated() {
             currentPage.drawLine(
                 x1: tickX,
                 y1: plotFrame.bottom,
@@ -2628,15 +2643,24 @@ private struct Layout {
                 width: 0.2,
                 color: PDFColor(red: 0.88, green: 0.89, blue: 0.91),
             )
+            guard let left = lefts[index] else {
+                continue
+            }
             try drawChartText(
-                formatChartNumber(tick),
-                x: tickX,
+                labels[index],
+                x: left,
                 y: plotFrame.bottom - 13,
                 size: chartLabelSize,
                 color: .gray,
-                alignment: .center,
             )
         }
+    }
+
+    /// The left and right end of the chart's frame, the box `drawChartPlan` draws, cut to the page: no chart label may leave it.
+    private var chartLabelBounds: ClosedRange<Double> {
+        let left = max(0, options.margins.left - 4)
+        let right = min(options.pageSize.width, options.margins.left + contentWidth + 4)
+        return left ... max(left, right)
     }
 
     private mutating func drawChartLegend(_ labels: [String], topY: Double) throws {

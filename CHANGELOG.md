@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A tick label of a chart's axis no longer leaves the chart or the page (issue 64). The x axis of a line chart with numeric x values drew the ticks of
+  the rounded range although the plot spans the x values only: with x from 1 to 16 it drew the ticks 0 and 20 outside the plot, the label "20" past the
+  right edge of the page and the label "0" left of the chart's frame. Only the ticks inside the range are drawn now (5, 10 and 15 there); the line and
+  its points are where they were. Also, on the x axis of a line or scatter chart a label that would pass an end of the chart's frame is moved inward to
+  that end, and a label that then comes within 4 points of the moved one is not drawn (its gridline stays); and the column of the y axis grows past its
+  68 points for a label that would otherwise start left of the frame. A chart whose tick labels lay inside the frame and whose ticks lay inside the plot
+  is drawn byte for byte as before.
+
 ## [0.18.4] - 2026-11-23
 
 A patch release: two drawing faults found in the pictures of a published article.

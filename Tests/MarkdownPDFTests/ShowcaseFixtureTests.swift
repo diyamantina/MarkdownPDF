@@ -26,29 +26,40 @@ struct ShowcaseFixtureTests {
         ).render(markdown: markdown)
 
         let base = (fixtureName as NSString).deletingPathExtension
-        func witness() throws {
-            try assertEmbeddedFontVisualWitness(
-                data,
-                name: "showcase-\(base)",
-                expectedSubstrings: Self.expectedSubstrings[fixtureName] ?? [base],
-                minWords: 20,
+        // The witness holds every word inside its page. The line chart "Temps de
+        // rendu" of `05-charts-dashboard.md` once drew the tick label "20" past the
+        // right edge of the page, and the witness recorded it as a known issue.
+        try assertEmbeddedFontVisualWitness(
+            data,
+            name: "showcase-\(base)",
+            expectedSubstrings: Self.expectedSubstrings[fixtureName] ?? [base],
+            minWords: 20,
+        )
+
+        // Every chart of the showcase is a block of its own, so its frame runs from
+        // 4 points left of the left margin to 4 points right of the right margin.
+        // Chart text is the only text set at the chart label size: each such run
+        // lies inside that frame. The count guards against a pass that saw no label.
+        let options = PDFOptions()
+        let frame = ChartTickLabelKey.frame(
+            pageWidth: options.pageSize.width,
+            marginLeft: options.margins.left,
+            marginRight: options.margins.right,
+        )
+        let labels = try PDFDocumentReader(data: data).pages.flatMap(\.runs).filter {
+            abs($0.fontSize - ChartTickLabelKey.labelSize) < 0.001 && !$0.text.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+        for label in labels {
+            #expect(
+                label.x >= frame.lowerBound - 0.01 && label.x + label.width <= frame.upperBound + 0.01,
+                Comment(rawValue: "chart label '\(label.text)' at \(label.x)...\(label.x + label.width) leaves the chart frame \(frame)"),
             )
         }
-        guard fixtureName == "05-charts-dashboard.md" else {
-            try witness()
-            return
-        }
-        // A known defect of the renderer, found when this witness moved to the
-        // package's own reader: the line chart "Temps de rendu" has x values 1 to
-        // 16, and its axis draws the tick labels 0 and 20 beyond the plot. The
-        // label "20" lands at x 639 on a page 612 points wide. The outside
-        // extractor used before dropped text outside the page, so it never saw it.
-        // When the renderer keeps tick labels inside the plot, this known issue
-        // stops being recorded and the test says so. See Docs/NOT-VERIFIED.md.
-        try withKnownIssue("a chart axis tick label is drawn outside the page") {
-            try witness()
-        } matching: { issue in
-            issue.comments.contains { $0.rawValue.contains("'20' is outside page bounds") }
+        if fixtureName == "05-charts-dashboard.md" {
+            // Measured on 2026-11-24, printed by the line below: 40 chart labels in this fixture. The floor is the
+            // measured number, so a filter that finds no label cannot pass.
+            print("ShowcaseFixtureTests: \(labels.count) chart labels in \(fixtureName)")
+            #expect(labels.count >= 40)
         }
     }
 
