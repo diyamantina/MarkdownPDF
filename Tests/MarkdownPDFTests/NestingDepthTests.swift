@@ -58,29 +58,40 @@ struct NestingDepthTests {
         try PDFDocumentReader(data: data).text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    @Test("a list nested this many levels renders on a small stack and keeps its words", arguments: [
-        31, 32, 33, 34, 100, 1000,
-    ])
+    /// The depths of the fast suite: both sides of the parser's limit of 32 and of the layout's guard. The extremes are in
+    /// `NestingDepthLargeTests`, which the hook does not run (they cost minutes: the input of a list grows with the
+    /// square of its depth).
+    static let nearTheLimit = [31, 32, 33, 34]
+
+    @Test("a list nested this many levels renders on a small stack and keeps its words", arguments: nearTheLimit)
     func list(depth: Int) async throws {
-        let data = try await Self.renderOnSmallStack(Self.nestedList(depth: depth))
-        let text = try Self.text(of: data)
-        #expect(text.contains("level 1"))
-        #expect(text.contains("level \(depth)"), "the deepest item is in the PDF")
+        try await Self.expectListKeepsItsWords(depth: depth)
     }
 
-    @Test("a quote nested this many levels renders on a small stack and keeps its words", arguments: [
-        31, 32, 33, 34, 100, 1000, 10000,
-    ])
+    @Test("a quote nested this many levels renders on a small stack and keeps its words", arguments: nearTheLimit)
     func quote(depth: Int) async throws {
-        let data = try await Self.renderOnSmallStack(Self.nestedQuote(depth: depth))
-        #expect(try Self.text(of: data).contains("bottom \(depth)"))
+        try await Self.expectQuoteKeepsItsWords(depth: depth)
     }
 
-    @Test("a footnote body nested this many levels renders on a small stack and keeps its words", arguments: [
-        31, 32, 33, 34, 100, 1000, 10000,
-    ])
+    @Test("a footnote body nested this many levels renders on a small stack and keeps its words", arguments: nearTheLimit)
     func footnote(depth: Int) async throws {
-        let data = try await Self.renderOnSmallStack(Self.nestedFootnote(depth: depth))
-        #expect(try Self.text(of: data).contains("note bottom \(depth)"))
+        try await Self.expectFootnoteKeepsItsWords(depth: depth)
+    }
+
+    static func expectListKeepsItsWords(depth: Int) async throws {
+        let data = try await renderOnSmallStack(nestedList(depth: depth))
+        let words = try text(of: data)
+        #expect(words.contains("level 1"))
+        #expect(words.contains("level \(depth)"), "the deepest item is in the PDF")
+    }
+
+    static func expectQuoteKeepsItsWords(depth: Int) async throws {
+        let data = try await renderOnSmallStack(nestedQuote(depth: depth))
+        #expect(try text(of: data).contains("bottom \(depth)"))
+    }
+
+    static func expectFootnoteKeepsItsWords(depth: Int) async throws {
+        let data = try await renderOnSmallStack(nestedFootnote(depth: depth))
+        #expect(try text(of: data).contains("note bottom \(depth)"))
     }
 }

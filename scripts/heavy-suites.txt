@@ -1,0 +1,19 @@
+# The test suites the pre-push hook does not run: one Swift type name for each line, in the module MarkdownPDFTests.
+# The heavy script (scripts/check-heavy.sh) runs every suite, these included; a release or a "verified" claim names that run.
+# A suite is listed here only when it was measured (one test at a time, 2026-11-24) to cost 5 seconds or more; the 14 below
+# are 590 of the 706 seconds of the whole run, and the other 110 suites run in 38 seconds. Add a suite when it grows past
+# 5 seconds; `scripts/test-test-suites.sh` checks that every name here is a real suite.
+ClosingPunctuationHangTests
+ClosingPunctuationAfterCodeTests
+ClosingPunctuationTests
+NestingDepthLargeTests
+FixtureTests
+SymbolOracleTests
+CoverPageTests
+ShowcaseFixtureTests
+PDFVisualLayoutValidationTests
+BundledEmojiFaceTests
+DisplayMathSpacingTests
+KeepTogetherTests
+OutlineOptionsMatrixTests
+ChartTickLabelTests

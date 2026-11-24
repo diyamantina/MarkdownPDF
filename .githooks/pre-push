@@ -21,6 +21,7 @@ FAIL=0
 # Always: repo-wide style and namespacing gates.
 bash scripts/check-style.sh || FAIL=1
 bash scripts/check-namespacing.sh || FAIL=1
+bash scripts/test-test-suites.sh > /dev/null || FAIL=1
 
 # Swift gates, only when the package exists.
 if [ -f Package.swift ]; then
@@ -34,7 +35,9 @@ if [ -f Package.swift ]; then
   else
     echo "pre-push: swiftlint not installed, skipping lint check" >&2
   fi
-  ( swift build && swift test ) || FAIL=1
+  # The tests that cost under 5 seconds each suite (scripts/heavy-suites.txt lists the rest). The heavy suites run in
+  # scripts/check-heavy.sh, which a release or a "verified" claim names; the target of this hook is 60 seconds alone.
+  ( swift build && bash scripts/test-suites.sh smoke ) || FAIL=1
 fi
 
 if [ "$FAIL" -ne 0 ]; then
