@@ -1,9 +1,18 @@
-# Flat public names that existed before the rule of the top namespace. This file lists only the names this repository adds as
-# compatibility aliases after moving their types to ExtendedMarkdown; the rest of the flat names are the debt of issue 67
-# (the public API reviewed and nested under the package name), which has not been counted into this list yet.
-# These five aliases keep the published names working; they leave this list when the API is frozen (issue 67).
-MarkdownParser
+# Flat public type names that existed before the first namespace rule (the top namespace is the package name).
+# The list may only shrink: a name that is on it and is no longer declared is stale and fails the check, so it cannot hide a new flat name.
+# Written by `nscheck --repo DIR --list`; rewrite it only to take out the names that moved into the namespace.
 MarkdownBlock
-MarkdownInline
 MarkdownDocument
+MarkdownInline
 MarkdownMath
+MarkdownPDFError
+MarkdownPDFLinuxRenderer
+MarkdownPDFMacRenderer
+MarkdownPDFRenderer
+MarkdownParser
+MarkdownSource
+PDFColor
+PDFDocumentReader
+PDFOptions
+ResumeDocument
+ResumeMarkdownTemplate
