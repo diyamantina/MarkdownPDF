@@ -1,3 +1,4 @@
+import ExtendedMarkdownCore
 import Foundation
 import MathTypeset
 
@@ -6077,7 +6078,7 @@ extension Layout {
         width: Double,
     ) throws -> [[PDFTextRun]] {
         let font = standardFont(for: bold ? .bold : .regular)
-        let runs = try flatten(InlineParser().parse(markdown), font: font, size: size, color: color)
+        let runs = try flatten(ExtendedMarkdown.Core.InlineParser().parse(markdown), font: font, size: size, color: color)
         return try wrappedLines(runs, maxWidth: width)
     }
 

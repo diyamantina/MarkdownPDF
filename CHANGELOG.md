@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Markdown reader (the block and inline parser, the trees it builds, the math span and the HTML comment stripper: 7 files) moved to the package ExtendedMarkdown (`https://codeberg.org/MarkdownPDFHQ/ExtendedMarkdown`), which MarkdownPDF now depends on by branch `main`. Every name MarkdownPDF published for these types is kept as a type alias (`MarkdownParser`, `MarkdownBlock`, `MarkdownInline`, `MarkdownDocument`, `MarkdownMath`): the same types, nested types, initializers and cases, so a client compiles unchanged. A PDF is byte for byte what it was: a corpus of 210 PDFs (42 documents under 5 option sets) written before the move and after it is equal, file by file, with ExtendedMarkdown at revision 167ba2c. The three test suites of the parser moved with it; the render half of one test stays here (`LinkTrailingQuoteRenderTests`) and a compile test names every old public name (`CoreAliasTests`).
+
 ## [0.18.6] - 2026-11-24
 
 A patch release: a document nested very deeply no longer ends the process. The limits of the library stay as listed in `Docs/NOT-VERIFIED.md` and in

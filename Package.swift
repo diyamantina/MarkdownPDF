@@ -46,12 +46,14 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3"),
         .package(url: "https://codeberg.org/MarkdownPdfHQ/MathTypeset.git", branch: "main"),
+        .package(url: "https://codeberg.org/MarkdownPDFHQ/ExtendedMarkdown.git", branch: "main"),
     ],
     targets: [
         .target(
             name: "MarkdownPDF",
             dependencies: [
                 .product(name: "MathTypeset", package: "MathTypeset"),
+                .product(name: "ExtendedMarkdown", package: "ExtendedMarkdown"),
             ],
             resources: [.copy("Fonts")],
         ),
