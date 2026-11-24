@@ -1,13 +1,13 @@
 ---
 number: 64
 title: "A chart axis tick label is drawn outside the page"
-state: open
+state: closed
 labels: []
 assignees: []
 created: 2026-11-24T00:24:30+01:00
-updated: 2026-11-24T00:24:30+01:00
+updated: 2026-11-24T01:11:12+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/64
-synced: 2026-11-24T00:24:30+01:00 6abc55eafe3f
+synced: 2026-11-24T01:11:12+01:00 0ab81f39de83
 neutralized: 1
 ---
 
