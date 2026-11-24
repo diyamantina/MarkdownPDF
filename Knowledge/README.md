@@ -6,4 +6,5 @@ Every claim carries one of three marks: MEASURED (read in a run, with the test o
 
 - [layout-stack-depth.md](layout-stack-depth.md): why a deeply nested list or quote ended the process, the stack measurement that separates the unfixed layout from the guard, the guard of 16 levels.
 - [corpus-method.md](corpus-method.md): the byte baseline of 190 PDFs, how it is made, and the planted faults that prove it can fail.
+- [pre-push-hook.md](pre-push-hook.md): why a push from a cold worktree failed with "unable to read tree", and the line that cures it.
 - [measured/README.md](measured/README.md): the raw numbers behind the notes.

@@ -8,6 +8,11 @@
 
 set -u
 
+# Git exports these variables to a hook. SwiftPM runs git itself to check out the packages this one depends on, and with
+# them set those git calls read this repository's object store instead of their own ("unable to read tree"), so a cold
+# worktree fails before it builds. The gate finds the repository from its folder and needs none of them.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR
+
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo .)
 cd "$ROOT" || exit 1
 
