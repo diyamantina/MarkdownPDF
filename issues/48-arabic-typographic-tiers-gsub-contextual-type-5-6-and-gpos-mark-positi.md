@@ -5,9 +5,9 @@ state: open
 labels: []
 assignees: []
 created: 2026-07-09T12:50:35+02:00
-updated: 2026-07-09T20:28:18+02:00
+updated: 2026-11-24T12:19:19+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48
-synced: 2026-07-09T20:28:18+02:00 922c898fe695
+synced: 2026-11-24T12:19:19+01:00 922c898fe695
 neutralized: 1
 ---
 
