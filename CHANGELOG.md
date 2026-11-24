@@ -79,7 +79,9 @@ embedding, which a PDF is.
 
 - The bundled colour emoji face is Twemoji 17.0.3 (a COLR version 0 build, Emoji 17.0; the art is CC BY 4.0, text in `Fonts/LICENSE-Twemoji.txt`),
   replacing the older Twemoji.Mozilla face. Of the 7210 entries of the whole-set oracle, 6708 are drawn (93.0 percent, 85.8 before), none is replaced by
-  a wrong character, and the rest is named in `whole-set-report.txt`: 24 emoji of Unicode 18.0 that no open face has yet, and 478 symbols.
+  a wrong character, and the rest is named in `whole-set-report.txt`: 24 emoji entries (9 new single emoji of Unicode 18.0, 10 skin tone variants of
+  them and the 5 bare skin tone components), and 478 symbols. (Corrected on 2026-11-24: this line said "24 emoji of Unicode 18.0 that no open face has
+  yet", which the report does not say of the skin tone components.)
 - A sequence is looked up in the face as written, fully qualified, and without its variation selectors, because faces key their ligatures on different
   spellings (the keycap, for one).
 
