@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-25
+
+Formulas in the structure tree, decorative pictures, TeX math spacing and better Mermaid links. The limits of the library
+stay as listed in `Docs/NOT-VERIFIED.md`: page appearance and PDF/A and PDF/UA conformance are not verified by the tests.
+
 ### Added
 
 - A display formula in a tagged PDF is a `Formula` structure element whose alternative text (`/Alt`) is its spoken, linearized form (the same text already written as `/ActualText` over the drawn glyphs), as PDF/UA-1 7.7 (Matterhorn checkpoints 17-001 and 17-002) and WCAG 2.2 1.1.1 ask. A formula the math parser refuses is still drawn as its source text in a paragraph, with no `Formula` element. Untagged output is unchanged.
