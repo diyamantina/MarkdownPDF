@@ -79,9 +79,57 @@ struct MermaidEdgeRoute: Equatable {
         var height: Double
     }
 
+    /// The two ends of the link from the node `source` to the node `target`: the middles of the two sides that face each other.
+    ///
+    /// The layout puts the nodes of different layers apart along the flow (`flowIsVertical`: rows one under the other, otherwise columns side by
+    /// side), so two nodes with clear space between them along the flow are joined through the sides that face along it, bottom to top or right
+    /// to left, however far to the side one lies of the other. Two nodes of one layer have no clear space along the flow and are joined across it.
+    /// Two nodes with no clear space either way (one inside or over the other) are joined along the larger distance between their centres.
+    static func endpoints(from source: Rectangle, to target: Rectangle, flowIsVertical: Bool) -> (start: Point, end: Point) {
+        let sourceCenter = Point(x: (source.left + source.right) / 2, y: (source.bottom + source.top) / 2)
+        let targetCenter = Point(x: (target.left + target.right) / 2, y: (target.bottom + target.top) / 2)
+        let clearAcross = max(target.left - source.right, source.left - target.right)
+        let clearUpright = max(target.bottom - source.top, source.bottom - target.top)
+
+        let joinsUpright: Bool = if flowIsVertical, clearUpright > 0 {
+            true
+        } else if !flowIsVertical, clearAcross > 0 {
+            false
+        } else if clearUpright > 0 || clearAcross > 0 {
+            clearUpright > 0
+        } else {
+            abs(targetCenter.x - sourceCenter.x) <= abs(targetCenter.y - sourceCenter.y)
+        }
+
+        guard joinsUpright else {
+            if targetCenter.x >= sourceCenter.x {
+                return (Point(x: source.right, y: sourceCenter.y), Point(x: target.left, y: targetCenter.y))
+            }
+            return (Point(x: source.left, y: sourceCenter.y), Point(x: target.right, y: targetCenter.y))
+        }
+        if targetCenter.y <= sourceCenter.y {
+            return (Point(x: sourceCenter.x, y: source.bottom), Point(x: targetCenter.x, y: target.top))
+        }
+        return (Point(x: sourceCenter.x, y: source.top), Point(x: targetCenter.x, y: target.bottom))
+    }
+
+    /// How far the apex of an arc is lifted, along the unit `normal` of the line, for each link already drawn between the same two nodes: half
+    /// of what the label's ground measures along the normal (its height over a level line, its width beside an upright one) and the margin, so
+    /// the ground stays the margin clear of the line it is lifted from; a link with no label is lifted as one with a ground of two margins.
+    static func apexLift(label: LabelSize?, normal: Point) -> Double {
+        guard let label else {
+            return margin * 2
+        }
+        return (abs(normal.x) * label.width + abs(normal.y) * label.height) / 2 + margin
+    }
+
     /// The route of the link from `start` to `end`. `obstacles` are the nodes the line must not cross (not the two it joins). A `label` is kept
     /// off every rectangle of `labelObstacles` (the nodes, the two it joins too): when it would overlap one at the middle of the straight line,
     /// the link bends into an arc whose apex, in steps of two points of the control offset, is the first that lifts the label clear.
+    ///
+    /// `earlierLinks` is the number of links already drawn between the same two nodes, in either direction. Those run between the same two end
+    /// points, so this one would lie on the first of them: it bends into an arc instead, its apex ``apexLift(label:normal:)`` further from the line
+    /// for each of them, on top of what the obstacles ask for.
     static func route(
         from start: Point,
         to end: Point,
@@ -89,6 +137,7 @@ struct MermaidEdgeRoute: Equatable {
         within bounds: Rectangle,
         label: LabelSize? = nil,
         labelObstacles: [Rectangle] = [],
+        earlierLinks: Int = 0,
     ) -> MermaidEdgeRoute {
         let middle = Point(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
         let straight = MermaidEdgeRoute(path: .straight, labelPoint: middle)
@@ -107,7 +156,7 @@ struct MermaidEdgeRoute: Equatable {
             )
             return labelBlockers.contains { frame.overlaps($0) }
         }
-        guard length > 0, !blocking.isEmpty || labelCollides(at: middle) else {
+        guard length > 0, !blocking.isEmpty || labelCollides(at: middle) || earlierLinks > 0 else {
             return straight
         }
 
@@ -122,6 +171,8 @@ struct MermaidEdgeRoute: Equatable {
                 }
                 offset = needed
             }
+            // The apex of the arc is three quarters of the control offset from the line.
+            offset += Double(earlierLinks) * apexLift(label: label, normal: normal) / 0.75
             func apex(_ offset: Double) -> Point {
                 Point(x: middle.x + normal.x * 0.75 * offset, y: middle.y + normal.y * 0.75 * offset)
             }

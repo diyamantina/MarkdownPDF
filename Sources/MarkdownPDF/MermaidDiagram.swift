@@ -327,6 +327,39 @@ struct MermaidDiagram: Equatable {
         )
     }
 
+    /// What the drawing of a link needs to know beyond its two nodes.
+    struct EdgePlacement: Equatable {
+        /// Whether the layers the two nodes were placed in run one under the other (rows) and not side by side (columns).
+        var flowIsVertical: Bool
+        /// The number of drawn links before this one that join the same two nodes, in either direction.
+        var earlierLinks: Int
+    }
+
+    /// The placement of every link, in the order of ``edges``. Two members of one group were laid out in the group's direction; every other
+    /// pair in `outerDirection`, the direction the groups and the nodes outside them were laid out in. A hidden link draws nothing and is not
+    /// counted among the earlier links; a link from a node to itself has no line to share.
+    func edgePlacements(outerDirection: Direction) -> [EdgePlacement] {
+        var groupOfMember: [String: Group] = [:]
+        for group in groups {
+            for member in group.members {
+                groupOfMember[member] = group
+            }
+        }
+        var drawnBetween: [[String]: Int] = [:]
+        return edges.map { edge in
+            var flow = outerDirection
+            if let group = groupOfMember[edge.source], group.id == groupOfMember[edge.target]?.id {
+                flow = group.direction ?? direction
+            }
+            let pair = [edge.source, edge.target].sorted()
+            let earlier = drawnBetween[pair] ?? 0
+            if edge.isDrawn, edge.source != edge.target {
+                drawnBetween[pair] = earlier + 1
+            }
+            return EdgePlacement(flowIsVertical: flow.isVertical, earlierLinks: edge.source == edge.target ? 0 : earlier)
+        }
+    }
+
     private struct SourceLine {
         var number: Int
         var text: String

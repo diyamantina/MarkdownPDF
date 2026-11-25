@@ -3037,7 +3037,8 @@ private struct Layout {
         }
 
         // A link that bends around nodes needs room outside the rows: the diagram grows by what the arcs and their labels reach past it.
-        let headroom = try mermaidArcHeadroom(boxes: boxes, groups: groupBoxes, edges: diagram.edges, height: height)
+        let placements = diagram.edgePlacements(outerDirection: outerDirection)
+        let headroom = try mermaidArcHeadroom(boxes: boxes, groups: groupBoxes, edges: diagram.edges, placements: placements, height: height)
         if headroom.top > 0 {
             for index in boxes.indices {
                 boxes[index].topOffset += headroom.top
@@ -3055,12 +3056,13 @@ private struct Layout {
             boxes: boxes,
             groups: groupBoxes,
             edges: diagram.edges,
+            placements: placements,
             planHeight: height,
         ) {
             return .fallback(reason)
         }
 
-        return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: diagram.edges, groups: groupBoxes))
+        return .plan(MermaidRenderPlan(height: height, boxes: boxes, edges: diagram.edges, placements: placements, groups: groupBoxes))
     }
 
     /// How far the arcs of the bent links, and their labels, reach above the top of the diagram and below its bottom, so the diagram can be
@@ -3069,6 +3071,7 @@ private struct Layout {
         boxes: [MermaidNodeBox],
         groups: [MermaidGroupBox],
         edges: [MermaidDiagram.Edge],
+        placements: [MermaidDiagram.EdgePlacement],
         height: Double,
     ) throws -> (top: Double, bottom: Double) {
         var framesByID = Dictionary(uniqueKeysWithValues: boxes.map { ($0.id, $0.frame(topY: 0)) })
@@ -3079,15 +3082,16 @@ private struct Layout {
         let spare = 4.0
         var top = 0.0
         var bottom = 0.0
-        for edge in edges where edge.isDrawn {
+        for (edge, placement) in zip(edges, placements) where edge.isDrawn {
             guard let sourceFrame = framesByID[edge.source], let targetFrame = framesByID[edge.target] else {
                 continue
             }
-            let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
+            let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame, flowIsVertical: placement.flowIsVertical)
             let route = try mermaidEdgeRoute(
                 label: edge.label,
                 source: sourceFrame,
                 target: targetFrame,
+                placement: placement,
                 boxes: boxes,
                 topY: 0,
                 bounds: unbounded,
@@ -3282,6 +3286,7 @@ private struct Layout {
         boxes: [MermaidNodeBox],
         groups: [MermaidGroupBox],
         edges: [MermaidDiagram.Edge],
+        placements: [MermaidDiagram.EdgePlacement],
         planHeight: Double,
     ) throws -> String? {
         let contentFrame = MermaidFrame(
@@ -3296,7 +3301,7 @@ private struct Layout {
         }
         let nodeFrames = boxes.map { $0.frame(topY: 0).expanded(by: 2) }
 
-        for edge in edges where edge.isDrawn {
+        for (edge, placement) in zip(edges, placements) where edge.isDrawn {
             guard let label = edge.label,
                   let sourceFrame = framesByID[edge.source],
                   let targetFrame = framesByID[edge.target]
@@ -3308,6 +3313,7 @@ private struct Layout {
                 label: label,
                 source: sourceFrame,
                 target: targetFrame,
+                placement: placement,
                 boxes: boxes,
                 topY: 0,
                 bounds: contentFrame,
@@ -3354,7 +3360,7 @@ private struct Layout {
         for group in plan.groups {
             framesByID[group.id] = group.frame(topY: topY)
         }
-        for edge in plan.edges where edge.isDrawn {
+        for (edge, placement) in zip(plan.edges, plan.placements) where edge.isDrawn {
             guard let sourceFrame = framesByID[edge.source],
                   let targetFrame = framesByID[edge.target]
             else {
@@ -3362,6 +3368,7 @@ private struct Layout {
             }
             try drawMermaidEdge(
                 edge,
+                placement: placement,
                 sourceFrame: sourceFrame,
                 targetFrame: targetFrame,
                 groupFrames: plan.groups.map { $0.frame(topY: topY) },
@@ -3398,6 +3405,7 @@ private struct Layout {
 
     private mutating func drawMermaidEdge(
         _ edge: MermaidDiagram.Edge,
+        placement: MermaidDiagram.EdgePlacement,
         sourceFrame: MermaidFrame,
         targetFrame: MermaidFrame,
         groupFrames: [MermaidFrame] = [],
@@ -3405,11 +3413,12 @@ private struct Layout {
         topY: Double = 0,
         bounds: MermaidFrame,
     ) throws {
-        let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
+        let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame, flowIsVertical: placement.flowIsVertical)
         let route = try mermaidEdgeRoute(
             label: edge.label,
             source: sourceFrame,
             target: targetFrame,
+            placement: placement,
             boxes: boxes,
             topY: topY,
             bounds: bounds,
@@ -3446,11 +3455,13 @@ private struct Layout {
         }
     }
 
-    /// The route of the link between two nodes: the other nodes are in its way, and its label is kept off every node, the two it joins too.
+    /// The route of the link between two nodes: the other nodes are in its way, its label is kept off every node, the two it joins too, and it
+    /// does not lie on a link already drawn between the same two nodes.
     private func mermaidEdgeRoute(
         label: String?,
         source: MermaidFrame,
         target: MermaidFrame,
+        placement: MermaidDiagram.EdgePlacement,
         boxes: [MermaidNodeBox],
         topY: Double,
         bounds: MermaidFrame,
@@ -3458,7 +3469,7 @@ private struct Layout {
         func rectangle(_ frame: MermaidFrame) -> MermaidEdgeRoute.Rectangle {
             MermaidEdgeRoute.Rectangle(left: frame.left, bottom: frame.bottom, right: frame.right, top: frame.top)
         }
-        let endpoints = mermaidEdgeEndpoints(source: source, target: target)
+        let endpoints = mermaidEdgeEndpoints(source: source, target: target, flowIsVertical: placement.flowIsVertical)
         let labelSize: MermaidEdgeRoute.LabelSize?
         if let label {
             let run = mermaidEdgeLabelRun(label)
@@ -3473,6 +3484,7 @@ private struct Layout {
             within: rectangle(bounds),
             label: labelSize,
             labelObstacles: boxes.map { rectangle($0.frame(topY: topY).expanded(by: 2)) },
+            earlierLinks: placement.earlierLinks,
         )
     }
 
@@ -3537,36 +3549,18 @@ private struct Layout {
         }
     }
 
+    /// The two ends of a link, on the sides of its nodes that face each other: see ``MermaidEdgeRoute/endpoints(from:to:flowIsVertical:)``.
     private func mermaidEdgeEndpoints(
         source: MermaidFrame,
         target: MermaidFrame,
+        flowIsVertical: Bool,
     ) -> (start: MermaidPoint, end: MermaidPoint) {
-        let horizontalDistance = abs(target.centerX - source.centerX)
-        let verticalDistance = abs(target.centerY - source.centerY)
-
-        if horizontalDistance > verticalDistance {
-            if target.centerX >= source.centerX {
-                return (
-                    MermaidPoint(x: source.right, y: source.centerY),
-                    MermaidPoint(x: target.left, y: target.centerY),
-                )
-            }
-            return (
-                MermaidPoint(x: source.left, y: source.centerY),
-                MermaidPoint(x: target.right, y: target.centerY),
-            )
-        }
-
-        if target.centerY <= source.centerY {
-            return (
-                MermaidPoint(x: source.centerX, y: source.bottom),
-                MermaidPoint(x: target.centerX, y: target.top),
-            )
-        }
-        return (
-            MermaidPoint(x: source.centerX, y: source.top),
-            MermaidPoint(x: target.centerX, y: target.bottom),
+        let ends = MermaidEdgeRoute.endpoints(
+            from: MermaidEdgeRoute.Rectangle(left: source.left, bottom: source.bottom, right: source.right, top: source.top),
+            to: MermaidEdgeRoute.Rectangle(left: target.left, bottom: target.bottom, right: target.right, top: target.top),
+            flowIsVertical: flowIsVertical,
         )
+        return (MermaidPoint(x: ends.start.x, y: ends.start.y), MermaidPoint(x: ends.end.x, y: ends.end.y))
     }
 
     private mutating func drawArrow(from start: MermaidPoint, to end: MermaidPoint, dashed: Bool = false, arrowhead: Bool = true) {
@@ -5727,6 +5721,8 @@ private struct Layout {
         var height: Double
         var boxes: [MermaidNodeBox]
         var edges: [MermaidDiagram.Edge]
+        /// One per edge, in the same order.
+        var placements: [MermaidDiagram.EdgePlacement]
         var groups: [MermaidGroupBox] = []
     }
 
