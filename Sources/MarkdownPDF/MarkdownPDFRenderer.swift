@@ -253,6 +253,11 @@ private extension MarkdownPDFRenderer {
     }
 }
 
+/// Why a display formula is drawn as its source text: the math parser refused it.
+private enum MathParseOutcome: Error {
+    case unparsable
+}
+
 private struct RenderUnit {
     var document: MarkdownDocument
     var assetsBaseURL: URL?
@@ -1866,7 +1871,18 @@ private struct Layout {
     }
 
     private mutating func renderDisplayMath(_ math: MarkdownMath) throws {
-        let mathElement = beginStructureElement(.paragraph)
+        // A formula that parses is a `Formula` element whose alternative text is its spoken (linearized) form, so assistive
+        // technology reads it (PDF/UA-1, 7.9; WCAG 2.2, 1.1.1). Source that does not parse is drawn as text in a paragraph.
+        let parsedMath: MathParser.ParsedFormula?
+        do {
+            parsedMath = try MathParser().parse(math.source)
+        } catch {
+            parsedMath = nil
+        }
+        let mathElement = beginStructureElement(
+            parsedMath == nil ? .paragraph : .formula,
+            attributes: PDFTaggedContent.Attributes(alternateDescription: parsedMath?.linearizedText),
+        )
         defer { endStructureElement(mathElement) }
 
         let style = style(for: .displayMath)
@@ -1875,7 +1891,9 @@ private struct Layout {
         let bottomSpacing = options.baseFontSize * style.spacingAfterMultiplier
 
         do {
-            let parsed = try MathParser().parse(math.source)
+            guard let parsed = parsedMath else {
+                throw MathParseOutcome.unparsable
+            }
             let layout = try mathLayout(for: style)
             let box = try layout.layout(parsed.root, size: size, displayStyle: true)
             let totalHeight = topSpacing + box.height + box.depth + bottomSpacing

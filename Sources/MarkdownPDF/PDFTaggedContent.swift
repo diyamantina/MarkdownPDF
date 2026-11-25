@@ -83,6 +83,7 @@ struct PDFTaggedContent {
         case tableHeader = "TH"
         case tableCell = "TD"
         case figure = "Figure"
+        case formula = "Formula"
         case code = "Code"
         case tableOfContents = "TOC"
         case tableOfContentsItem = "TOCI"

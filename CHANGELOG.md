@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A display formula in a tagged PDF is a `Formula` structure element whose alternative text (`/Alt`) is its spoken, linearized form (the same text already written as `/ActualText` over the drawn glyphs), as PDF/UA-1 7.9 and WCAG 2.2 1.1.1 ask. A formula the math parser refuses is still drawn as its source text in a paragraph, with no `Formula` element. Inline formulas are not covered yet. Untagged output is unchanged.
 - A picture with no text alternative and the title `decorative` (`![](chart.png "decorative")`) is an artifact in a tagged PDF: it is drawn, and it has no figure element, so assistive technology skips it (WCAG 2.2, 1.1.1; PDF/UA-1, 7.3). A picture with any text stays a figure that carries it, and a picture with empty text and no marker stays a figure, so nothing is hidden by accident. The marker is the exact title `decorative`. Untagged output is unchanged.
 
 ### Changed
