@@ -4,8 +4,8 @@ import MathTypeset
 import Testing
 
 /// An inline formula drawn as a box (a fraction, a root, a matrix: it has no text of its own) in a tagged PDF is a
-/// `Formula` structure element inside its paragraph, with the spoken form as alternative text (PDF/UA-1, 7.9; WCAG 2.2,
-/// 1.1.1). The answer key is the library's own linearizer read back through the library's own reader; the paragraph keeps
+/// `Formula` structure element inside its paragraph, with the spoken form as alternative text (PDF/UA-1, 7.7, Matterhorn 17-001 and
+/// 17-002; WCAG 2.2, 1.1.1). The answer key is the library's own linearizer read back through the library's own reader; the paragraph keeps
 /// its own text.
 @Suite("Inline formula alternative text in tagged PDF")
 struct PDFInlineFormulaAlternativeTests {

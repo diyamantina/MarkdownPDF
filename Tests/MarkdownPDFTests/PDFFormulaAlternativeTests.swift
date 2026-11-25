@@ -4,7 +4,7 @@ import MathTypeset
 import Testing
 
 /// A display formula in a tagged PDF is a `Formula` structure element whose alternative text is the spoken form of the
-/// formula (PDF/UA-1, 7.9; WCAG 2.2, 1.1.1), so that assistive technology reads it instead of skipping a drawing. The
+/// formula (PDF/UA-1, 7.7, Matterhorn 17-001 and 17-002; WCAG 2.2, 1.1.1), so that assistive technology reads it instead of skipping a drawing. The
 /// answer key is the library's own linearizer (`MathParser().parse(source).linearizedText`), the very text that is
 /// already written as `/ActualText` over the drawn glyphs, read back through the library's own reader.
 @Suite("Formula alternative text in tagged PDF")

@@ -1872,7 +1872,8 @@ private struct Layout {
 
     private mutating func renderDisplayMath(_ math: MarkdownMath) throws {
         // A formula that parses is a `Formula` element whose alternative text is its spoken (linearized) form, so assistive
-        // technology reads it (PDF/UA-1, 7.9; WCAG 2.2, 1.1.1). Source that does not parse is drawn as text in a paragraph.
+        // technology reads it (PDF/UA-1, 7.7, Matterhorn 17-001 and 17-002; WCAG 2.2, 1.1.1). Source that does not parse is
+        // drawn as text in a paragraph.
         let parsedMath: MathParser.ParsedFormula?
         do {
             parsedMath = try MathParser().parse(math.source)
@@ -4821,7 +4822,7 @@ private struct Layout {
             }
             if let box = run.inlineMathBox {
                 // A formula drawn as a box has no text of its own: it is a `Formula` element inside its paragraph, with
-                // the spoken (linearized) form as alternative text (PDF/UA-1, 7.9; WCAG 2.2, 1.1.1).
+                // the spoken (linearized) form as alternative text (PDF/UA-1, 7.7, Matterhorn 17-001 and 17-002; WCAG 2.2, 1.1.1).
                 let formula = beginStructureElement(
                     .formula,
                     attributes: PDFTaggedContent.Attributes(alternateDescription: run.text),
