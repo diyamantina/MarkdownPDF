@@ -2132,8 +2132,8 @@ private struct Layout {
     }
 
     private mutating func renderMermaidBlock(_ code: String) throws {
-        if ChartBlock.isMermaidPieCandidate(code) {
-            switch ChartBlock.parseMermaidPie(code) {
+        if ExtendedMarkdown.Core.Chart.isMermaidPieCandidate(code) {
+            switch ExtendedMarkdown.Core.Chart.parseMermaidPie(code) {
             case let .chart(chart):
                 try renderChart(chart, sourceCode: code, fallbackPrefix: "Unsupported Mermaid chart")
             case let .unsupported(reason):
@@ -2169,7 +2169,7 @@ private struct Layout {
     }
 
     private mutating func renderChartFenceBlock(_ code: String) throws {
-        switch ChartBlock.parseChartFence(code) {
+        switch ExtendedMarkdown.Core.Chart.parseChartFence(code) {
         case let .chart(chart):
             try renderChart(chart, sourceCode: code, fallbackPrefix: "Unsupported chart")
         case let .unsupported(reason):
@@ -2178,7 +2178,7 @@ private struct Layout {
     }
 
     private mutating func renderChart(
-        _ chart: ChartBlock,
+        _ chart: ExtendedMarkdown.Core.Chart,
         sourceCode: String,
         fallbackPrefix: String,
     ) throws {
@@ -2206,7 +2206,7 @@ private struct Layout {
         }
     }
 
-    private func chartAlternateDescription(_ chart: ChartBlock) -> String {
+    private func chartAlternateDescription(_ chart: ExtendedMarkdown.Core.Chart) -> String {
         if let title = chart.title, !title.isEmpty {
             return title
         }
@@ -2224,7 +2224,7 @@ private struct Layout {
         }
     }
 
-    private func chartRenderPlan(for chart: ChartBlock) throws -> ChartRenderPlanResult {
+    private func chartRenderPlan(for chart: ExtendedMarkdown.Core.Chart) throws -> ChartRenderPlanResult {
         guard contentWidth >= 180 else {
             return .fallback("content area is too narrow for native chart rendering")
         }
@@ -2260,7 +2260,7 @@ private struct Layout {
         }
     }
 
-    private func pieChartRenderPlan(for chart: ChartBlock, height: Double) throws -> ChartRenderPlanResult {
+    private func pieChartRenderPlan(for chart: ExtendedMarkdown.Core.Chart, height: Double) throws -> ChartRenderPlanResult {
         guard let series = chart.series.first, !series.points.isEmpty else {
             return .fallback("pie chart has no slices")
         }
@@ -2289,7 +2289,7 @@ private struct Layout {
         ))
     }
 
-    private func cartesianChartRenderPlan(for chart: ChartBlock, height: Double) throws -> ChartRenderPlanResult {
+    private func cartesianChartRenderPlan(for chart: ExtendedMarkdown.Core.Chart, height: Double) throws -> ChartRenderPlanResult {
         let allPoints = chart.series.flatMap(\.points)
         guard !allPoints.isEmpty else {
             return .fallback("chart has no data points")
@@ -2341,7 +2341,7 @@ private struct Layout {
             // The plot spans the x values themselves, not the rounded range the ticks are taken from: a tick below the least x or above the greatest
             // maps to a point outside the plot, and its label left the chart and the page. Only the ticks inside the range belong to the axis.
             xTicks = chart.categories.isEmpty
-                ? ChartBlock.TickLabelLayout.ticks(niceChartTicks(min: xDomain.min, max: xDomain.max, targetCount: 5), inside: xDomain)
+                ? ExtendedMarkdown.Core.Chart.TickLabelLayout.ticks(niceChartTicks(min: xDomain.min, max: xDomain.max, targetCount: 5), inside: xDomain)
                 : chart.series[0].points.map(\.x)
             if !chart.categories.isEmpty {
                 let bandWidth = plotFrame.width / Double(chart.categories.count)
@@ -2451,7 +2451,7 @@ private struct Layout {
                 currentPage.drawRingSlice(
                     centerX: centerX,
                     centerY: centerY,
-                    innerRadius: ChartBlock.DoughnutGeometry.holeRadius(outer: radius),
+                    innerRadius: ExtendedMarkdown.Core.Chart.DoughnutGeometry.holeRadius(outer: radius),
                     outerRadius: radius,
                     startAngle: angle,
                     endAngle: nextAngle,
@@ -2665,10 +2665,10 @@ private struct Layout {
         plotFrame: ChartFrame,
     ) throws {
         // A label is centred under its tick and stays inside the chart's frame: one that would pass an end of the frame is moved inward, and a label
-        // that then comes too close to a moved one is not drawn (`ChartBlock.TickLabelLayout`). Every tick keeps its gridline.
+        // that then comes too close to a moved one is not drawn (`ExtendedMarkdown.Core.Chart.TickLabelLayout`). Every tick keeps its gridline.
         let centers = ticks.map { chartX($0, domain: domain, frame: plotFrame) }
         let labels = ticks.map { formatChartNumber($0) }
-        let lefts = try ChartBlock.TickLabelLayout.lefts(
+        let lefts = try ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(
             centers: centers,
             widths: labels.map { try chartTextWidth($0) },
             bounds: chartLabelBounds,
@@ -5686,7 +5686,7 @@ private struct Layout {
     }
 
     private struct ChartRenderPlan {
-        var chart: ChartBlock
+        var chart: ExtendedMarkdown.Core.Chart
         var height: Double
         var plotFrame: ChartFrame?
         var xTicks: [Double]

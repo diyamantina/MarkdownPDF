@@ -1,3 +1,4 @@
+import ExtendedMarkdownCore
 import Foundation
 @testable import MarkdownPDF
 import Testing
@@ -105,39 +106,39 @@ struct ChartTickLabelTests {
 
     @Test("labels that lie inside the frame are centred under their ticks, exactly")
     func untouched() {
-        let lefts = ChartBlock.TickLabelLayout.lefts(centers: [100, 150, 200], widths: [10, 20, 30], bounds: 50 ... 250)
+        let lefts = ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [100, 150, 200], widths: [10, 20, 30], bounds: 50 ... 250)
         #expect(lefts == [95, 140, 185])
     }
 
     @Test("a label that passes an end of the frame is moved to that end")
     func moved() {
-        let lefts = ChartBlock.TickLabelLayout.lefts(centers: [52, 150, 248], widths: [10, 20, 30], bounds: 50 ... 250)
+        let lefts = ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [52, 150, 248], widths: [10, 20, 30], bounds: 50 ... 250)
         #expect(lefts == [50, 140, 220])
     }
 
     @Test("a label within 4 points of a moved label is not drawn, one further away is")
     func thinned() {
-        let close = ChartBlock.TickLabelLayout.lefts(centers: [100, 200, 245], widths: [20, 34, 30], bounds: 50 ... 250)
+        let close = ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [100, 200, 245], widths: [20, 34, 30], bounds: 50 ... 250)
         #expect(close == [90, nil, 220], "the label from 183 to 217 ends 3 points before the moved label at 220")
-        let clear = ChartBlock.TickLabelLayout.lefts(centers: [100, 200, 245], widths: [20, 30, 30], bounds: 50 ... 250)
+        let clear = ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [100, 200, 245], widths: [20, 30, 30], bounds: 50 ... 250)
         #expect(clear == [90, 185, 220], "the label from 185 to 215 ends 5 points before the moved label at 220")
-        let touching = ChartBlock.TickLabelLayout.lefts(centers: [100, 205, 245], widths: [20, 30, 30], bounds: 50 ... 250)
+        let touching = ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [100, 205, 245], widths: [20, 30, 30], bounds: 50 ... 250)
         #expect(touching == [90, nil, 220])
     }
 
     @Test("two moved labels that meet: the first stays; a label wider than the frame is not drawn; no ticks, no labels")
     func edges() {
-        #expect(ChartBlock.TickLabelLayout.lefts(centers: [55, 140], widths: [40, 60], bounds: 50 ... 150) == [50, nil])
-        #expect(ChartBlock.TickLabelLayout.lefts(centers: [75], widths: [60], bounds: 50 ... 100) == [nil])
-        #expect(ChartBlock.TickLabelLayout.lefts(centers: [], widths: [], bounds: 50 ... 100) == [])
+        #expect(ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [55, 140], widths: [40, 60], bounds: 50 ... 150) == [50, nil])
+        #expect(ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [75], widths: [60], bounds: 50 ... 100) == [nil])
+        #expect(ExtendedMarkdown.Core.Chart.TickLabelLayout.lefts(centers: [], widths: [], bounds: 50 ... 100) == [])
     }
 
     @Test("only the ticks inside the domain belong to the axis, the ends included")
     func ticksInsideDomain() {
-        #expect(ChartBlock.TickLabelLayout.ticks([0, 5, 10, 15, 20], inside: (1, 16)) == [5, 10, 15])
-        #expect(ChartBlock.TickLabelLayout.ticks([0, 5, 10], inside: (0, 10)) == [0, 5, 10])
-        #expect(ChartBlock.TickLabelLayout.ticks([0.1 + 0.2], inside: (0, 0.3)) == [0.1 + 0.2], "a tick a rounding past the end is on it")
-        #expect(ChartBlock.TickLabelLayout.ticks([], inside: (0, 1)).isEmpty)
+        #expect(ExtendedMarkdown.Core.Chart.TickLabelLayout.ticks([0, 5, 10, 15, 20], inside: (1, 16)) == [5, 10, 15])
+        #expect(ExtendedMarkdown.Core.Chart.TickLabelLayout.ticks([0, 5, 10], inside: (0, 10)) == [0, 5, 10])
+        #expect(ExtendedMarkdown.Core.Chart.TickLabelLayout.ticks([0.1 + 0.2], inside: (0, 0.3)) == [0.1 + 0.2], "a tick a rounding past the end is on it")
+        #expect(ExtendedMarkdown.Core.Chart.TickLabelLayout.ticks([], inside: (0, 1)).isEmpty)
     }
 
     // MARK: The sweep against the answer key

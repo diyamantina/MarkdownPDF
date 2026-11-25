@@ -1,6 +1,7 @@
+import ExtendedMarkdownCore
 import Foundation
 
-extension ChartBlock {
+extension ExtendedMarkdown.Core.Chart {
     /// The closed form of a doughnut chart: a pie with a hole.
     ///
     /// The slices run clockwise from twelve o'clock, as the pie chart draws them. Slice `i` of values `v` with total `T`

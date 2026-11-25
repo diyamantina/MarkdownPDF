@@ -1,6 +1,7 @@
+import ExtendedMarkdownCore
 import Foundation
 
-extension ChartBlock {
+extension ExtendedMarkdown.Core.Chart {
     /// Where the tick labels of a chart's numeric x axis lie.
     ///
     /// Three rules, each a closed form, so a test can state the numbers without the drawing code.

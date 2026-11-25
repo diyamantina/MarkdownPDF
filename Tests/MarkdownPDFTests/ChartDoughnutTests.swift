@@ -1,8 +1,9 @@
+import ExtendedMarkdownCore
 import Foundation
 @testable import MarkdownPDF
 import Testing
 
-/// The doughnut chart type: a pie with a hole. The oracle is the closed form in `ChartBlock.DoughnutGeometry` (the sweep of a slice
+/// The doughnut chart type: a pie with a hole. The oracle is the closed form in `ExtendedMarkdown.Core.Chart.DoughnutGeometry` (the sweep of a slice
 /// is `2 * pi * value / total`, the hole radius is the named fraction of the outer radius); the drawing is read back from the bytes of
 /// the page and has to agree with it.
 @Suite("Doughnut chart")
@@ -28,7 +29,7 @@ struct ChartDoughnutTests {
 
     @Test("the sweeps are 2 pi times the share, clockwise from twelve o'clock, and add up to one turn")
     func sweepsAreTheShares() {
-        let arcs = ChartBlock.DoughnutGeometry.arcs(for: [62, 31, 7])
+        let arcs = ExtendedMarkdown.Core.Chart.DoughnutGeometry.arcs(for: [62, 31, 7])
         #expect(arcs.count == 3)
         #expect(arcs[0].start == Double.pi / 2)
         let expected = [62.0, 31.0, 7.0].map { -Double.pi * 2 * $0 / 100 }
@@ -43,19 +44,19 @@ struct ChartDoughnutTests {
 
     @Test("a total that is not positive has no arcs")
     func noArcsWithoutATotal() {
-        #expect(ChartBlock.DoughnutGeometry.arcs(for: []).isEmpty)
-        #expect(ChartBlock.DoughnutGeometry.arcs(for: [0, 0]).isEmpty)
-        #expect(ChartBlock.DoughnutGeometry.arcs(for: [Double.infinity, 1]).isEmpty)
+        #expect(ExtendedMarkdown.Core.Chart.DoughnutGeometry.arcs(for: []).isEmpty)
+        #expect(ExtendedMarkdown.Core.Chart.DoughnutGeometry.arcs(for: [0, 0]).isEmpty)
+        #expect(ExtendedMarkdown.Core.Chart.DoughnutGeometry.arcs(for: [Double.infinity, 1]).isEmpty)
     }
 
     @Test("the hole is the named fraction of the outer radius and the ring area is the difference of two sectors")
     func holeAndArea() {
-        #expect(ChartBlock.DoughnutGeometry.holeRadius(outer: 100) == 100 * ChartBlock.DoughnutGeometry.holeFraction)
+        #expect(ExtendedMarkdown.Core.Chart.DoughnutGeometry.holeRadius(outer: 100) == 100 * ExtendedMarkdown.Core.Chart.DoughnutGeometry.holeFraction)
         // A whole turn of radius 10 with a hole of radius 5.5 is pi * (100 - 30.25).
-        let whole = ChartBlock.DoughnutGeometry.ringArea(sweep: -Double.pi * 2, outer: 10)
+        let whole = ExtendedMarkdown.Core.Chart.DoughnutGeometry.ringArea(sweep: -Double.pi * 2, outer: 10)
         #expect(abs(whole - Double.pi * (100 - 30.25)) <= 1e-12)
         // The areas of the slices add up to the area of the whole ring.
-        let parts = ChartBlock.DoughnutGeometry.arcs(for: [1, 2, 3, 4]).map { ChartBlock.DoughnutGeometry.ringArea(sweep: $0.sweep, outer: 10) }
+        let parts = ExtendedMarkdown.Core.Chart.DoughnutGeometry.arcs(for: [1, 2, 3, 4]).map { ExtendedMarkdown.Core.Chart.DoughnutGeometry.ringArea(sweep: $0.sweep, outer: 10) }
         #expect(abs(parts.reduce(0, +) - whole) <= 1e-12)
     }
 
@@ -65,7 +66,7 @@ struct ChartDoughnutTests {
     func parses() {
         for word in ["doughnut", "donut"] {
             let source = "type: \(word)\nslice: A = 3\nslice: B = 1"
-            guard case let .chart(chart) = ChartBlock.parseChartFence(source) else {
+            guard case let .chart(chart) = ExtendedMarkdown.Core.Chart.parseChartFence(source) else {
                 Issue.record("`\(word)` should parse")
                 continue
             }
@@ -77,10 +78,10 @@ struct ChartDoughnutTests {
 
     @Test("a doughnut with no positive total or too many slices is reported by name, not drawn")
     func refusals() {
-        let zero = ChartBlock.parseChartFence("type: doughnut\nslice: A = 0\nslice: B = 0")
+        let zero = ExtendedMarkdown.Core.Chart.parseChartFence("type: doughnut\nslice: A = 0\nslice: B = 0")
         #expect(zero == .unsupported("pie chart total must be greater than zero"))
         let nine = (1 ... 9).map { "slice: S\($0) = 1" }.joined(separator: "\n")
-        #expect(ChartBlock.parseChartFence("type: doughnut\n\(nine)") == .unsupported("too many pie slices for the portable chart profile"))
+        #expect(ExtendedMarkdown.Core.Chart.parseChartFence("type: doughnut\n\(nine)") == .unsupported("too many pie slices for the portable chart profile"))
     }
 
     // MARK: The drawing, read back from the page
@@ -128,7 +129,7 @@ struct ChartDoughnutTests {
         let centerY = (minY + maxY) / 2
         let outer = (maxX - minX) / 2
         #expect(abs((maxY - minY) / 2 - outer) <= Self.printedTolerance, "the outer shape is not a circle")
-        let hole = ChartBlock.DoughnutGeometry.holeRadius(outer: outer)
+        let hole = ExtendedMarkdown.Core.Chart.DoughnutGeometry.holeRadius(outer: outer)
 
         var onOuter = 0
         var onHole = 0
@@ -158,7 +159,7 @@ struct ChartDoughnutTests {
         let centerX = try (#require(reference.map(\.x).min()) + #require(reference.map(\.x).max())) / 2
         let centerY = try (#require(reference.map(\.y).min()) + #require(reference.map(\.y).max())) / 2
         let outer = try (#require(reference.map(\.x).max()) - #require(reference.map(\.x).min())) / 2
-        let arcs = ChartBlock.DoughnutGeometry.arcs(for: values)
+        let arcs = ExtendedMarkdown.Core.Chart.DoughnutGeometry.arcs(for: values)
         // Each slice's path starts at its outer start point: the first three outer points that are the start of a slice.
         for arc in arcs {
             let wantedX = centerX + cos(arc.start) * outer
