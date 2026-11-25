@@ -4820,9 +4820,16 @@ private struct Layout {
                 addNamedDestination(destination, x: cursor, y: y + run.baselineOffset + run.size)
             }
             if let box = run.inlineMathBox {
+                // A formula drawn as a box has no text of its own: it is a `Formula` element inside its paragraph, with
+                // the spoken (linearized) form as alternative text (PDF/UA-1, 7.9; WCAG 2.2, 1.1.1).
+                let formula = beginStructureElement(
+                    .formula,
+                    attributes: PDFTaggedContent.Attributes(alternateDescription: run.text),
+                )
                 currentPage.beginActualText(run.text)
                 try drawMathBox(box, x: cursor, baselineY: y + run.baselineOffset)
                 currentPage.endMarkedContent()
+                endStructureElement(formula)
                 cursor += box.width
                 continue
             }
