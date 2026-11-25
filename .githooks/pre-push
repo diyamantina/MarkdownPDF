@@ -22,6 +22,7 @@ FAIL=0
 bash scripts/check-style.sh || FAIL=1
 bash scripts/check-namespacing.sh || FAIL=1
 bash scripts/test-test-suites.sh > /dev/null || FAIL=1
+bash scripts/check-warnings.sh --self-test > /dev/null || FAIL=1
 
 # Swift gates, only when the package exists.
 if [ -f Package.swift ]; then

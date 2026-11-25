@@ -3285,7 +3285,6 @@ private struct Layout {
                 continue
             }
 
-            let endpoints = mermaidEdgeEndpoints(source: sourceFrame, target: targetFrame)
             let route = try mermaidEdgeRoute(
                 label: label,
                 source: sourceFrame,

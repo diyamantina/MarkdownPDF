@@ -185,7 +185,7 @@ struct TrueTypeGlyphOutlineTests {
 
     @Test("every malformed outline is refused, never read as something else", arguments: [0, 1, 2, 3, 4] as [Int])
     func malformed(kind: Int) {
-        var outline: TrueTypeGlyphOutline = switch kind {
+        let outline: TrueTypeGlyphOutline = switch kind {
         case 0: font([Array(simpleGlyph(contours: [[(0, 0, true), (10, 0, true), (10, 10, true)]]).prefix(14))]) // cut inside the points
         case 1: font([header(contours: -1) + u16(0x0003) + u16(7) + i16(0) + i16(0)]) // component glyph 7 does not exist
         case 2: font([header(contours: -1) + u16(0x0001) + u16(0) + i16(0) + i16(0)]) // point matching is not supported

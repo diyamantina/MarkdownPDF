@@ -115,7 +115,7 @@ struct ArabicRenderIntegrationTests {
         let (options, _) = try Self.notoOptions()
         let word = "\u{0645}\u{0631}\u{062D}\u{0628}\u{0627}" // مرحبا
         let data = try MarkdownPDFRenderer(options: options).render(markdown: word)
-        let inspector = try PDFInspector(data)
+        let inspector = PDFInspector(data)
         #expect(inspector.text.contains("/ToUnicode"))
         // Every source scalar appears as a bfchar/bfrange Unicode value in the CMap.
         let content = inspector.text
@@ -138,6 +138,6 @@ struct ArabicRenderIntegrationTests {
         let opts = PDFOptions(embeddedFonts: .allRoles(PDFOptions.EmbeddedFontSource(data: arial, baseName: "Arial")))
         let data = try MarkdownPDFRenderer(options: opts).render(markdown: "\u{05E9}\u{05DC}\u{05D5}\u{05DD}") // שלום
         #expect(!data.isEmpty)
-        #expect(try PDFInspector(data).text.contains("/ToUnicode"))
+        #expect(PDFInspector(data).text.contains("/ToUnicode"))
     }
 }

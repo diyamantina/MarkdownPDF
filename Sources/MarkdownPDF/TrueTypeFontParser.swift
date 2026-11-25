@@ -212,7 +212,7 @@ struct TrueTypeFontParser {
         let post = try parsePostScriptTable(table(named: "post", recordsByTag: recordsByTag, bytes: bytes))
         let math: TrueTypeMathTable? = if parseMathTable {
             try recordsByTag["MATH"].map { record in
-                let bytes = try tableBytes(record, in: bytes)
+                let bytes = tableBytes(record, in: bytes)
                 do {
                     return try TrueTypeMathTableParser(bytes: bytes, numGlyphs: maxp.numGlyphs).parse()
                 } catch let error as TrueTypeFontError {

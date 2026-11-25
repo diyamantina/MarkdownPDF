@@ -8,7 +8,7 @@ private enum EmojiFixture {
     static let source: PDFOptions.EmbeddedFontSource? = {
         // The bundled face, unless the variable `TWEMOJI_FONT` names another file (a newer release to try).
         if let path = ProcessInfo.processInfo.environment["TWEMOJI_FONT"], let data = FileManager.default.contents(atPath: path) {
-            return try? PDFOptions.EmbeddedFontSource(data: data, baseName: "Twemoji")
+            return PDFOptions.EmbeddedFontSource(data: data, baseName: "Twemoji")
         }
         return BundledFonts.twemoji
     }()

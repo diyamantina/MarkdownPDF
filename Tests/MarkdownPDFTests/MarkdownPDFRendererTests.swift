@@ -593,7 +593,7 @@ struct MarkdownPDFRendererTests {
 
         // The surrounding text and the ToUnicode span survive, so the page is a real
         // document, not an aborted stub.
-        let inspector = try PDFInspector(data)
+        let inspector = PDFInspector(data)
         #expect(inspector.text.contains("/ToUnicode"))
         let extracted = try PDFValidation.text(data, artifact: "notdef-actual-text")
         #expect(extracted.contains("AB\(missing)CD"))
@@ -615,7 +615,7 @@ struct MarkdownPDFRendererTests {
         #expect(!data.isEmpty)
 
         // The uppercase letters the font does draw still recover through ToUnicode.
-        let inspector = try PDFInspector(data)
+        let inspector = PDFInspector(data)
         #expect(inspector.text.contains("/ToUnicode"))
         let extracted = try PDFValidation.text(data, artifact: "multiple-notdef-actual-text")
         #expect(extracted.contains("AB😀CD emoji then 中 cjk tail"))
@@ -636,7 +636,7 @@ struct MarkdownPDFRendererTests {
         #expect(!data.isEmpty)
 
         // The all-notdef font carries no `/ToUnicode`, which is legal in a plain PDF.
-        let inspector = try PDFInspector(data)
+        let inspector = PDFInspector(data)
         #expect(!inspector.text.contains("/ToUnicode"))
         let extracted = try PDFValidation.text(data, artifact: "all-notdef-actual-text")
         #expect(extracted.contains("xyz"))
@@ -750,7 +750,7 @@ struct MarkdownPDFRendererTests {
         ))
         let data = try MarkdownPDFRenderer(options: embedded).render(markdown: "ABCD")
         #expect(!data.isEmpty)
-        let inspector = try PDFInspector(data)
+        let inspector = PDFInspector(data)
         #expect(inspector.text.contains("/FontFile2")) // the selected face was embedded
     }
 

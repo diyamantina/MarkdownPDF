@@ -95,7 +95,7 @@ struct ColorTableTests {
         ("a base record array cut short", 6),
     ] as [(String, Int)])
     func colrMalformed(_ name: String, _ kind: Int) {
-        var bytes: [UInt8] = switch kind {
+        let bytes: [UInt8] = switch kind {
         case 2: colr(version: 2, bases: [(glyph: 1, first: 0, count: 1)], layers: [(9, 0)])
         case 0: Array(colr(bases: [(glyph: 1, first: 0, count: 1)], layers: [(9, 0)]).prefix(9))
         case 1: colr(bases: [(glyph: 5, first: 0, count: 1), (glyph: 3, first: 1, count: 1)], layers: [(9, 0), (8, 0)])

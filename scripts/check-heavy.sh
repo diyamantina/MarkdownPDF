@@ -13,8 +13,12 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR
 
 bash scripts/check-style.sh
 bash scripts/check-namespacing.sh
+bash scripts/check-warnings.sh --self-test
 bash scripts/test-test-suites.sh
 swiftformat . --config .swiftformat --lint
 swiftlint --config .swiftlint.yml --strict
 swift build
+# A clean build of the package and its tests in a scratch folder: a cached build prints no warning, so only a build from scratch can
+# say there is none (a warning in Sources/ or Tests/ is a finding, issue 89).
+bash scripts/check-warnings.sh --build
 bash scripts/test-suites.sh heavy

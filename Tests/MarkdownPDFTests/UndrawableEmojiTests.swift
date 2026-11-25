@@ -13,7 +13,7 @@ struct UndrawableEmojiTests {
     private static let olderFace: PDFOptions.EmbeddedFontSource? = {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("Fixtures/OlderEmojiFace/Twemoji.Mozilla.ttf")
-        return (try? Data(contentsOf: url)).flatMap { try? PDFOptions.EmbeddedFontSource(data: $0, baseName: "Twemoji") }
+        return (try? Data(contentsOf: url)).map { PDFOptions.EmbeddedFontSource(data: $0, baseName: "Twemoji") }
     }()
 
     private static var fonts: PDFOptions.EmbeddedFonts {
