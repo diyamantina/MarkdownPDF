@@ -8,6 +8,7 @@ Every claim carries one of three marks: MEASURED (read in a run, with the test o
 - [corpus-method.md](corpus-method.md): the byte baseline of 190 PDFs, how it is made, and the planted faults that prove it can fail.
 - [extended-markdown-move.md](extended-markdown-move.md): the Markdown reader moved to the package ExtendedMarkdown: what moved and what could not, the corpus and test-identifier oracle, and the rule for later commits of the other package.
 - [chart-parser-move.md](chart-parser-move.md): the chart parser moved to ExtendedMarkdown, the 210-file corpus identical before and after (baseline digest), and the stale-dependency fault met a third time.
+- [formula-structure-plan.md](formula-structure-plan.md): how an inline formula reaches the structure tree today (a formula drawn as text has no element; the box element owns no content), what the free sources say about formulas in tagged PDF, the oracle, the red tests and the plan for issue 90 part 2.
 - [pre-push-hook.md](pre-push-hook.md): why a push from a cold worktree failed with "unable to read tree", and the line that cures it.
 - [math-spacing-baseline.md](math-spacing-baseline.md): what the TeX spacing between math atoms (from MathTypeset) changed in the 210-PDF corpus: 5 PDFs, positions only, and the one formula the first version lost.
 - [measured/README.md](measured/README.md): the raw numbers behind the notes.
