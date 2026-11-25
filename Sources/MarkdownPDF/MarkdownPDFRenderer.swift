@@ -3961,10 +3961,13 @@ private struct Layout {
 
     private mutating func renderStandaloneImage(_ content: [MarkdownInline]) throws -> Bool {
         guard content.count == 1,
-              case let .image(alt, source, _) = content[0]
+              case let .image(alt, source, title) = content[0]
         else {
             return false
         }
+        // A picture with no text and the title `decorative` is decoration: an artifact in a tagged PDF, so that
+        // assistive technology skips it (WCAG 2.2, 1.1.1; PDF/UA-1, 7.3). Any text, or any other title, keeps it a figure.
+        let isDecorative = alt.isEmpty && title == Self.decorativeImageTitle
 
         if source.hasPrefix("http://") || source.hasPrefix("https://") {
             try drawImagePlaceholder(text: "[Remote image: \(alt.isEmpty ? source : alt)]")
@@ -3994,6 +3997,19 @@ private struct Layout {
 
         ensureSpace(drawHeight)
         markBlockQuoteContentDrawn()
+        if isDecorative {
+            let artifact = beginArtifactIfTagged()
+            currentPage.drawImage(
+                name: image.name,
+                x: options.margins.left,
+                y: y - drawHeight,
+                width: drawWidth,
+                height: drawHeight,
+            )
+            endMarkedContentIfNeeded(artifact)
+            y -= drawHeight
+            return true
+        }
         let figureElement = beginStructureElement(
             .figure,
             attributes: PDFTaggedContent.Attributes(
@@ -4013,6 +4029,9 @@ private struct Layout {
         y -= drawHeight
         return true
     }
+
+    /// The title that marks a picture with no text alternative as decoration. TileDown writes the same marker.
+    static let decorativeImageTitle = "decorative"
 
     private mutating func drawImagePlaceholder(text: String) throws {
         let element = beginStructureElement(.paragraph)

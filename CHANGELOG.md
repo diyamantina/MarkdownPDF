@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A picture with no text alternative and the title `decorative` (`![](chart.png "decorative")`) is an artifact in a tagged PDF: it is drawn, and it has no figure element, so assistive technology skips it (WCAG 2.2, 1.1.1; PDF/UA-1, 7.3). A picture with any text stays a figure that carries it, and a picture with empty text and no marker stays a figure, so nothing is hidden by accident. The marker is the exact title `decorative`. Untagged output is unchanged.
+
 ### Changed
 
 - A build of the package and its tests from scratch prints no compiler warning (#89). Twelve warnings are gone: nine `try` written before a call that cannot throw (one in `Sources/`, eight in tests, one of them inside an `#expect`), one value never used in the Mermaid edge routing (`Sources/`), and two `var` never mutated (tests); no behaviour changes (the 1020 tests pass and the 210-PDF corpus is byte-equal apart from the changelog's own renders). `scripts/check-warnings.sh` builds from scratch in a scratch folder and fails on any warning in `Sources/` or `Tests/`, including a warning inside a macro expansion; the heavy run calls it, the pre-push hook runs its self-test.
