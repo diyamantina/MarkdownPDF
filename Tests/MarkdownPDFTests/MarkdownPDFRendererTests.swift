@@ -1439,7 +1439,7 @@ struct MarkdownPDFRendererTests {
 
     @Test("Writes deterministic page resource dictionaries")
     func writesDeterministicPageResourceDictionaries() throws {
-        let directory = FileManager.default.temporaryDirectory
+        let directory = TestTemporaryRoot.url
             .appendingPathComponent("MarkdownPDFTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let imageURL = directory.appendingPathComponent("image.jpg")
@@ -2303,7 +2303,7 @@ struct MarkdownPDFRendererTests {
 
     @Test("Embeds local JPEG images")
     func embedsJPEGImages() throws {
-        let directory = FileManager.default.temporaryDirectory
+        let directory = TestTemporaryRoot.url
             .appendingPathComponent("MarkdownPDFTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let imageURL = directory.appendingPathComponent("image.jpg")
@@ -2321,7 +2321,7 @@ struct MarkdownPDFRendererTests {
 
     @Test("Embeds local PNG images")
     func embedsPNGImages() throws {
-        let directory = FileManager.default.temporaryDirectory
+        let directory = TestTemporaryRoot.url
             .appendingPathComponent("MarkdownPDFTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let imageURL = directory.appendingPathComponent("image.png")
@@ -2355,7 +2355,7 @@ struct MarkdownPDFRendererTests {
 
     @Test("Reuses local image XObjects by source")
     func reusesLocalImageXObjectsBySource() throws {
-        let directory = FileManager.default.temporaryDirectory
+        let directory = TestTemporaryRoot.url
             .appendingPathComponent("MarkdownPDFTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let imageURL = directory.appendingPathComponent("image.png")

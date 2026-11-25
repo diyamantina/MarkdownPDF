@@ -6,7 +6,7 @@ import Testing
 struct PDFStructuralValidationTests {
     @Test("Validates canonical structure for feature coverage PDF")
     func validatesCanonicalStructureForFeatureCoveragePDF() throws {
-        let directory = FileManager.default.temporaryDirectory
+        let directory = TestTemporaryRoot.url
             .appendingPathComponent("MarkdownPDFStructuralTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let imageURL = directory.appendingPathComponent("image.jpg")

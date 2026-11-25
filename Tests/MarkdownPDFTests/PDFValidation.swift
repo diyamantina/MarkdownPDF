@@ -46,7 +46,7 @@ enum PDFValidation {
     }
 
     static func temporaryDirectory() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
+        let directory = TestTemporaryRoot.url
             .appendingPathComponent("MarkdownPDFValidation-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory

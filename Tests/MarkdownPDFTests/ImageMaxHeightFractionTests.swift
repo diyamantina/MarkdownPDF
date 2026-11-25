@@ -9,7 +9,7 @@ struct ImageMaxHeightFractionTests {
 
     /// The drawn height of the one image on the page, read from its `cm` operator.
     private func drawnImageHeight(fraction: Double?) throws -> Double {
-        let directory = FileManager.default.temporaryDirectory
+        let directory = TestTemporaryRoot.url
             .appendingPathComponent("MarkdownPDFTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try tallJPEG().write(to: directory.appendingPathComponent("tall.jpg"))
