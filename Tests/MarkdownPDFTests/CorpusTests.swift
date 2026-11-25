@@ -83,7 +83,7 @@ struct CorpusTests {
 
     @Test(
         "every document under every option set is written to a file",
-        .enabled(if: CorpusTests.outputFolder != nil, "set CORPUS_OUT to a folder to write the corpus")
+        .enabled(if: CorpusTests.outputFolder != nil, "set CORPUS_OUT to a folder to write the corpus"),
     )
     func writeCorpus() throws {
         let out = try #require(Self.outputFolder)
