@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T14:07:03+02:00
 updated: 2026-07-09T14:17:14+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/50
-synced: 2026-07-09T14:17:14+02:00 1fd39d236585
-neutralized: 1
+synced: 2026-07-09T14:17:14+02:00 43d5643e9f7f
+neutralized: 2
 ---
 
 A line mixing Arabic (or another complex script) with Latin, using an embedded font whose `latn` GSUB uses a non-zero lookupFlag (e.g. Noto Naskh Arabic's IgnoreMarks), aborts the whole document with `unsupportedGSUBLookupFlag(8)`.

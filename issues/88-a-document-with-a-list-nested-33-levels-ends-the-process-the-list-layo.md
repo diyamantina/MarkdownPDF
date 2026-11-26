@@ -1,14 +1,14 @@
 ---
 number: 88
 title: "A document with a list nested 33 levels ends the process: the list layout overflows the stack"
-state: open
+state: closed
 labels: ["before-1.0", "bug"]
 assignees: []
 created: 2026-11-24T15:57:15+01:00
-updated: 2026-11-24T15:57:15+01:00
+updated: 2026-11-26T03:33:16+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/88
-synced: 2026-11-24T15:57:15+01:00 d6a354a76c54
-neutralized: 1
+synced: 2026-11-26T03:33:16+01:00 89cfa48f4680
+neutralized: 2
 ---
 
 ## What
@@ -30,3 +30,9 @@ The reference is the contract of the parser's guard: past the limit the text deg
 ## Acceptance
 
 The cases above pass; the nesting limit of the layout is stated in the documentation next to the parser's limit; the corpus of the extraction work gets its nested documents past 32 levels back.
+
+## Comments
+
+### Mihaela, 2026-11-26T03:33:16+01:00
+
+Fixed in 0.18.6 (commit 93c5990): a quote or list deeper than 16 levels is drawn as prose, and the tests render lists, quotes and footnotes up to 10000 levels on a small stack (a list to 1000, because its input grows with the square of the depth). Re-checked on main ac49d9e: the nesting tests pass. Remainders against the written acceptance: the list test stops at 1000 levels; the limit of 16 is not in README.md or Docs/ (it is in the CHANGELOG and Knowledge/); the planted fault checked in a child process is not a test, only a measurement noted in the test file.

@@ -2,13 +2,13 @@
 number: 54
 title: "Chinese/Japanese polish: CFF system fonts, vertical text, kinsoku line-break audit"
 state: open
-labels: []
+labels: ["enhancement"]
 assignees: []
 created: 2026-07-09T14:30:50+02:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-26T03:33:15+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/54
-synced: 2026-11-24T12:19:19+01:00 11bd69efefc1
-neutralized: 1
+synced: 2026-11-26T03:33:15+01:00 4c122990a41c
+neutralized: 2
 ---
 
 Base Chinese/Japanese already render correctly today with a TrueType (`glyf`) CJK font: each Han character / kana maps to one glyph via cmap (no shaping), and the engine already does CJK line breaking (`LineBreakOpportunityDetector`: breaks between ideographs, Japanese non-starters). Verified: 漢字 日本語 中文 あいう renders and extracts. This issue tracks the remaining CJK refinements, to be done AFTER Hebrew.
@@ -25,3 +25,9 @@ Base Chinese/Japanese already render correctly today with a TrueType (`glyf`) CJ
 Render a CJK paragraph (mixed Han + kana + CJK punctuation) with a CFF and a glyf font once #49 lands; confirm glyphs, line breaks (no orphaned punctuation), and ToUnicode.
 
 Mostly done; the substantive remaining item is CFF fonts (#49).
+
+## Comments
+
+### Mihaela, 2026-11-26T03:33:13+01:00
+
+Decided for 1.0 by #76.

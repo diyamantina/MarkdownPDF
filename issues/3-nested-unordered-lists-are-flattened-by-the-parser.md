@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T17:19:33+02:00
 updated: 2026-07-08T22:45:16+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/3
-synced: 2026-07-08T22:45:16+02:00 c176e7230798
-neutralized: 1
+synced: 2026-07-08T22:45:16+02:00 57c4e4963b61
+neutralized: 2
 ---
 
 `BlockParser.parseUnorderedList` consumes every line whose leading marker matches, regardless of indentation, and appends each as a sibling `ListItem`. `unorderedMarker(in:)` trims leading spaces, so depth is discarded.

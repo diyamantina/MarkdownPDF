@@ -5,10 +5,10 @@ state: open
 labels: ["before-1.0", "enhancement"]
 assignees: []
 created: 2026-11-24T11:29:05+01:00
-updated: 2026-11-24T13:32:07+01:00
+updated: 2026-11-26T03:33:13+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/76
-synced: 2026-11-24T13:32:07+01:00 3ffdfa53f21d
-neutralized: 1
+synced: 2026-11-26T03:33:13+01:00 e48a1b6669ca
+neutralized: 2
 ---
 
 ## What

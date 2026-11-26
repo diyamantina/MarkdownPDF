@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T23:57:01+02:00
 updated: 2026-07-09T00:32:54+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/25
-synced: 2026-07-09T00:32:54+02:00 ef1437662916
-neutralized: 1
+synced: 2026-07-09T00:32:54+02:00 9ae2f018cbc2
+neutralized: 2
 ---
 
 `renderList` adds 24pt of indent per nesting level with no clamp (`MarkdownPDFRenderer.swift:823`). Past the page width, `contentWidth` goes negative; `wrappedLines` with a non-positive width emits one token per line, each triggering a page break.

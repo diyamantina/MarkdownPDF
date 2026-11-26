@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T00:29:19+02:00
 updated: 2026-07-09T14:08:29+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/29
-synced: 2026-07-09T14:08:29+02:00 a6a584c2d59e
-neutralized: 1
+synced: 2026-07-09T14:08:29+02:00 52df2d54f92b
+neutralized: 2
 ---
 
 Follow-up to #27 (which fixed U+FEFF). Under an embedded font whose cmap lacks them, every default-ignorable format character aborts the whole render with `TrueTypeGlyphMappingError.missingGlyph` (policy `.reject`, TrueTypeGlyphMapper.swift:93): U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 word joiner, U+00AD soft hyphen, U+202A/202C/202E bidi controls, U+2028 line sep, U+2029 paragraph sep. Base-14 draws `?` for all except U+00AD.

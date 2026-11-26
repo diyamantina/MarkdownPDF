@@ -2,13 +2,13 @@
 number: 48
 title: "Arabic typographic tiers: GSUB contextual (type 5/6) and GPOS mark positioning"
 state: open
-labels: []
+labels: ["enhancement"]
 assignees: []
 created: 2026-07-09T12:50:35+02:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-26T03:33:13+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/48
-synced: 2026-11-24T12:19:19+01:00 922c898fe695
-neutralized: 1
+synced: 2026-11-26T03:33:13+01:00 f75b999f7329
+neutralized: 2
 ---
 
 Follow-up to #46. The shaping core applies GSUB lookup types 1 (single-sub) and 4 (ligature). Two typographic tiers remain, grounded in the OpenType spec (PureTextResearch BIBLIOGRAPHY §1, §5):
@@ -63,3 +63,7 @@ These are refinements beyond the two tiers this issue named, kept honestly on th
 - **GPOS cursive (type 3) and pair/kern (type 2)**, and **anchor device/contour refinements** (formats 2/3 beyond x/y).
 
 Suggest a fresh issue for full UTR #53 + NFD if those become a priority; everything the two named tiers called for is done.
+
+### Mihaela, 2026-11-26T03:33:11+01:00
+
+Decided for 1.0 by #76. Both tiers named in the title shipped in 0.7.0 (GSUB contextual lookups and GPOS mark positioning, with tests that pass on main ac49d9e). Left open for one point: the locl and calt features, named under Phase 2 here, are applied nowhere in Sources on that commit, and the remainders listed in #76 do not name them.

@@ -7,8 +7,8 @@ assignees: []
 created: 2026-11-24T00:24:30+01:00
 updated: 2026-11-24T01:16:44+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/64
-synced: 2026-11-24T01:16:44+01:00 0ab81f39de83
-neutralized: 1
+synced: 2026-11-24T01:16:44+01:00 d7ea078871d2
+neutralized: 2
 ---
 
 A chart axis tick label can be drawn outside the page.

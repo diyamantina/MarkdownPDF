@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T12:50:34+02:00
 updated: 2026-07-09T14:11:37+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/47
-synced: 2026-07-09T14:11:37+02:00 bb6c05c39b70
-neutralized: 1
+synced: 2026-07-09T14:11:37+02:00 fe42dd443ee9
+neutralized: 2
 ---
 
 Follow-up to #46 (Arabic shaping core, merged). The joining + GSUB positional shaping now exists and is oracle-verified, but it is NOT wired into the render path, so Arabic still draws unshaped in actual PDFs. This issue is that integration.

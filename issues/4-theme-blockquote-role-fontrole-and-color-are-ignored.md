@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T17:19:34+02:00
 updated: 2026-07-08T18:46:03+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/4
-synced: 2026-07-08T18:46:03+02:00 22feac10b409
-neutralized: 1
+synced: 2026-07-08T18:46:03+02:00 8a9465dab516
+neutralized: 2
 ---
 
 The `.blockQuote` case in `MarkdownPDFRenderer.render(_:)` indents `margins.left` by 14 and renders nested blocks. It consults `style(for: .blockQuote)` only through `blockQuoteTopSpacing` and `blockQuoteBottomSpacing`, which read `spacingBeforeMultiplier` and `spacingAfterMultiplier`.

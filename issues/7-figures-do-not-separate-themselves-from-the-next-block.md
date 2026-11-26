@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T17:48:55+02:00
 updated: 2026-07-08T18:10:11+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/7
-synced: 2026-07-08T18:10:11+02:00 895fae605869
-neutralized: 1
+synced: 2026-07-08T18:10:11+02:00 993d4a4c9c4c
+neutralized: 2
 ---
 
 `renderMermaidBlock` and `renderChart` both advance `y` by `plan.height + 12`. That 12pt is the figure's own padding inside its frame; a following paragraph's ascender consumes most of it, so the next line of text sits on the frame.

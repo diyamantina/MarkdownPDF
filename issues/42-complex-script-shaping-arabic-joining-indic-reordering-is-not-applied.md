@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T10:35:41+02:00
 updated: 2026-07-09T14:10:12+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/42
-synced: 2026-07-09T14:10:12+02:00 2ecac75056d9
-neutralized: 1
+synced: 2026-07-09T14:10:12+02:00 aa78d33f2adf
+neutralized: 2
 ---
 
 Under an embedded font that covers Arabic (e.g. Arial), Arabic text renders but is **not shaped**: letters appear in isolated forms instead of contextually joined initial/medial/final forms, so a word like `العربية` shows as disconnected glyphs rather than connected script. The render does not abort (it succeeds), but the output is incorrect for a native reader. The same applies to other complex scripts that require shaping (Indic conjuncts and matra reordering, etc.).

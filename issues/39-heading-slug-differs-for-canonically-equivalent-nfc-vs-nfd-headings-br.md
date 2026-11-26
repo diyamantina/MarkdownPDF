@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T03:28:41+02:00
 updated: 2026-07-09T03:48:04+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/39
-synced: 2026-07-09T03:48:04+02:00 0349a3babad0
-neutralized: 1
+synced: 2026-07-09T03:48:04+02:00 b27454ca45a7
+neutralized: 2
 ---
 
 Found by the adversarial critic reviewing #37/#38 (low severity, PLAUSIBLE, pre-existing; untouched by that fix).

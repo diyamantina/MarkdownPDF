@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T10:35:41+02:00
 updated: 2026-07-09T11:17:16+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/41
-synced: 2026-07-09T11:17:16+02:00 f92bb1590b58
-neutralized: 1
+synced: 2026-07-09T11:17:16+02:00 f7eeb9cccb7a
+neutralized: 2
 ---
 
 The engine only embeds a single-face TrueType/OpenType file. Passing a `.ttc`/`.otc` collection throws `unsupportedFontFormat(format: "TrueType/OpenType Collection", guidance: "Extract a single face from the .ttc collection and embed that face; whole-collection embedding is not supported.")`.

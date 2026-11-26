@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T22:40:16+02:00
 updated: 2026-07-08T22:55:37+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/17
-synced: 2026-07-08T22:55:37+02:00 5b4e92f428e6
-neutralized: 1
+synced: 2026-07-08T22:55:37+02:00 3b29405b178f
+neutralized: 2
 ---
 
 `stripBlockQuoteMarker(from:)` (MarkdownParser.swift:504) trims the whole line, then drops the `>`, then trims the remainder:

@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T02:57:50+02:00
 updated: 2026-07-09T03:28:42+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/37
-synced: 2026-07-09T03:28:42+02:00 48d2a4081cdc
-neutralized: 1
+synced: 2026-07-09T03:28:42+02:00 ef137adcf8b1
+neutralized: 2
 ---
 
 ## Problem

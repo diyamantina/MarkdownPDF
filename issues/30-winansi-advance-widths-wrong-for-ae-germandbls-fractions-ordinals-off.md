@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T00:47:33+02:00
 updated: 2026-07-09T01:05:44+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/30
-synced: 2026-07-09T01:05:44+02:00 fec0509e4108
-neutralized: 1
+synced: 2026-07-09T01:05:44+02:00 92d62ff29686
+neutralized: 2
 ---
 
 `StandardFont.WidthTable.width(for:)` returned the width of `?` (556 for Helvetica) for any WinAnsi scalar outside ASCII that was neither in the small hand-written `winAnsiPunctuation` table nor decomposable to an ASCII base. So Æ (true 1000), ß (611), ½/¼/¾ (834), ª (370), º (365), Ø (778), the superscripts, Þ, Ð, and the broken bar all measured at 556.

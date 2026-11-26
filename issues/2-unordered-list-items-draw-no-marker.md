@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T17:19:16+02:00
 updated: 2026-07-08T17:50:24+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/2
-synced: 2026-07-08T17:50:24+02:00 0e933d9d97b5
-neutralized: 1
+synced: 2026-07-08T17:50:24+02:00 dc56a5d79523
+neutralized: 2
 ---
 
 `MarkdownPDFRenderer.renderList` draws a marker only when `start != nil` (ordered) or the item has a checkbox. Unordered items get the 24pt indent and no glyph, so every bullet list renders as bare indented lines.

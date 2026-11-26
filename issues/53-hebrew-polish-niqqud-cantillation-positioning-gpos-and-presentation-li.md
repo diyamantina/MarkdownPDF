@@ -2,13 +2,13 @@
 number: 53
 title: "Hebrew polish: niqqud/cantillation positioning (GPOS) and presentation ligatures"
 state: open
-labels: []
+labels: ["enhancement"]
 assignees: []
 created: 2026-07-09T14:30:49+02:00
-updated: 2026-11-24T12:19:19+01:00
+updated: 2026-11-26T03:33:14+01:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/53
-synced: 2026-11-24T12:19:19+01:00 6559b6f1a488
-neutralized: 1
+synced: 2026-11-26T03:33:14+01:00 3b4b0e5b9fdd
+neutralized: 2
 ---
 
 Base Hebrew already renders correctly today (non-joining letters via cmap + the existing bidi RTL ordering + an embedded font; verified end to end). This issue tracks the remaining Hebrew refinements, to be done AFTER CFF (#49).
@@ -23,3 +23,9 @@ Base Hebrew already renders correctly today (non-joining letters via cmap + the 
 Render pointed Hebrew (e.g. שָׁלוֹם) with an embedded font that has niqqud + GPOS anchors; confirm the points land on the correct base letters (raster + hb-shape position diff), and ToUnicode recovers the base + points.
 
 Depends on #48 (GPOS) for the positioning; otherwise Hebrew is complete.
+
+## Comments
+
+### Mihaela, 2026-11-26T03:33:12+01:00
+
+Decided for 1.0 by #76.

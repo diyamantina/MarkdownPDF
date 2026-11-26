@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T02:21:13+02:00
 updated: 2026-07-09T02:49:33+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/35
-synced: 2026-07-09T02:49:33+02:00 e567710e3714
-neutralized: 1
+synced: 2026-07-09T02:49:33+02:00 63cd3a751c01
+neutralized: 2
 ---
 
 Found by the adversarial critic while verifying #33/#34; confirmed reproducible but pre-existing (the branch dates to commit b6920485, 2026-06-01), so it was split out rather than folded into #34.

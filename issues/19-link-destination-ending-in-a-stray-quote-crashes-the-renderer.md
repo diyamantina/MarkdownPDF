@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T23:22:01+02:00
 updated: 2026-07-08T23:41:36+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/19
-synced: 2026-07-08T23:41:36+02:00 ffefd40d151b
-neutralized: 1
+synced: 2026-07-08T23:41:36+02:00 91ebd83eef78
+neutralized: 2
 ---
 
 `InlineParser.parseDestination` (InlineParser.swift:255) crashes the whole render on a six-character input:

@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T13:18:46+02:00
 updated: 2026-07-09T16:23:31+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/49
-synced: 2026-07-09T16:23:31+02:00 75f1ce7e1edb
-neutralized: 1
+synced: 2026-07-09T16:23:31+02:00 6506615c1b23
+neutralized: 2
 ---
 
 The embedder only supports TrueType (`glyf`) outlines. An OpenType-CFF font (`OTTO` sfnt, a `CFF ` table with Type2 charstrings) is rejected with `unsupportedFontFormat("OpenType CFF", "FontFile3 / CIDFontType0 ... staged but not implemented")`. This blocks the fonts users actually reach for on macOS: the system CJK and Arabic fonts are largely CFF (Hiragino Sans/Sans GB, PingFang, most Noto CJK `.otf`/`.ttc` builds). CJK and Hebrew otherwise render today (they need no shaping); the only remaining blocker for their common system fonts is CFF embedding.

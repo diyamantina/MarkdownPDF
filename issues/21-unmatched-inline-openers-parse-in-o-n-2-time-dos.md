@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T23:40:15+02:00
 updated: 2026-07-09T00:03:27+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/21
-synced: 2026-07-09T00:03:27+02:00 bd72a87a5a25
-neutralized: 1
+synced: 2026-07-09T00:03:27+02:00 eeb48f600a21
+neutralized: 2
 ---
 
 A run of inline openers with no matching closer parses quadratically. Each failed opener scans to end-of-string for its closer (`firstUnescaped("]")`, `firstIndex(">")`, `firstIndex(")")`), then `consumeText` advances a single character and the loop retries, so n openers cost O(n^2).

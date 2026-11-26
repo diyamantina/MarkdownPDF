@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T10:52:45+02:00
 updated: 2026-07-09T11:32:32+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/43
-synced: 2026-07-09T11:32:32+02:00 ff72933e2913
-neutralized: 1
+synced: 2026-07-09T11:32:32+02:00 cff1884eb231
+neutralized: 2
 ---
 
 Found while implementing #41 (TTC support). The parser validates every table's checksum and throws `invalidTableChecksum` on any mismatch. Real Apple system fonts routinely have non-spec table checksums, so they are rejected even though they are structurally valid and render fine.

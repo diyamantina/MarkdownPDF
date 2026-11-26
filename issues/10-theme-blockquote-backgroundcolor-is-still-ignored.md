@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T18:16:24+02:00
 updated: 2026-07-08T23:03:39+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/10
-synced: 2026-07-08T23:03:39+02:00 3fff678be97f
-neutralized: 1
+synced: 2026-07-08T23:03:39+02:00 f46b767509d9
+neutralized: 2
 ---
 
 Follow-up to #4, which made `fontRole`, `color`, and `borderColor` effective for block quotes.

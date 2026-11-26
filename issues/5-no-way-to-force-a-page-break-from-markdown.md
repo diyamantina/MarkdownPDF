@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-08T17:24:06+02:00
 updated: 2026-07-08T17:50:39+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/5
-synced: 2026-07-08T17:50:39+02:00 731c0e0797ec
-neutralized: 1
+synced: 2026-07-08T17:50:39+02:00 eba68ceb78f0
+neutralized: 2
 ---
 
 The engine can size a page (`PDFOptions.PageSize`) but never starts one on demand. `startNewPage()` is called only when content overflows. A document therefore cannot control its own pagination.

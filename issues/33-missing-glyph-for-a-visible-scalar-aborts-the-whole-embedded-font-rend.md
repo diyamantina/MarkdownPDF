@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T01:16:36+02:00
 updated: 2026-07-09T02:19:57+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/33
-synced: 2026-07-09T02:19:57+02:00 6d1861454232
-neutralized: 1
+synced: 2026-07-09T02:19:57+02:00 4fe6f7788083
+neutralized: 2
 ---
 
 Split from #29 (shape 2). #29's shape 1 (strip invisible default-ignorable format controls) is handled in PR #32. This tracks the remaining, distinct concern.

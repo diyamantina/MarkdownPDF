@@ -7,8 +7,8 @@ assignees: []
 created: 2026-07-09T00:07:09+02:00
 updated: 2026-07-09T01:16:36+02:00
 host: https://codeberg.org/MarkdownPDFHQ/MarkdownPDF/issues/27
-synced: 2026-07-09T01:16:36+02:00 4f96c275db1c
-neutralized: 1
+synced: 2026-07-09T01:16:36+02:00 3ad9fc8fafcd
+neutralized: 2
 ---
 
 `"AB\u{FEFF}CD"` rendered with `PDFOptions.embeddedFonts` throws `unsupportedComplexScriptScalar(scalar: "\u{FEFF}")` and aborts the whole render.
