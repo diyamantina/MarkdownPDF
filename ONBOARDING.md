@@ -1,0 +1,42 @@
+# Onboarding (2026-11-26)
+
+## Purpose
+
+A Swift library that turns Markdown into PDF. Start with `README.md`, `CONTRIBUTING.md`, `Docs/NOT-VERIFIED.md` and `Knowledge/`.
+
+## State
+
+- Main before this file: `2c3620b`. Last release: `0.19.0`. Nothing is listed under "Unreleased" in `CHANGELOG.md`.
+- 27 open issues, mirrored in `issues/`. Issue 48 was left open on purpose during the last cleanup.
+
+## Done on 2026-11-26
+
+- A knowledge note on the Metal survey.
+- Issues 88 and 89 closed in the issue cleanup.
+
+## In flight and local only
+
+Nothing is uncommitted. Local branches not on the host:
+
+- `corpus-s0`, `corpus-s0b`, `issues-1-0`: equal changes are already on main.
+- `emoji-colr`: one commit with no equal patch on main, "feat(fonts): an emoji is drawn from a colour face as layers in palette colours" (`3989f11`). Decide whether to land it or drop it before deleting the branch.
+
+## Next steps
+
+- The reader now lives in the `ExtendedMarkdown` package; further moves continue there.
+- 1.0 comes together with MathTypeset and TileDown, after MathTypeset's layout engine.
+
+## Waiting on the owner
+
+Nothing specific, beyond the 1.0 plan.
+
+## Build, test, publish
+
+```sh
+git config core.hooksPath .githooks
+swift build
+scripts/test-suites.sh smoke   # what the push gate runs
+scripts/check-heavy.sh         # the full run, needed for a release
+```
+
+Page appearance and PDF/A and PDF/UA conformance are not verified by the tests. Releases and the Homebrew tap need the owner's yes.
