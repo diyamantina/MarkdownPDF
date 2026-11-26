@@ -13,3 +13,4 @@ Every claim carries one of three marks: MEASURED (read in a run, with the test o
 - [math-spacing-baseline.md](math-spacing-baseline.md): what the TeX spacing between math atoms (from MathTypeset) changed in the 210-PDF corpus: 5 PDFs, positions only, and the one formula the first version lost.
 - [measured/README.md](measured/README.md): the raw numbers behind the notes.
 - `bold-in-base-fonts.md`: why bold can look letter-spaced with the unembedded base fonts.
+- [metal-and-data-parallel-work.md](metal-and-data-parallel-work.md): why the performance work here needs no Metal path unless a profile names data-parallel work.
